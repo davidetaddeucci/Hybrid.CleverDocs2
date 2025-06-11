@@ -1,5 +1,7 @@
-namespace $ns;
-public class $req
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Search
 {
-    // TODO: add request properties
+    public class SearchRequest
+    {
+        // TODO: add search parameters (e.g., Query, Filters)
+    }
 }
