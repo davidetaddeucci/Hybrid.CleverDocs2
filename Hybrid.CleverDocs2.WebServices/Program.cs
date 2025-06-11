@@ -25,12 +25,40 @@ builder.Services.AddHttpClient<IAuthClient, AuthClient>(client =>
 .AddPolicyHandler(HttpPolicyExtensions
     .HandleTransientHttpError()
     .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+// Register WebDevClient with resilience policies
+builder.Services.AddHttpClient<IWebDevClient, WebDevClient>(client =>
+{
+    var cfg = builder.Configuration.GetSection("R2R");
+    var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
+    client.BaseAddress = new Uri(url);
+    client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
+})
+.AddPolicyHandler(HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .WaitAndRetryAsync(builder.Configuration.GetSection("R2R").GetValue<int>("MaxRetries"), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
+.AddPolicyHandler(HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
 
 
 // Add services to the container.
 
 // Register DocumentClient with resilience policies
 builder.Services.AddHttpClient<IDocumentClient, DocumentClient>(client =>
+{
+    var cfg = builder.Configuration.GetSection("R2R");
+    var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
+    client.BaseAddress = new Uri(url);
+    client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
+})
+.AddPolicyHandler(HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .WaitAndRetryAsync(builder.Configuration.GetSection("R2R").GetValue<int>("MaxRetries"), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
+.AddPolicyHandler(HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+// Register WebDevClient with resilience policies
+builder.Services.AddHttpClient<IWebDevClient, WebDevClient>(client =>
 {
     var cfg = builder.Configuration.GetSection("R2R");
     var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
