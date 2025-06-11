@@ -56,7 +56,28 @@ The following endpoints correspond to the Docker Compose setup:
 - **Redis**: `localhost:6380`, password: `your_redis_password`
 - **RabbitMQ**: AMQP at `localhost:5674`, Management UI at `http://localhost:15674`, user: `your_rabbitmq_user`, password: `your_strong_password`
 
+## Self-hosted R2R API Container
+We assume a self-hosted R2R container (using `full.toml`) running on an independent Postgres, RabbitMQ, and Redis instance. Configure the container with your custom configuration file by setting the environment variable `R2R_CONFIG_PATH` inside the container to your TOML (e.g., `/configs/full.toml`).
+
+For runtime overrides (e.g., search settings, model selection), the wrapper supports passing dynamic configuration in each API call. See https://r2r-docs.sciphi.ai/self-hosting/configuration/overview.
+
+In `appsettings.json` / `appsettings.Development.json`, configure the R2R section:
+```json
+"R2R": {
+  "BaseUrl": "http://localhost:7272",
+  "ConfigPath": "/configs/full.toml",
+  "DefaultTimeout": 30,
+  "MaxRetries": 3
+}
+```
+
 ## R2R Wrapper Implementation Plan
+11. Auth client: login, token refresh, logout, session introspection.
+12. Document & Collection clients: CRUD, metadata, multi-tenant filters.
+13. Conversation client: manage chat sessions, pagination, transcripts.
+14. Prompt client: template CRUD, versioning, validation.
+15. Search & RAG client: vector, hybrid, advanced, agentic flows, with deduplication and contextual enrichment pre-processing.
+
 The WebServices project will implement a resilient .NET client wrapper against the SciPhi AI R2R API in a modular 10-phase approach:
 1. Common infrastructure: named HttpClients with BaseAddress, Polly policies (retry, circuit breaker, timeout, bulkhead), Serilog logging, Prometheus metrics, health checks.
 2. Ingestion client: chunked uploads, idempotency tokens, parallel ingestion with throttling, retry/backoff, resume support.

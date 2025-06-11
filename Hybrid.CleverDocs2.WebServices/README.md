@@ -125,6 +125,7 @@ Principali sezioni di configurazione:
     "RabbitMQ": "amqp://guest:guest@192.168.1.4:5672"
   },
   "R2R": {
+    "ConfigPath": "./configs/full.toml",  # Custom TOML config path inside R2R container
     "ApiUrl": "http://192.168.1.4:7272",
     "DefaultTimeout": 30,
     "MaxRetries": 3
