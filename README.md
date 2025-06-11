@@ -56,6 +56,19 @@ The following endpoints correspond to the Docker Compose setup:
 - **Redis**: `localhost:6380`, password: `your_redis_password`
 - **RabbitMQ**: AMQP at `localhost:5674`, Management UI at `http://localhost:15674`, user: `your_rabbitmq_user`, password: `your_strong_password`
 
+## R2R Wrapper Implementation Plan
+The WebServices project will implement a resilient .NET client wrapper against the SciPhi AI R2R API in a modular 10-phase approach:
+1. Common infrastructure: named HttpClients with BaseAddress, Polly policies (retry, circuit breaker, timeout, bulkhead), Serilog logging, Prometheus metrics, health checks.
+2. Ingestion client: chunked uploads, idempotency tokens, parallel ingestion with throttling, retry/backoff, resume support.
+3. Graph client: batch graph operations, caching, eventual consistency, error handling.
+4. Custom tools client: plugin registration, sandbox execution, metadata & health-check endpoints, versioning.
+5. Maintenance client: scheduled and on-demand cleanup, dry-run mode, alerting, database/index maintenance.
+6. Orchestration service: idempotent workflows combining ingestion, indexing, RAG, tools, backed by RabbitMQ and state persisted in PostgreSQL.
+7. Local-LLM fallback: strategy pattern between remote R2R and on-premise LLMs, TTL caching, health probes, load balancing.
+8. Structured-output validation: JSON schema enforcement, auto-correction of deviations, centralized schema registry.
+9. MCP introspection & tuning: runtime tuning via API, pipeline metrics, introspection endpoints.
+10. Web-Dev integration & Evals: CORS/iframe support, SSE/WebSocket streaming, embedded Swagger UI, health metrics, evaluation endpoints.
+
 
 ## Quick Start
 1. Prepare a `docker-compose.yml` for PostgreSQL, Redis, and RabbitMQ and note their endpoints.

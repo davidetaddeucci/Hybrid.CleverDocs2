@@ -198,6 +198,16 @@ Per gestire l'elaborazione asincrona dei documenti, il sistema utilizza RabbitMQ
 - **Worker Services**: Servizi dedicati per l'elaborazione dei messaggi
 - **Circuit Breaker**: Per gestire errori e fallimenti
 - **Retry con Backoff Esponenziale**: Per operazioni fallite
+
+## Contribution
+- Seguire il piano di implementazione modulare per i client R2R
+- Scrivere test unitari e di integrazione per ogni servizio in `tests/`
+- Aggiornare la documentazione `docs/` con esempi di utilizzo e scenari di failure
+- Creare PR per ogni feature branch
+
+## License
+© 2025 Hybrid Research. All rights reserved.
+
 - **Dead Letter Queue**: Per messaggi non elaborabili
 
 Per dettagli sull'implementazione del sistema di code, consultare [Gestione Code RabbitMQ](./docs/gestione_code_rabbitmq.md).
