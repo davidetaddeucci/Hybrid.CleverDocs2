@@ -1,5 +1,7 @@
-namespace $ns;
-public class $res
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Orchestration
 {
-    // TODO: add response properties
+    public class OrchestrationResponse
+    {
+        // TODO: add response properties (e.g., OrchestrationId, Status)
+    }
 }
