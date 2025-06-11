@@ -1,6 +1,15 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
-namespace Hybrid.CleverDocs2.WebServices.Services.Clients;
-public interface $iface
+using Hybrid.CleverDocs2.WebServices.Services.DTOs.McpTuning;
+
+namespace Hybrid.CleverDocs2.WebServices.Services.Clients
 {
-    // TODO: define methods for $module operations
+    public interface IMcpTuningClient
+    {
+        Task<McpTuningResponse> CreateAsync(McpTuningRequest request);
+        Task<McpTuningResponse> GetAsync(string id);
+        Task<IEnumerable<McpTuningResponse>> ListAsync();
+        Task<McpTuningResponse> UpdateAsync(string id, McpTuningRequest request);
+        Task DeleteAsync(string id);
+    }
 }

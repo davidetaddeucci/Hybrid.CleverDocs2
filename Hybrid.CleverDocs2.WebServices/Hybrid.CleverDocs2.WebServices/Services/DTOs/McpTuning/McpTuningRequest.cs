@@ -1,5 +1,7 @@
-namespace $ns;
-public class $req
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.McpTuning
 {
-    // TODO: add request properties
+    public class McpTuningRequest
+    {
+        // TODO: add request properties (e.g., ParameterName, Value)
+    }
 }
