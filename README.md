@@ -50,6 +50,13 @@ Hybrid.CleverDocs2/
 - RabbitMQ 3.12+
 - SciPhi AI R2R API server up and running
 
+## Service Endpoints
+The following endpoints correspond to the Docker Compose setup:
+- **PostgreSQL**: `localhost:5433`, database: `mydatabase`, user: `your_postgres_user`, password: `your_strong_password`
+- **Redis**: `localhost:6380`, password: `your_redis_password`
+- **RabbitMQ**: AMQP at `localhost:5674`, Management UI at `http://localhost:15674`, user: `your_rabbitmq_user`, password: `your_strong_password`
+
+
 ## Quick Start
 1. Prepare a `docker-compose.yml` for PostgreSQL, Redis, and RabbitMQ and note their endpoints.
 2. Clone the repository:
