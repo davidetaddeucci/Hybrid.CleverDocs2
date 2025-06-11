@@ -1,5 +1,7 @@
-namespace $ns;
-public class $res
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Graph
 {
-    // TODO: add response properties
+    public class GraphResponse
+    {
+        // TODO: add response properties (e.g., Nodes, Edges)
+    }
 }
