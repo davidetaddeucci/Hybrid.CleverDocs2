@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+using RabbitMQ.Client;
 using Microsoft.EntityFrameworkCore;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Consumers;
@@ -31,8 +33,7 @@ builder.Services.AddMassTransit(x => {
     x.AddConsumer<IngestionChunkConsumer>();
     x.UsingRabbitMq((context, cfg) => {
         var rmq = builder.Configuration.GetSection("RabbitMQ");
-        cfg.Host(rmq["Host"], h => {
-        h.VirtualHost(rmq["VirtualHost"]);
+        cfg.Host(rmq["Host"], rmq["VirtualHost"], h => {
             h.Username(rmq["Username"]);
             h.Password(rmq["Password"]);
         });
@@ -47,13 +48,7 @@ builder.Services.AddMassTransit(x => {
 builder.Services.AddHealthChecks()
     .AddNpgSql(builder.Configuration.GetConnectionString("Postgres"), name: "postgres")
     .AddRedis(builder.Configuration["Redis:Configuration"], name: "redis")
-    .AddRabbitMQ(sp => {
-        var configSection = sp.GetRequiredService<IConfiguration>().GetSection("RabbitMQ");
-        var uri = new Uri($"amqp://{configSection["Username"]}:{configSection["Password"]}@{configSection["Host"]}/{configSection["VirtualHost"]}");
-        var factory = new ConnectionFactory { Uri = uri };
-        return factory.CreateConnection();
-    }, name: "rabbitmq");
-// CORS
+    .AddRabbitMQ($"amqp://{builder.Configuration["RabbitMQ:Username"]}:{builder.Configuration["RabbitMQ:Password"]}@{builder.Configuration["RabbitMQ:Host"]}/{builder.Configuration["RabbitMQ:VirtualHost"]}", name: "rabbitmq");
 builder.Services.AddCors(options => options.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 
