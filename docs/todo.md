@@ -26,7 +26,7 @@
 - [ ] Implement DocumentClient with CRUD and DI registration
 - [x] Implement ConversationClient with CRUD and DI registration
 - [x] Implement PromptClient with CRUD and DI registration
-- [ ] Implement IngestionClient with CRUD and DI registration
+- [x] Implement IngestionClient with CRUD and DI registration
 - [ ] Implement GraphClient with CRUD and DI registration
 - [ ] Implement SearchClient with CRUD and DI registration
 - [ ] Implement ToolsClient with CRUD and DI registration
