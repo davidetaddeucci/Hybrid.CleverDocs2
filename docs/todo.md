@@ -24,7 +24,7 @@
 
 - [x] Scaffolding R2ROptions, AuthClient & DI registrations
 - [ ] Implement DocumentClient with CRUD and DI registration
-- [ ] Implement ConversationClient with CRUD and DI registration
+- [x] Implement ConversationClient with CRUD and DI registration
 - [ ] Implement PromptClient with CRUD and DI registration
 - [ ] Implement IngestionClient with CRUD and DI registration
 - [ ] Implement GraphClient with CRUD and DI registration

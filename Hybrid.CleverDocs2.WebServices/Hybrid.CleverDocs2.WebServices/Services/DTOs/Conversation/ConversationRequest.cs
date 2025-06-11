@@ -1,5 +1,7 @@
-namespace $ns;
-public class $req
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation
 {
-    // TODO: add request properties
+    public class ConversationRequest
+    {
+        // TODO: add request properties (e.g., Title, CollectionIds)
+    }
 }

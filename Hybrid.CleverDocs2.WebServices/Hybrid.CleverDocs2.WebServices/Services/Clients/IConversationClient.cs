@@ -1,6 +1,15 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
-namespace Hybrid.CleverDocs2.WebServices.Services.Clients;
-public interface $iface
+using Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation;
+
+namespace Hybrid.CleverDocs2.WebServices.Services.Clients
 {
-    // TODO: define methods for $module operations
+    public interface IConversationClient
+    {
+        Task<ConversationResponse> CreateAsync(ConversationRequest request);
+        Task<ConversationResponse> GetAsync(string id);
+        Task<IEnumerable<ConversationResponse>> ListAsync();
+        Task<ConversationResponse> UpdateAsync(string id, ConversationRequest request);
+        Task DeleteAsync(string id);
+    }
 }
