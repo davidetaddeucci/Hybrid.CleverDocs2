@@ -1,3 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+using Hybrid.CleverDocs2.WebServices.Data;
+using Hybrid.CleverDocs2.WebServices.Consumers;
+using Hybrid.CleverDocs2.WebServices.Workers;
+using MassTransit;
 using System;
 using Hybrid.CleverDocs2.WebServices.Services.Clients;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs;
@@ -10,6 +15,39 @@ using Microsoft.Extensions.DependencyInjection;
 var builder = WebApplication.CreateBuilder(args);
 // Configure R2R options
 builder.Services.Configure<R2ROptions>(builder.Configuration.GetSection("R2R"));
+// DbContext / PostgreSQL
+builder.Services.AddDbContext<ApplicationDbContext>(opts =>
+    opts.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+
+// Redis Cache
+builder.Services.AddStackExchangeRedisCache(opts => {
+    opts.Configuration = builder.Configuration["Redis:Configuration"];
+});
+
+// MassTransit / RabbitMQ
+builder.Services.AddMassTransit(x => {
+    x.AddConsumer<IngestionChunkConsumer>();
+    x.UsingRabbitMq((context, cfg) => {
+        var rmq = builder.Configuration.GetSection("RabbitMQ");
+        cfg.Host(rmq["Host"], rmq["VirtualHost"], h => {
+            h.Username(rmq["Username"]);
+            h.Password(rmq["Password"]);
+        });
+        cfg.ReceiveEndpoint("ingestion-chunk-queue", e => {
+            e.ConfigureConsumer<IngestionChunkConsumer>(context);
+        });
+    });
+});
+
+// HealthChecks
+builder.Services.AddHealthChecks()
+    .AddNpgSql(builder.Configuration.GetConnectionString("Postgres"), name: "postgres")
+    .AddRedis(builder.Configuration["Redis:Configuration"], name: "redis")
+    .AddRabbitMQ($"amqp://{builder.Configuration["RabbitMQ:Username"]}:{builder.Configuration["RabbitMQ:Password"]}@{builder.Configuration["RabbitMQ:Host"]}", name: "rabbitmq");
+
+// CORS
+builder.Services.AddCors(options => options.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+
 
 // Register AuthClient with resilience policies
 builder.Services.AddHttpClient<IAuthClient, AuthClient>(client =>
@@ -93,6 +131,8 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+// Run background ingestion worker
+builder.Services.AddHostedService<IngestionWorker>();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -101,6 +141,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapHealthChecks("/health");
+
 
 app.UseAuthorization();
 
