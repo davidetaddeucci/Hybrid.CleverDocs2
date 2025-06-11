@@ -19,6 +19,23 @@
 - [x] Definire l'integrazione con Redis per il caching avanzato
 
 ## Progettazione Frontend
+
+## WebServices Backend API
+
+- [x] Scaffolding R2ROptions, AuthClient & DI registrations
+- [ ] Implement DocumentClient with CRUD and DI registration
+- [ ] Implement ConversationClient with CRUD and DI registration
+- [ ] Implement PromptClient with CRUD and DI registration
+- [ ] Implement IngestionClient with CRUD and DI registration
+- [ ] Implement GraphClient with CRUD and DI registration
+- [ ] Implement SearchClient with CRUD and DI registration
+- [ ] Implement ToolsClient with CRUD and DI registration
+- [ ] Implement MaintenanceClient with CRUD and DI registration
+- [ ] Implement OrchestrationClient with CRUD and DI registration
+- [ ] Implement LocalLLMClient with CRUD and DI registration
+- [ ] Implement ValidationClient with CRUD and DI registration
+- [ ] Implement McpTuningClient with CRUD and DI registration
+- [ ] Implement WebDevClient with CRUD and DI registration
 - [x] Progettare l'interfaccia utente con MudBlazor
 - [x] Dettagliare i workflow per i diversi ruoli (Admin, Company, User)
 - [x] Definire componenti riutilizzabili e layout responsive
