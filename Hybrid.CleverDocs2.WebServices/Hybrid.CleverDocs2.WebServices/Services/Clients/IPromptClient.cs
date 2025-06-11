@@ -1,6 +1,15 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
-namespace Hybrid.CleverDocs2.WebServices.Services.Clients;
-public interface $iface
+using Hybrid.CleverDocs2.WebServices.Services.DTOs.Prompt;
+
+namespace Hybrid.CleverDocs2.WebServices.Services.Clients
 {
-    // TODO: define methods for $module operations
+    public interface IPromptClient
+    {
+        Task<PromptResponse> CreateAsync(PromptRequest request);
+        Task<PromptResponse> GetAsync(string id);
+        Task<IEnumerable<PromptResponse>> ListAsync();
+        Task<PromptResponse> UpdateAsync(string id, PromptRequest request);
+        Task DeleteAsync(string id);
+    }
 }

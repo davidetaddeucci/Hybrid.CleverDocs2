@@ -1,5 +1,7 @@
-namespace $ns;
-public class $res
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Prompt
 {
-    // TODO: add response properties
+    public class PromptResponse
+    {
+        // TODO: add response properties (e.g., ResponseText)
+    }
 }
