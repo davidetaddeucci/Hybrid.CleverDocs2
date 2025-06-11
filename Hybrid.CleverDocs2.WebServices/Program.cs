@@ -11,6 +11,8 @@ using Polly;
 using Polly.Extensions.Http;
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 // Configure R2R options
@@ -29,7 +31,8 @@ builder.Services.AddMassTransit(x => {
     x.AddConsumer<IngestionChunkConsumer>();
     x.UsingRabbitMq((context, cfg) => {
         var rmq = builder.Configuration.GetSection("RabbitMQ");
-        cfg.Host(rmq["Host"], rmq["VirtualHost"], h => {
+        cfg.Host(rmq["Host"], h => {
+        h.VirtualHost(rmq["VirtualHost"]);
             h.Username(rmq["Username"]);
             h.Password(rmq["Password"]);
         });
@@ -40,11 +43,16 @@ builder.Services.AddMassTransit(x => {
 });
 
 // HealthChecks
+
 builder.Services.AddHealthChecks()
     .AddNpgSql(builder.Configuration.GetConnectionString("Postgres"), name: "postgres")
     .AddRedis(builder.Configuration["Redis:Configuration"], name: "redis")
-    .AddRabbitMQ($"amqp://{builder.Configuration["RabbitMQ:Username"]}:{builder.Configuration["RabbitMQ:Password"]}@{builder.Configuration["RabbitMQ:Host"]}", name: "rabbitmq");
-
+    .AddRabbitMQ(sp => {
+        var configSection = sp.GetRequiredService<IConfiguration>().GetSection("RabbitMQ");
+        var uri = new Uri($"amqp://{configSection["Username"]}:{configSection["Password"]}@{configSection["Host"]}/{configSection["VirtualHost"]}");
+        var factory = new ConnectionFactory { Uri = uri };
+        return factory.CreateConnection();
+    }, name: "rabbitmq");
 // CORS
 builder.Services.AddCors(options => options.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
