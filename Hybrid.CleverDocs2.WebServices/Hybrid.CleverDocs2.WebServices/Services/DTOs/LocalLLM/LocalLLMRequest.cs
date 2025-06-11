@@ -1,5 +1,7 @@
-namespace $ns;
-public class $req
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.LocalLLM
 {
-    // TODO: add request properties
+    public class LocalLLMRequest
+    {
+        // TODO: add request properties (e.g., Prompt, Temperature)
+    }
 }

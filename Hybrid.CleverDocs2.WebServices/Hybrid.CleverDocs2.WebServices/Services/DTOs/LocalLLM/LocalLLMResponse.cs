@@ -1,5 +1,7 @@
-namespace $ns;
-public class $res
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.LocalLLM
 {
-    // TODO: add response properties
+    public class LocalLLMResponse
+    {
+        // TODO: add response properties (e.g., GeneratedText)
+    }
 }
