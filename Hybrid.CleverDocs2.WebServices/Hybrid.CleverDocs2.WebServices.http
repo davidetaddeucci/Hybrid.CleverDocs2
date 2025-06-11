@@ -1,0 +1,6 @@
+@Hybrid.CleverDocs2.WebServices_HostAddress = http://localhost:5252
+
+GET {{Hybrid.CleverDocs2.WebServices_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
