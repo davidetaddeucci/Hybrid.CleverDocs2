@@ -1,5 +1,7 @@
-namespace $ns;
-public class $res
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.WebDev
 {
-    // TODO: add response properties
+    public class WebDevResponse
+    {
+        // TODO: add response properties (e.g., DeploymentId, Status)
+    }
 }

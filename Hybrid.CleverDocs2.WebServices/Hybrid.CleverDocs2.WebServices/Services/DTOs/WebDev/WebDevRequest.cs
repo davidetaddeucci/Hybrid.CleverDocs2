@@ -1,5 +1,7 @@
-namespace $ns;
-public class $req
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.WebDev
 {
-    // TODO: add request properties
+    public class WebDevRequest
+    {
+        // TODO: add request properties (e.g., HtmlContent, Assets)
+    }
 }
