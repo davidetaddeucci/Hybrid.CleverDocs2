@@ -1,4 +1,31 @@
+using System;
+using Hybrid.CleverDocs2.WebServices.Services.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.DTOs;
+using Microsoft.Extensions.Options;
+using Polly;
+using Polly.Extensions.Http;
+using System.Net.Http;
+using Microsoft.Extensions.DependencyInjection;
+
 var builder = WebApplication.CreateBuilder(args);
+// Configure R2R options
+builder.Services.Configure<R2ROptions>(builder.Configuration.GetSection("R2R"));
+
+// Register AuthClient with resilience policies
+builder.Services.AddHttpClient<IAuthClient, AuthClient>(client =>
+{
+    var cfg = builder.Configuration.GetSection("R2R");
+    var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
+    client.BaseAddress = new Uri(url);
+    client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
+})
+.AddPolicyHandler(HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
+.AddPolicyHandler(HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+
 
 // Add services to the container.
 
