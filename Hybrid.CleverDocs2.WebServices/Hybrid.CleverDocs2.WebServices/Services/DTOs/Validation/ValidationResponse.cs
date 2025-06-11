@@ -1,5 +1,7 @@
-namespace $ns;
-public class $res
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Validation
 {
-    // TODO: add response properties
+    public class ValidationResponse
+    {
+        // TODO: add response properties (e.g., ValidationId, Results)
+    }
 }

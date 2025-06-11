@@ -33,7 +33,7 @@
 - [x] Implement MaintenanceClient with CRUD and DI registration
 - [x] Implement OrchestrationClient with CRUD and DI registration
 - [x] Implement LocalLLMClient with CRUD and DI registration
-- [ ] Implement ValidationClient with CRUD and DI registration
+- [x] Implement ValidationClient with CRUD and DI registration
 - [ ] Implement McpTuningClient with CRUD and DI registration
 - [ ] Implement WebDevClient with CRUD and DI registration
 - [x] Progettare l'interfaccia utente con MudBlazor

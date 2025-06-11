@@ -1,5 +1,7 @@
-namespace $ns;
-public class $req
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Validation
 {
-    // TODO: add request properties
+    public class ValidationRequest
+    {
+        // TODO: add request properties (e.g., DocumentId, Rules)
+    }
 }
