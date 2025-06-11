@@ -1,5 +1,7 @@
-namespace $ns;
-public class $res
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Tools
 {
-    // TODO: add response properties
+    public class ToolsResponse
+    {
+        // TODO: add response properties (e.g., ToolId, Status)
+    }
 }
