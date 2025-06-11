@@ -224,6 +224,8 @@ Il sistema può essere deployato in diversi ambienti:
 Per dettagli sul deployment, consultare:
 - [Guida al Deployment](./docs/deployment/README_architettura_deployment.md)
 
+$(cat /tmp/endpoints_snippet.txt)
+
 ## Conclusioni
 
 L'architettura di Hybrid.CleverDocs2 è progettata per essere robusta, scalabile e facile da mantenere. La separazione tra frontend e backend, l'uso di tecnologie moderne come Blazor, PostgreSQL, Redis e RabbitMQ, e l'implementazione di pattern come Clean Architecture e CQRS, permettono di creare un sistema enterprise-grade che soddisfa i requisiti di multitenancy, gestione documenti e interazione chatbot.
