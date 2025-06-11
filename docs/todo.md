@@ -30,7 +30,7 @@
 - [x] Implement GraphClient with CRUD and DI registration
 - [x] Implement SearchClient with CRUD and DI registration
 - [x] Implement ToolsClient with CRUD and DI registration
-- [ ] Implement MaintenanceClient with CRUD and DI registration
+- [x] Implement MaintenanceClient with CRUD and DI registration
 - [ ] Implement OrchestrationClient with CRUD and DI registration
 - [ ] Implement LocalLLMClient with CRUD and DI registration
 - [ ] Implement ValidationClient with CRUD and DI registration

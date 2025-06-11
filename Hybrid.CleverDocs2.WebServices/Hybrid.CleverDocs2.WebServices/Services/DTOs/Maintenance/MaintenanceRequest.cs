@@ -1,5 +1,7 @@
-namespace $ns;
-public class $req
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Maintenance
 {
-    // TODO: add request properties
+    public class MaintenanceRequest
+    {
+        // TODO: add request properties (e.g., JobId, Parameters)
+    }
 }
