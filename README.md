@@ -1,128 +1,81 @@
 # Hybrid.CleverDocs2
 
-## Panoramica
+## Overview
+Hybrid.CleverDocs2 is an enterprise-grade multi-tenant WebUI for managing document collections and interacting with the SciPhi AI R2R API engine. It comprises:
 
-Hybrid.CleverDocs2 è una WebUI multitenant enterprise-grade per accedere in concorrenza a tutti i servizi esibiti da un SciPhi AI R2R API server. Il sistema permette la creazione e gestione di collezioni di documenti personalizzate e protette per utente, con interazione in linguaggio naturale tramite LLM API.
+- **Hybrid.CleverDocs2.WebServices**: .NET 9.0 Web API backend, implements REST endpoints, JWT authentication, multi-tenant data isolation, and background workers for R2R queue consumption.
+- **Hybrid.CleverDocs.WebUI**: .NET 9.0 Blazor frontend (WebAssembly) with MudBlazor components, supporting multi-tenant login, document management, and AI chat interface.
 
-Il progetto è strutturato in due componenti principali:
-- **Hybrid.CleverDocs2.WebUI**: Frontend Blazor con MudBlazor
-- **Hybrid.CleverDocs2.WebServices**: Backend API server per comunicazione con R2R
+## Objectives
+- Provide an intuitive UI for non-technical users
+- Implement robust queuing of R2R jobs to handle high document volumes
+- Ensure tenant data isolation
+- Optimize performance via advanced caching
+- Secure authentication and authorization with JWT
+- Enable monitoring and scalability
 
-## Obiettivi del Sistema
-
-- Fornire un'interfaccia utente intuitiva e accessibile per utenti non tecnici
-- Implementare un sistema robusto di gestione code per superare i limiti di R2R nell'elaborare upload di troppi documenti
-- Garantire l'isolamento dei dati in un ambiente multitenant
-- Ottimizzare le performance con caching avanzato
-- Offrire un'esperienza di uso intuitiva, facile, accattivante e non respingente
-
-## Struttura del Repository
-
+## Repository Structure
 ```
 Hybrid.CleverDocs2/
-├── docs/                              # Documentazione generale
-│   ├── architettura/                  # Documenti di architettura
-│   ├── deployment/                    # Guide di deployment
-│   └── img/                           # Immagini e diagrammi
-├── shared/                            # Codice e modelli condivisi
-├── Hybrid.CleverDocs2.WebUI/          # Progetto frontend Blazor
-├── Hybrid.CleverDocs2.WebServices/    # Progetto backend API
-└── README.md                          # Questo file
+├── docs/                          # General documentation and design artifacts
+├── Hybrid.CleverDocs2.WebServices # Backend API server project
+├── Hybrid.CleverDocs.WebUI        # Frontend Blazor project
+└── README.md                      # This file
 ```
 
-## Documentazione
+## Documentation
+### General System Documentation (docs/)
+- **System Architecture**: `docs/Architettura del Sistema Hybrid.CleverDocs2.md`
+- **Auth Flows**: `docs/Flussi di Autenticazione e Autorizzazione.md`, `docs/autenticazione_autorizzazione.md`
+- **Data Model (PostgreSQL)**: `docs/modello_dati.md`, `docs/Modello Dati PostgreSQL per WebUI Multitenant R2R.md`
+- **RabbitMQ Integration**: `docs/Integrazione con R2R e Sistema di Gestione Code con RabbitMQ.md`
+- **Redis Caching**: `docs/Integrazione con Redis per Caching Avanzato.md`
+- **Scalability & Robustness**: `docs/scalabilita_robustezza.md`
+- **Deployment Guide**: `docs/README_ Architettura e Deployment.md`
 
-### Documentazione Generale
+### Subproject Documentation
+- **Frontend (Blazor)**: `Hybrid.CleverDocs.WebUI/README.md`, `docs/R2R WebUI Frontend Blazor.md`, `docs/interfaccia_utente.md`
+- **Backend (WebServices)**: `Hybrid.CleverDocs2.WebServices/README.md`, `docs/R2R WebUI Backend API Server.md`, `docs/Documenti Specifici per WebServices.md`
 
-La documentazione generale del sistema si trova nella directory `docs/` e copre gli aspetti architetturali e di deployment comuni a entrambi i sottoprogetti:
+## Known Gaps
+- Missing OpenAPI/Swagger specification (`.yaml` file)
+- No automated test suites (API unit tests, Blazor component tests, E2E, load tests)
+- Missing CI/CD pipeline definitions
+- Monitoring and health checks not instrumented (Prometheus/Grafana)
 
-- [Architettura del Sistema](./docs/architettura/architettura_sistema.md): Descrizione dettagliata dell'architettura complessiva
-- [Scalabilità e Robustezza](./docs/architettura/scalabilita_robustezza.md): Considerazioni enterprise-grade
-- [Modello Dati PostgreSQL](./docs/architettura/modello_dati_postgresql.md): Schema del database condiviso
-- [Integrazione con R2R e RabbitMQ](./docs/architettura/integrazione_r2r_rabbitmq.md): Visione generale dell'integrazione
-- [Integrazione con Redis](./docs/architettura/integrazione_redis.md): Visione generale del caching
-- [Guida al Deployment](./docs/deployment/README_architettura_deployment.md): Istruzioni per il deployment del sistema
-
-### Documentazione Specifica dei Sottoprogetti
-
-Ogni sottoprogetto ha la propria documentazione specifica nella rispettiva directory:
-
-- [README Frontend](./Hybrid.CleverDocs2.WebUI/README.md): Guida al frontend Blazor
-- [README Backend](./Hybrid.CleverDocs2.WebServices/README.md): Guida al backend API server
-
-## Ruoli Utente
-
-Il sistema supporta tre ruoli principali:
-
-1. **Admin**:
-   - Crea e gestisce Companies e Users
-   - Configura impostazioni globali e specifiche per Company
-   - Gestisce configurazioni di R2R API
-
-2. **Company**:
-   - Consulta dati di monitoring
-   - Visualizza tutte le basi di conoscenza dei propri Users
-   - Interroga il chatbot su tutte le collezioni
-
-3. **User**:
-   - Gestisce diverse collections
-   - Carica e cancella files nelle sue collections
-   - Interroga il chatbot selezionando quali collections utilizzare
-
-## Tecnologie Principali
-
-- **Frontend**: Microsoft .NET 9.0 Blazor con MudBlazor
-- **Backend**: Microsoft .NET 9.0 Web API
-- **Database**: PostgreSQL
-- **Message Broker**: RabbitMQ
-- **Caching**: Redis
-- **Integrazione**: SciPhi AI R2R API
-
-## Prerequisiti
-
+## Prerequisites
 - .NET 9.0 SDK
 - PostgreSQL 16+
 - Redis 7.0+
 - RabbitMQ 3.12+
-- SciPhi AI R2R API server attivo (http://192.168.1.4:7272)
+- SciPhi AI R2R API server up and running
 
 ## Quick Start
-
-1. Clonare il repository
+1. Prepare a `docker-compose.yml` for PostgreSQL, Redis, and RabbitMQ and note their endpoints.
+2. Clone the repository:
    ```bash
-   git clone https://github.com/hybrid/cleverdocs2.git
+   git clone https://github.com/davidetaddeucci/Hybrid.CleverDocs2.git
    cd Hybrid.CleverDocs2
    ```
-
-2. Configurare le connessioni a PostgreSQL, Redis, RabbitMQ e R2R API nei rispettivi file di configurazione
-
-3. Avviare il backend WebServices
+3. Configure service endpoints in `appsettings.Development.json` for both WebServices and WebUI:
+   - `ConnectionStrings:Postgres`
+   - `Redis:Configuration`
+   - `RabbitMQ:Host`
+   - `SciPhi:R2R:Url`
+4. Run the backend:
    ```bash
    cd Hybrid.CleverDocs2.WebServices
-   dotnet run --project src/Hybrid.CleverDocs2.WebServices.Api/Hybrid.CleverDocs2.WebServices.Api.csproj
+   dotnet run
    ```
-
-4. Avviare il frontend WebUI
+5. Run the frontend:
    ```bash
-   cd Hybrid.CleverDocs2.WebUI
-   dotnet run --project src/Hybrid.CleverDocs2.WebUI.csproj
+   cd Hybrid.CleverDocs.WebUI
+   dotnet run
    ```
+6. Open your browser to the address shown (e.g., `https://localhost:7000`).
 
-5. Accedere all'applicazione tramite browser all'indirizzo indicato (solitamente `https://localhost:7000`)
+## Contribution
+- Use feature branches, write tests, follow `.editorconfig`, and submit pull requests for review.
 
-Per istruzioni dettagliate, consultare:
-- [Guida al Deployment](./docs/deployment/README_architettura_deployment.md)
-- [README WebUI](./Hybrid.CleverDocs2.WebUI/README.md)
-- [README WebServices](./Hybrid.CleverDocs2.WebServices/README.md)
-
-## Contribuzione
-
-Seguire le linee guida di sviluppo definite nel progetto:
-- Utilizzare feature branches per nuove funzionalità
-- Scrivere test per nuovo codice
-- Seguire le convenzioni di codice definite in `.editorconfig`
-- Sottoporre pull request per review
-
-## Licenza
-
-Copyright (c) 2025. Tutti i diritti riservati.
+## License
+© 2025 Hybrid Research. All rights reserved.
