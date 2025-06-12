@@ -13,8 +13,6 @@ using Polly;
 using Polly.Extensions.Http;
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Configuration;
-using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 // Configure R2R options
@@ -48,7 +46,6 @@ builder.Services.AddMassTransit(x => {
 builder.Services.AddHealthChecks()
     .AddNpgSql(builder.Configuration.GetConnectionString("Postgres"), name: "postgres")
     .AddRedis(builder.Configuration["Redis:Configuration"], name: "redis")
-    .AddRabbitMQ($"amqp://{builder.Configuration["RabbitMQ:Username"]}:{builder.Configuration["RabbitMQ:Password"]}@{builder.Configuration["RabbitMQ:Host"]}/{builder.Configuration["RabbitMQ:VirtualHost"]}", name: "rabbitmq");
 builder.Services.AddCors(options => options.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 
