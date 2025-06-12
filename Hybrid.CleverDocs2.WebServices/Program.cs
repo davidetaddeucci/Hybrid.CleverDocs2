@@ -10,34 +10,76 @@ using Hybrid.CleverDocs2.WebServices.Services.Clients;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// DbContext / PostgreSQL
-builder.Services.AddDbContext<ApplicationDbContext>(opts =>
-    opts.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
-
-// Redis Cache
-builder.Services.AddStackExchangeRedisCache(opts => {
-    opts.Configuration = builder.Configuration["Redis:Configuration"];
+// PostgreSQL Database - Dynamically configured
+builder.Services.AddDbContext<ApplicationDbContext>(opts => {
+    var connectionString = builder.Configuration.GetConnectionString("Postgres") 
+        ?? throw new InvalidOperationException("PostgreSQL connection string 'Postgres' not found in configuration");
+    opts.UseNpgsql(connectionString);
 });
 
-// MassTransit / RabbitMQ
+// Redis Cache - Dynamically configured
+builder.Services.AddStackExchangeRedisCache(opts => {
+    var redisConfig = builder.Configuration.GetSection("Redis");
+    opts.Configuration = redisConfig["Configuration"] 
+        ?? throw new InvalidOperationException("Redis configuration not found");
+    opts.InstanceName = redisConfig["InstanceName"] ?? "CleverDocs2";
+    
+    // Additional Redis options from configuration
+    if (int.TryParse(redisConfig["ConnectTimeout"], out var connectTimeout))
+        opts.ConfigurationOptions = StackExchange.Redis.ConfigurationOptions.Parse(opts.Configuration);
+});
+
+// MassTransit / RabbitMQ - Dynamically configured
 builder.Services.AddMassTransit(x => {
     x.AddConsumer<IngestionChunkConsumer>();
     x.UsingRabbitMq((context, cfg) => {
         var rmq = builder.Configuration.GetSection("RabbitMQ");
-        cfg.Host(rmq["Host"], rmq["VirtualHost"], h => {
-            h.Username(rmq["Username"]);
-            h.Password(rmq["Password"]);
+        var host = rmq["Host"] ?? throw new InvalidOperationException("RabbitMQ Host not configured");
+        var virtualHost = rmq["VirtualHost"] ?? "/";
+        var username = rmq["Username"] ?? throw new InvalidOperationException("RabbitMQ Username not configured");
+        var password = rmq["Password"] ?? throw new InvalidOperationException("RabbitMQ Password not configured");
+        
+        cfg.Host(host, virtualHost, h => {
+            h.Username(username);
+            h.Password(password);
+            
+            // Additional RabbitMQ configuration from appsettings
+            if (int.TryParse(rmq["Heartbeat"], out var heartbeat))
+                h.Heartbeat((ushort)heartbeat);
+            if (int.TryParse(rmq["RequestedConnectionTimeout"], out var timeout))
+                h.RequestedConnectionTimeout(TimeSpan.FromMilliseconds(timeout));
         });
+        
         cfg.ReceiveEndpoint("ingestion-chunk-queue", e => {
             e.ConfigureConsumer<IngestionChunkConsumer>(context);
         });
     });
 });
 
-// Health Checks
-builder.Services.AddHealthChecks()
-    .AddNpgSql(builder.Configuration.GetConnectionString("Postgres")!, name: "postgres")
-    .AddRedis(builder.Configuration["Redis:Configuration"]!, name: "redis");
+// Health Checks - Dynamically configured
+var healthChecksBuilder = builder.Services.AddHealthChecks();
+
+// PostgreSQL Health Check
+var postgresConnection = builder.Configuration.GetConnectionString("Postgres");
+if (!string.IsNullOrEmpty(postgresConnection))
+{
+    healthChecksBuilder.AddNpgSql(postgresConnection, name: "postgres");
+}
+
+// Redis Health Check
+var redisConnection = builder.Configuration["Redis:Configuration"];
+if (!string.IsNullOrEmpty(redisConnection))
+{
+    healthChecksBuilder.AddRedis(redisConnection, name: "redis");
+}
+
+// RabbitMQ Health Check (optional - commented out due to package compatibility)
+// var rabbitMqConfig = builder.Configuration.GetSection("RabbitMQ");
+// var enableRabbitMqHealthCheck = builder.Configuration.GetValue<bool>("HealthChecks:RabbitMQ:Enabled");
+// if (enableRabbitMqHealthCheck && !string.IsNullOrEmpty(rabbitMqConfig["Host"]))
+// {
+//     // RabbitMQ health check can be added when compatible package is available
+// }
     // Note: RabbitMQ health check temporarily disabled due to package compatibility issues
 
 // Polly Policies
