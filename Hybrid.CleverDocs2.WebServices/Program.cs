@@ -69,6 +69,7 @@ void RegisterR2RClient<TInterface, TImplementation>(IServiceCollection services)
 // Register all R2R clients
 RegisterR2RClient<IAuthClient, AuthClient>(builder.Services);
 RegisterR2RClient<IDocumentClient, DocumentClient>(builder.Services);
+RegisterR2RClient<ICollectionClient, CollectionClient>(builder.Services);
 RegisterR2RClient<IConversationClient, ConversationClient>(builder.Services);
 RegisterR2RClient<IPromptClient, PromptClient>(builder.Services);
 RegisterR2RClient<IIngestionClient, IngestionClient>(builder.Services);
