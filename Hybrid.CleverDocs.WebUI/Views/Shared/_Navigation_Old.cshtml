@@ -1,0 +1,258 @@
+@{
+    var userRole = ViewBag.UserRole?.ToString()?.ToLower() ?? "user";
+}
+
+<ul class="navbar-nav">
+    <!-- Dashboard -->
+    <li class="nav-item">
+        <a class="nav-link text-dark" href="@Url.Action("Index", "Dashboard")">
+            <i class="material-symbols-rounded opacity-5">dashboard</i>
+            <span class="nav-link-text ms-1">Dashboard</span>
+        </a>
+    </li>
+
+    @if (userRole == "admin")
+    {
+        <!-- Admin Section -->
+        <li class="nav-item mt-3">
+            <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">Administration</h6>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="@Url.Action("Index", "Companies")">
+                <i class="material-symbols-rounded opacity-5">business</i>
+                <span class="nav-link-text ms-1">Companies</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="@Url.Action("Index", "AdminUsers")">
+                <i class="material-symbols-rounded opacity-5">admin_panel_settings</i>
+                <span class="nav-link-text ms-1">Admin Users</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="@Url.Action("Index", "SystemSettings")">
+                <i class="material-symbols-rounded opacity-5">settings</i>
+                <span class="nav-link-text ms-1">System Settings</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="@Url.Action("Health", "System")">
+                <i class="material-symbols-rounded opacity-5">monitor_heart</i>
+                <span class="nav-link-text ms-1">System Health</span>
+            </a>
+        </li>
+    }
+
+@if (userRole == "admin" || userRole == "company")
+{
+    <!-- Company Management -->
+    <div class="nav-item">
+        <a href="#" class="nav-link">
+            <i class="fas fa-building"></i>
+            <span>Company</span>
+            <button class="nav-toggle">
+                <i class="fas fa-chevron-down"></i>
+            </button>
+        </a>
+        <div class="nav-submenu">
+            <a href="@Url.Action("Index", "CompanyUsers")" class="nav-link">
+                <i class="fas fa-users"></i>
+                <span>Users</span>
+            </a>
+            <a href="@Url.Action("Settings", "Company")" class="nav-link">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+            @if (userRole == "company")
+            {
+                <a href="@Url.Action("Billing", "Company")" class="nav-link">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Billing</span>
+                </a>
+            }
+        </div>
+    </div>
+}
+
+<!-- Documents -->
+<div class="nav-item">
+    <a href="#" class="nav-link">
+        <i class="fas fa-file-alt"></i>
+        <span>Documents</span>
+        <button class="nav-toggle">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </a>
+    <div class="nav-submenu">
+        <a href="@Url.Action("Index", "Documents")" class="nav-link">
+            <i class="fas fa-list"></i>
+            <span>All Documents</span>
+        </a>
+        <a href="@Url.Action("Upload", "Documents")" class="nav-link">
+            <i class="fas fa-upload"></i>
+            <span>Upload</span>
+        </a>
+        <a href="@Url.Action("Processing", "Documents")" class="nav-link">
+            <i class="fas fa-spinner"></i>
+            <span>Processing</span>
+        </a>
+    </div>
+</div>
+
+<!-- Collections -->
+<div class="nav-item">
+    <a href="#" class="nav-link">
+        <i class="fas fa-folder"></i>
+        <span>Collections</span>
+        <button class="nav-toggle">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </a>
+    <div class="nav-submenu">
+        <a href="@Url.Action("Index", "Collections")" class="nav-link">
+            <i class="fas fa-list"></i>
+            <span>My Collections</span>
+        </a>
+        <a href="@Url.Action("Create", "Collections")" class="nav-link">
+            <i class="fas fa-plus"></i>
+            <span>Create New</span>
+        </a>
+        <a href="@Url.Action("Shared", "Collections")" class="nav-link">
+            <i class="fas fa-share-alt"></i>
+            <span>Shared</span>
+        </a>
+    </div>
+</div>
+
+<!-- AI Chat -->
+<div class="nav-item">
+    <a href="#" class="nav-link">
+        <i class="fas fa-comments"></i>
+        <span>AI Chat</span>
+        <button class="nav-toggle">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </a>
+    <div class="nav-submenu">
+        <a href="@Url.Action("Index", "Chat")" class="nav-link">
+            <i class="fas fa-comment"></i>
+            <span>New Chat</span>
+        </a>
+        <a href="@Url.Action("History", "Chat")" class="nav-link">
+            <i class="fas fa-history"></i>
+            <span>Chat History</span>
+        </a>
+        <a href="@Url.Action("Templates", "Chat")" class="nav-link">
+            <i class="fas fa-file-code"></i>
+            <span>Prompt Templates</span>
+        </a>
+    </div>
+</div>
+
+<!-- Search -->
+<div class="nav-item">
+    <a href="@Url.Action("Index", "Search")" class="nav-link">
+        <i class="fas fa-search"></i>
+        <span>Search</span>
+    </a>
+</div>
+
+<!-- Analytics -->
+<div class="nav-item">
+    <a href="#" class="nav-link">
+        <i class="fas fa-chart-bar"></i>
+        <span>Analytics</span>
+        <button class="nav-toggle">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </a>
+    <div class="nav-submenu">
+        <a href="@Url.Action("Usage", "Analytics")" class="nav-link">
+            <i class="fas fa-chart-line"></i>
+            <span>Usage Stats</span>
+        </a>
+        <a href="@Url.Action("Performance", "Analytics")" class="nav-link">
+            <i class="fas fa-tachometer-alt"></i>
+            <span>Performance</span>
+        </a>
+        <a href="@Url.Action("Reports", "Analytics")" class="nav-link">
+            <i class="fas fa-file-chart-line"></i>
+            <span>Reports</span>
+        </a>
+    </div>
+</div>
+
+<!-- Divider -->
+<hr style="margin: 1rem; border-color: var(--md-border-light);">
+
+<!-- User Profile -->
+<div class="nav-item">
+    <a href="@Url.Action("Profile", "User")" class="nav-link">
+        <i class="fas fa-user"></i>
+        <span>Profile</span>
+    </a>
+</div>
+
+<!-- Settings -->
+<div class="nav-item">
+    <a href="#" class="nav-link">
+        <i class="fas fa-cog"></i>
+        <span>Settings</span>
+        <button class="nav-toggle">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </a>
+    <div class="nav-submenu">
+        <a href="@Url.Action("Account", "Settings")" class="nav-link">
+            <i class="fas fa-user-cog"></i>
+            <span>Account</span>
+        </a>
+        <a href="@Url.Action("Security", "Settings")" class="nav-link">
+            <i class="fas fa-shield-alt"></i>
+            <span>Security</span>
+        </a>
+        <a href="@Url.Action("Notifications", "Settings")" class="nav-link">
+            <i class="fas fa-bell"></i>
+            <span>Notifications</span>
+        </a>
+        <a href="@Url.Action("Preferences", "Settings")" class="nav-link">
+            <i class="fas fa-sliders-h"></i>
+            <span>Preferences</span>
+        </a>
+    </div>
+</div>
+
+<!-- Help -->
+<div class="nav-item">
+    <a href="#" class="nav-link">
+        <i class="fas fa-question-circle"></i>
+        <span>Help</span>
+        <button class="nav-toggle">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </a>
+    <div class="nav-submenu">
+        <a href="@Url.Action("Documentation", "Help")" class="nav-link">
+            <i class="fas fa-book"></i>
+            <span>Documentation</span>
+        </a>
+        <a href="@Url.Action("Support", "Help")" class="nav-link">
+            <i class="fas fa-life-ring"></i>
+            <span>Support</span>
+        </a>
+        <a href="@Url.Action("About", "Help")" class="nav-link">
+            <i class="fas fa-info-circle"></i>
+            <span>About</span>
+        </a>
+    </div>
+</div>
+
+<!-- Logout -->
+<div class="nav-item" style="margin-top: auto; padding-top: 1rem;">
+    <form asp-controller="Auth" asp-action="Logout" method="post" style="margin: 0;">
+        <button type="submit" class="nav-link" style="background: none; border: none; width: 100%; text-align: left;">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </button>
+    </form>
+</div>
