@@ -25,11 +25,11 @@
     <!-- State Management -->
     <PackageReference Include="Blazored.LocalStorage" Version="4.5.0" />
     
-    <!-- Charts for Analytics -->
-    <PackageReference Include="ApexCharts" Version="3.0.2" />
+    <!-- Charts for Analytics (temporarily disabled) -->
+    <!-- <PackageReference Include="ApexCharts" Version="3.0.2" /> -->
     
-    <!-- File Upload -->
-    <PackageReference Include="BlazorInputFile" Version="0.2.0" />
+    <!-- File Upload (temporarily disabled) -->
+    <!-- <PackageReference Include="BlazorInputFile" Version="0.2.0" /> -->
   </ItemGroup>
 
 </Project>

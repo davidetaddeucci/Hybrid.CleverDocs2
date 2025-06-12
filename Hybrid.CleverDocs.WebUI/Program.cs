@@ -1,73 +1,44 @@
 using Blazored.LocalStorage;
-using Hybrid.CleverDocs.WebUI.Components;
 using Hybrid.CleverDocs.WebUI.Services.Api;
 using Hybrid.CleverDocs.WebUI.Services.Auth;
 using Microsoft.AspNetCore.Components.Authorization;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Serilog
-Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .Enrich.FromLogContext()
-    .WriteTo.Console()
-    .WriteTo.File("logs/webui-.txt", rollingInterval: RollingInterval.Day)
-    .CreateLogger();
-
-builder.Host.UseSerilog();
-
 // Add services to the container.
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+builder.Services.AddRazorPages();
+builder.Services.AddServerSideBlazor();
 
 // Add Blazored LocalStorage
 builder.Services.AddBlazoredLocalStorage();
 
-// Add HttpClient
-builder.Services.AddHttpClient<IApiClient, ApiClient>();
+// Add HTTP Client
+builder.Services.AddHttpClient();
 
-// Add Authentication services
-builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddAuthorizationCore();
-
-// Add API services
+// Add API Client
 builder.Services.AddScoped<IApiClient, ApiClient>();
 
-// Add configuration
-builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
+// Add Authentication Services
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
+
+// Add Authorization
+builder.Services.AddAuthorizationCore();
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
-app.UseAntiforgery();
+app.UseStaticFiles();
+app.UseRouting();
 
-// Add authentication middleware
-app.UseAuthentication();
-app.UseAuthorization();
+app.MapRazorPages();
+app.MapBlazorHub();
+app.MapFallbackToPage("/_Host");
 
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
-
-try
-{
-    Log.Information("Starting Hybrid.CleverDocs2.WebUI");
-    app.Run();
-}
-catch (Exception ex)
-{
-    Log.Fatal(ex, "Application terminated unexpectedly");
-}
-finally
-{
-    Log.CloseAndFlush();
-}
+app.Run();

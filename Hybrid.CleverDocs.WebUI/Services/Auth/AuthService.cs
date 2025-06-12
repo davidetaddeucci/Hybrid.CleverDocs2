@@ -33,15 +33,33 @@ public class AuthService : IAuthService
     {
         try
         {
-            var response = await _apiClient.PostAsync<LoginResponse>("webui/auth/login", request);
+            // Create request for backend
+            var backendRequest = new { email = request.Email, password = request.Password };
+            
+            var response = await _apiClient.PostAsync<dynamic>("api/simple-auth/login", backendRequest);
             
             if (response.Success && response.Data != null)
             {
                 var tokenKey = _configuration["Authentication:TokenStorageKey"] ?? "auth_token";
                 
-                await _localStorage.SetItemAsync(tokenKey, response.Data.AccessToken);
+                // Extract data from backend response
+                var token = response.Data.token?.ToString() ?? "";
+                var userData = response.Data.user;
+                var expiresAt = DateTime.Parse(response.Data.expiresAt?.ToString() ?? DateTime.UtcNow.AddHours(24).ToString());
                 
-                _currentUser = response.Data.User;
+                await _localStorage.SetItemAsync(tokenKey, token);
+                
+                // Create UserProfile from backend data
+                _currentUser = new UserProfile(
+                    userData.id?.ToString() ?? "",
+                    userData.email?.ToString() ?? "",
+                    userData.firstName?.ToString() ?? "",
+                    userData.lastName?.ToString() ?? "",
+                    Enum.Parse<UserRole>(userData.role?.ToString() ?? "User"),
+                    userData.company?.id?.ToString(),
+                    userData.company?.name?.ToString()
+                );
+                
                 AuthenticationStateChanged?.Invoke(_currentUser);
                 
                 // Notify authentication state provider
@@ -49,9 +67,13 @@ public class AuthService : IAuthService
                 {
                     await customProvider.NotifyAuthenticationStateChangedAsync();
                 }
+                
+                // Return adapted response
+                var loginResponse = new LoginResponse(token, _currentUser, expiresAt);
+                return new ApiResponse<LoginResponse>(true, loginResponse);
             }
             
-            return response;
+            return new ApiResponse<LoginResponse>(false, Message: response.Message ?? "Login failed");
         }
         catch (Exception ex)
         {
@@ -64,7 +86,7 @@ public class AuthService : IAuthService
         try
         {
             // Call backend logout endpoint
-            await _apiClient.PostAsync("webui/auth/logout", new { });
+            await _apiClient.PostAsync<object>("api/simple-auth/logout", new { });
             
             var tokenKey = _configuration["Authentication:TokenStorageKey"] ?? "auth_token";
             
@@ -142,10 +164,10 @@ public class AuthService : IAuthService
 
             // Extract user info from token
             var userId = jsonToken.Claims.FirstOrDefault(x => x.Type == "user_id")?.Value;
-            var email = jsonToken.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
+            var email = jsonToken.Claims.FirstOrDefault(x => x.Type == ClaimTypes.Email)?.Value;
             var firstName = jsonToken.Claims.FirstOrDefault(x => x.Type == "first_name")?.Value;
             var lastName = jsonToken.Claims.FirstOrDefault(x => x.Type == "last_name")?.Value;
-            var roleString = jsonToken.Claims.FirstOrDefault(x => x.Type == "role")?.Value;
+            var roleString = jsonToken.Claims.FirstOrDefault(x => x.Type == ClaimTypes.Role)?.Value;
             var companyId = jsonToken.Claims.FirstOrDefault(x => x.Type == "company_id")?.Value;
             var companyName = jsonToken.Claims.FirstOrDefault(x => x.Type == "company_name")?.Value;
 

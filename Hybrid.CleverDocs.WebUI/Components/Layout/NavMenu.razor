@@ -5,163 +5,161 @@
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 
-<div class="flex flex-col h-full">
+<div class="cd-nav-menu">
     <!-- Logo Section -->
-    <div class="p-6 border-b border-md-outline-variant">
-        <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 bg-md-primary rounded-md-lg flex items-center justify-center">
-                <svg class="w-6 h-6 text-md-on-primary" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-            </div>
-            <div>
-                <h2 class="text-title-medium text-md-on-surface">CleverDocs</h2>
-                <p class="text-body-small text-md-on-surface-variant">AI Document Assistant</p>
-            </div>
+    <div class="cd-nav-header">
+        <div class="cd-nav-logo">
+            <svg class="w-8 h-8 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="cd-nav-title">CleverDocs</span>
         </div>
     </div>
 
     <!-- Navigation Items -->
-    <nav class="flex-1 p-4 space-y-2">
+    <nav class="cd-nav-items">
         <AuthorizeView>
             <Authorized>
                 @{
                     var user = context.User;
-                    var role = GetUserRole(user);
+                    var role = user.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value ?? "User";
                 }
 
-                <!-- Dashboard -->
-                <NavItem Icon="home" Text="Dashboard" Href="/" />
+                <!-- Common Navigation Items -->
+                <a href="/" class="cd-nav-item @GetActiveClass("/")">
+                    <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+                    </svg>
+                    <span class="cd-nav-label">Dashboard</span>
+                </a>
 
-                @if (role == UserRole.Admin)
+                @if (role == "Admin")
                 {
                     <!-- Admin Navigation -->
-                    <NavSection Title="Amministrazione">
-                        <NavItem Icon="business" Text="Aziende" Href="/admin/companies" />
-                        <NavItem Icon="people" Text="Utenti" Href="/admin/users" />
-                        <NavItem Icon="key" Text="API Keys" Href="/admin/apikeys" />
-                        <NavItem Icon="settings" Text="Impostazioni Sistema" Href="/admin/settings" />
-                    </NavSection>
-                    
-                    <NavSection Title="Analytics">
-                        <NavItem Icon="analytics" Text="Metriche Globali" Href="/admin/analytics" />
-                        <NavItem Icon="chart" Text="Report Utilizzo" Href="/admin/reports" />
-                        <NavItem Icon="audit" Text="Audit Trail" Href="/admin/audit" />
-                    </NavSection>
-                    
-                    <NavSection Title="Sistema">
-                        <NavItem Icon="config" Text="Configurazione" Href="/admin/config" />
-                        <NavItem Icon="backup" Text="Backup" Href="/admin/backup" />
-                        <NavItem Icon="logs" Text="Log Sistema" Href="/admin/logs" />
-                        <NavItem Icon="health" Text="Health Check" Href="/admin/health" />
-                    </NavSection>
+                    <div class="cd-nav-section">
+                        <div class="cd-nav-section-title">Amministrazione</div>
+                        
+                        <a href="/admin" class="cd-nav-item @GetActiveClass("/admin")">
+                            <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="cd-nav-label">Admin Panel</span>
+                        </a>
+
+                        <a href="/admin/users" class="cd-nav-item @GetActiveClass("/admin/users")">
+                            <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                            </svg>
+                            <span class="cd-nav-label">Gestione Utenti</span>
+                        </a>
+
+                        <a href="/admin/companies" class="cd-nav-item @GetActiveClass("/admin/companies")">
+                            <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-6a1 1 0 00-1-1H9a1 1 0 00-1 1v6a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="cd-nav-label">Gestione Aziende</span>
+                        </a>
+
+                        <a href="/admin/analytics" class="cd-nav-item @GetActiveClass("/admin/analytics")">
+                            <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
+                            </svg>
+                            <span class="cd-nav-label">Analytics</span>
+                        </a>
+                    </div>
                 }
-                else if (role == UserRole.Company)
+                else if (role == "Company")
                 {
                     <!-- Company Navigation -->
-                    <NavSection Title="Gestione Aziendale">
-                        <NavItem Icon="people" Text="Utenti" Href="/company/users" />
-                        <NavItem Icon="folder" Text="Collezioni" Href="/company/collections" />
-                        <NavItem Icon="chat" Text="Chat AI" Href="/company/chat" />
-                        <NavItem Icon="analytics" Text="Report" Href="/company/analytics" />
-                    </NavSection>
-                    
-                    <NavSection Title="Impostazioni">
-                        <NavItem Icon="business" Text="Profilo Azienda" Href="/company/profile" />
-                        <NavItem Icon="config" Text="Configurazione R2R" Href="/company/r2r-config" />
-                        <NavItem Icon="quota" Text="Quote e Limiti" Href="/company/quotas" />
-                    </NavSection>
-                    
-                    <!-- Future Features -->
-                    <NavSection Title="Collaborazione" IsComingSoon="true">
-                        <NavItem Icon="team" Text="Team Workspaces" Href="/company/workspaces" IsDisabled="true" />
-                        <NavItem Icon="shared" Text="Shared Collections" Href="/company/shared" IsDisabled="true" />
-                        <NavItem Icon="workflow" Text="Workflows" Href="/company/workflows" IsDisabled="true" />
-                    </NavSection>
-                }
-                else if (role == UserRole.User)
-                {
-                    <!-- User Navigation -->
-                    <NavSection Title="Le Mie Risorse">
-                        <NavItem Icon="folder" Text="Collezioni" Href="/user/collections" />
-                        <NavItem Icon="upload" Text="Documenti" Href="/user/documents" />
-                        <NavItem Icon="chat" Text="Chat AI" Href="/user/chat" />
-                        <NavItem Icon="history" Text="Conversazioni" Href="/user/conversations" />
-                    </NavSection>
-                    
-                    <!-- Future Features -->
-                    <NavSection Title="AI Features" IsComingSoon="true">
-                        <NavItem Icon="search" Text="Smart Search" Href="/user/smart-search" IsDisabled="true" />
-                        <NavItem Icon="summary" Text="Summarization" Href="/user/summary" IsDisabled="true" />
-                        <NavItem Icon="tag" Text="Auto-tagging" Href="/user/auto-tag" IsDisabled="true" />
-                    </NavSection>
-                    
-                    <NavSection Title="Collaborazione" IsComingSoon="true">
-                        <NavItem Icon="team" Text="Team Collections" Href="/user/team-collections" IsDisabled="true" />
-                        <NavItem Icon="shared" Text="Shared Conversations" Href="/user/shared-conversations" IsDisabled="true" />
-                        <NavItem Icon="annotation" Text="Annotations" Href="/user/annotations" IsDisabled="true" />
-                    </NavSection>
+                    <div class="cd-nav-section">
+                        <div class="cd-nav-section-title">Gestione Aziendale</div>
+                        
+                        <a href="/company" class="cd-nav-item @GetActiveClass("/company")">
+                            <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-6a1 1 0 00-1-1H9a1 1 0 00-1 1v6a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="cd-nav-label">Dashboard Aziendale</span>
+                        </a>
+
+                        <a href="/company/team" class="cd-nav-item @GetActiveClass("/company/team")">
+                            <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                            </svg>
+                            <span class="cd-nav-label">Team</span>
+                        </a>
+
+                        <a href="/company/collections" class="cd-nav-item @GetActiveClass("/company/collections")">
+                            <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="cd-nav-label">Collezioni</span>
+                        </a>
+                    </div>
                 }
 
-                <!-- Common Navigation -->
-                <NavSection Title="Account">
-                    <NavItem Icon="person" Text="Profilo" Href="/profile" />
-                    <NavItem Icon="help" Text="Aiuto" Href="/help" />
-                </NavSection>
+                <!-- Common sections for all authenticated users -->
+                <div class="cd-nav-section">
+                    <div class="cd-nav-section-title">Documenti</div>
+                    
+                    <a href="/documents" class="cd-nav-item @GetActiveClass("/documents")">
+                        <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v8H4V6z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="cd-nav-label">I Miei Documenti</span>
+                    </a>
+
+                    <a href="/search" class="cd-nav-item @GetActiveClass("/search")">
+                        <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="cd-nav-label">Ricerca</span>
+                    </a>
+
+                    <a href="/upload" class="cd-nav-item @GetActiveClass("/upload")">
+                        <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="cd-nav-label">Carica Documenti</span>
+                    </a>
+                </div>
+
+                <div class="cd-nav-section">
+                    <div class="cd-nav-section-title">Impostazioni</div>
+                    
+                    <a href="/profile" class="cd-nav-item @GetActiveClass("/profile")">
+                        <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="cd-nav-label">Profilo</span>
+                    </a>
+
+                    <a href="/settings" class="cd-nav-item @GetActiveClass("/settings")">
+                        <svg class="cd-nav-icon" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="cd-nav-label">Impostazioni</span>
+                    </a>
+                </div>
             </Authorized>
         </AuthorizeView>
     </nav>
-
-    <!-- User Info & Logout -->
-    <div class="p-4 border-t border-md-outline-variant">
-        <AuthorizeView>
-            <Authorized>
-                @{
-                    var userName = context.User.Identity?.Name ?? "Utente";
-                    var userEmail = context.User.FindFirst("email")?.Value ?? "";
-                    var companyName = context.User.FindFirst("company_name")?.Value;
-                }
-                
-                <div class="flex items-center space-x-3 mb-3">
-                    <div class="w-10 h-10 bg-md-secondary rounded-full flex items-center justify-center">
-                        <span class="text-md-on-secondary text-label-large">
-                            @(userName.Substring(0, 1).ToUpper())
-                        </span>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-body-medium text-md-on-surface truncate">@userName</p>
-                        @if (!string.IsNullOrEmpty(companyName))
-                        {
-                            <p class="text-body-small text-md-on-surface-variant truncate">@companyName</p>
-                        }
-                    </div>
-                </div>
-                
-                <button @onclick="LogoutAsync" class="btn-outlined w-full">
-                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"></path>
-                    </svg>
-                    Esci
-                </button>
-            </Authorized>
-        </AuthorizeView>
-    </div>
 </div>
 
 @code {
-    private UserRole GetUserRole(ClaimsPrincipal user)
+    private string GetActiveClass(string path)
     {
-        var roleString = user.FindFirst("role")?.Value;
-        if (Enum.TryParse<UserRole>(roleString, out var role))
+        var currentPath = Navigation.ToBaseRelativePath(Navigation.Uri);
+        
+        if (path == "/" && (currentPath == "" || currentPath == "/"))
         {
-            return role;
+            return "cd-nav-item-active";
         }
-        return UserRole.User;
-    }
-
-    private async Task LogoutAsync()
-    {
-        await AuthService.LogoutAsync();
-        Navigation.NavigateTo("/login", true);
+        
+        if (path != "/" && currentPath.StartsWith(path.TrimStart('/'), StringComparison.OrdinalIgnoreCase))
+        {
+            return "cd-nav-item-active";
+        }
+        
+        return "";
     }
 }

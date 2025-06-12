@@ -1,0 +1,269 @@
+@page "/admin"
+@namespace Hybrid.CleverDocs.WebUI.Components.Pages
+@using Hybrid.CleverDocs.WebUI.Models
+@using Hybrid.CleverDocs.WebUI.Services.Auth
+@using Microsoft.AspNetCore.Authorization
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Admin Dashboard - CleverDocs</PageTitle>
+
+<div class="cd-dashboard-layout">
+    <!-- Header -->
+    <div class="cd-dashboard-header">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="cd-headline-large">Admin Dashboard</h1>
+                <p class="cd-body-medium text-gray-600">Gestione completa del sistema</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="cd-badge cd-badge-success">
+                    <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                    Sistema Attivo
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="cd-stats-card">
+            <div class="cd-stats-icon cd-stats-icon-blue">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <div class="cd-stats-content">
+                <div class="cd-stats-value">@totalUsers</div>
+                <div class="cd-stats-label">Utenti Totali</div>
+            </div>
+        </div>
+
+        <div class="cd-stats-card">
+            <div class="cd-stats-icon cd-stats-icon-green">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-6a1 1 0 00-1-1H9a1 1 0 00-1 1v6a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd"></path>
+                </svg>
+            </div>
+            <div class="cd-stats-content">
+                <div class="cd-stats-value">@totalCompanies</div>
+                <div class="cd-stats-label">Aziende</div>
+            </div>
+        </div>
+
+        <div class="cd-stats-card">
+            <div class="cd-stats-icon cd-stats-icon-purple">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd"></path>
+                </svg>
+            </div>
+            <div class="cd-stats-content">
+                <div class="cd-stats-value">@totalCollections</div>
+                <div class="cd-stats-label">Collezioni</div>
+            </div>
+        </div>
+
+        <div class="cd-stats-card">
+            <div class="cd-stats-icon cd-stats-icon-orange">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v8H4V6z" clip-rule="evenodd"></path>
+                </svg>
+            </div>
+            <div class="cd-stats-content">
+                <div class="cd-stats-value">@totalDocuments</div>
+                <div class="cd-stats-label">Documenti</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- System Management -->
+        <div class="lg:col-span-2">
+            <div class="cd-card">
+                <div class="cd-card-header">
+                    <h2 class="cd-headline-medium">Gestione Sistema</h2>
+                </div>
+                <div class="cd-card-content">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button class="cd-action-card" @onclick="ManageUsers">
+                            <div class="cd-action-icon cd-action-icon-blue">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="cd-action-title">Gestione Utenti</div>
+                                <div class="cd-action-description">Crea, modifica e gestisci utenti</div>
+                            </div>
+                        </button>
+
+                        <button class="cd-action-card" @onclick="ManageCompanies">
+                            <div class="cd-action-icon cd-action-icon-green">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-6a1 1 0 00-1-1H9a1 1 0 00-1 1v6a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="cd-action-title">Gestione Aziende</div>
+                                <div class="cd-action-description">Amministra aziende e piani</div>
+                            </div>
+                        </button>
+
+                        <button class="cd-action-card" @onclick="ViewAnalytics">
+                            <div class="cd-action-icon cd-action-icon-purple">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="cd-action-title">Analytics</div>
+                                <div class="cd-action-description">Visualizza metriche e report</div>
+                            </div>
+                        </button>
+
+                        <button class="cd-action-card" @onclick="SystemSettings">
+                            <div class="cd-action-icon cd-action-icon-orange">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="cd-action-title">Impostazioni</div>
+                                <div class="cd-action-description">Configura sistema e servizi</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="lg:col-span-1">
+            <div class="cd-card">
+                <div class="cd-card-header">
+                    <h2 class="cd-headline-medium">Stato Sistema</h2>
+                </div>
+                <div class="cd-card-content space-y-4">
+                    <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                            <span class="cd-body-medium">Backend API</span>
+                        </div>
+                        <span class="cd-badge cd-badge-success">Online</span>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                            <span class="cd-body-medium">PostgreSQL</span>
+                        </div>
+                        <span class="cd-badge cd-badge-success">Online</span>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                            <span class="cd-body-medium">Redis</span>
+                        </div>
+                        <span class="cd-badge cd-badge-success">Online</span>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                            <span class="cd-body-medium">RabbitMQ</span>
+                        </div>
+                        <span class="cd-badge cd-badge-success">Online</span>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
+                            <span class="cd-body-medium">R2R Clients</span>
+                        </div>
+                        <span class="cd-badge cd-badge-info">14 Ready</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="cd-card mt-6">
+                <div class="cd-card-header">
+                    <h2 class="cd-headline-medium">Attività Recente</h2>
+                </div>
+                <div class="cd-card-content">
+                    <div class="space-y-3">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                            <div>
+                                <p class="cd-body-small text-gray-900">Nuovo utente registrato</p>
+                                <p class="cd-body-small text-gray-500">2 minuti fa</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                            <div>
+                                <p class="cd-body-small text-gray-900">Sistema aggiornato</p>
+                                <p class="cd-body-small text-gray-500">1 ora fa</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-2 h-2 bg-purple-500 rounded-full mt-2"></div>
+                            <div>
+                                <p class="cd-body-small text-gray-900">Backup completato</p>
+                                <p class="cd-body-small text-gray-500">3 ore fa</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int totalUsers = 156;
+    private int totalCompanies = 23;
+    private int totalCollections = 89;
+    private int totalDocuments = 1247;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if user has admin role
+        if (!await AuthService.HasRoleAsync(UserRole.Admin))
+        {
+            Navigation.NavigateTo("/", true);
+        }
+        
+        // Load dashboard data
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        // TODO: Load real data from API
+        await Task.Delay(100); // Simulate API call
+    }
+
+    private void ManageUsers()
+    {
+        Navigation.NavigateTo("/admin/users");
+    }
+
+    private void ManageCompanies()
+    {
+        Navigation.NavigateTo("/admin/companies");
+    }
+
+    private void ViewAnalytics()
+    {
+        Navigation.NavigateTo("/admin/analytics");
+    }
+
+    private void SystemSettings()
+    {
+        Navigation.NavigateTo("/admin/settings");
+    }
+}

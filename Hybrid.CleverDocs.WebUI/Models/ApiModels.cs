@@ -3,7 +3,20 @@ using System.Text.Json.Serialization;
 namespace Hybrid.CleverDocs.WebUI.Models;
 
 // Authentication Models
-public record LoginRequest(string Email, string Password, bool RememberMe = false);
+public class LoginRequest
+{
+    public string Email { get; set; } = "";
+    public string Password { get; set; } = "";
+    public bool RememberMe { get; set; } = false;
+    
+    public LoginRequest() { }
+    public LoginRequest(string email, string password, bool rememberMe = false)
+    {
+        Email = email;
+        Password = password;
+        RememberMe = rememberMe;
+    }
+}
 
 public record LoginResponse(
     string AccessToken,

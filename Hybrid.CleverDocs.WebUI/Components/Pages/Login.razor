@@ -29,7 +29,7 @@
             <div>
                 <label class="cd-input-label">Email</label>
                 <InputText @bind-Value="loginRequest.Email" 
-                          class="cd-input @(HasError("email") ? "border-red-500" : "")"
+                          class="@($"cd-input {(HasError("email") ? "border-red-500" : "")}")"
                           placeholder="inserisci@email.com"
                           autocomplete="email" />
                 <ValidationMessage For="@(() => loginRequest.Email)" class="text-red-500 text-sm mt-1" />
@@ -41,7 +41,7 @@
                 <div class="relative">
                     <InputText @bind-Value="loginRequest.Password" 
                               type="@(showPassword ? "text" : "password")"
-                              class="cd-input @(HasError("password") ? "border-red-500" : "") pr-12"
+                              class="@($"cd-input {(HasError("password") ? "border-red-500" : "")} pr-12")"
                               placeholder="••••••••"
                               autocomplete="current-password" />
                     <button type="button" 
@@ -159,7 +159,7 @@
 </div>
 
 @code {
-    private LoginRequest loginRequest = new("", "");
+    private LoginRequest loginRequest = new();
     private bool rememberMe = false;
     private bool showPassword = false;
     private bool isLoading = false;

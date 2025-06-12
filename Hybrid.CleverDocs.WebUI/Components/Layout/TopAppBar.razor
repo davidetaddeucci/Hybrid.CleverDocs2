@@ -4,64 +4,64 @@
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 
-<div class="flex items-center justify-between">
+<div class="cd-topbar-content">
     <!-- Page Title and Breadcrumb -->
-    <div class="flex items-center space-x-4">
-        <h1 class="text-headline-small text-md-on-surface">
+    <div class="cd-topbar-left">
+        <h1 class="cd-topbar-title">
             @GetPageTitle()
         </h1>
         
         @if (ShowBreadcrumb)
         {
-            <nav class="flex items-center space-x-2 text-body-small text-md-on-surface-variant">
-                <span>Home</span>
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <nav class="cd-breadcrumb">
+                <span class="cd-breadcrumb-item">Home</span>
+                <svg class="cd-breadcrumb-separator" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
                 </svg>
-                <span>@GetPageTitle()</span>
+                <span class="cd-breadcrumb-item">@GetPageTitle()</span>
             </nav>
         }
     </div>
 
     <!-- Actions and User Menu -->
-    <div class="flex items-center space-x-4">
+    <div class="cd-topbar-right">
         <!-- Search (if enabled) -->
         @if (ShowSearch)
         {
-            <div class="relative">
+            <div class="cd-search-container">
                 <input type="text" 
                        placeholder="Cerca..." 
-                       class="input-outlined w-80 pl-10"
+                       class="cd-search-input"
                        @bind="searchQuery"
                        @onkeypress="OnSearchKeyPress" />
-                <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-md-on-surface-variant" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="cd-search-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path>
                 </svg>
             </div>
         }
 
         <!-- Notifications -->
-        <button class="relative p-2 rounded-md-lg hover:bg-md-on-surface hover:bg-opacity-8 transition-colors">
-            <svg class="w-6 h-6 text-md-on-surface" fill="currentColor" viewBox="0 0 20 20">
+        <button class="cd-icon-button">
+            <svg class="cd-icon" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"></path>
             </svg>
             @if (HasNotifications)
             {
-                <span class="absolute -top-1 -right-1 w-3 h-3 bg-md-error rounded-full"></span>
+                <span class="cd-notification-badge"></span>
             }
         </button>
 
         <!-- Theme Toggle -->
-        <button @onclick="ToggleTheme" class="p-2 rounded-md-lg hover:bg-md-on-surface hover:bg-opacity-8 transition-colors">
+        <button @onclick="ToggleTheme" class="cd-icon-button">
             @if (isDarkMode)
             {
-                <svg class="w-6 h-6 text-md-on-surface" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="cd-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
                 </svg>
             }
             else
             {
-                <svg class="w-6 h-6 text-md-on-surface" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="cd-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
                 </svg>
             }
@@ -75,43 +75,45 @@
                     var userInitial = userName.Substring(0, 1).ToUpper();
                 }
                 
-                <div class="relative">
-                    <button @onclick="ToggleUserMenu" class="flex items-center space-x-3 p-2 rounded-md-lg hover:bg-md-on-surface hover:bg-opacity-8 transition-colors">
-                        <div class="w-8 h-8 bg-md-secondary rounded-full flex items-center justify-center">
-                            <span class="text-md-on-secondary text-label-medium">@userInitial</span>
+                <div class="cd-user-menu-container">
+                    <button @onclick="ToggleUserMenu" class="cd-user-menu">
+                        <div class="cd-user-avatar">
+                            <span>@userInitial</span>
                         </div>
-                        <span class="text-body-medium text-md-on-surface">@userName</span>
-                        <svg class="w-4 h-4 text-md-on-surface-variant" fill="currentColor" viewBox="0 0 20 20">
+                        <div class="cd-user-info">
+                            <span class="cd-user-name">@userName</span>
+                        </div>
+                        <svg class="cd-dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                         </svg>
                     </button>
 
                     @if (showUserMenu)
                     {
-                        <div class="absolute right-0 top-full mt-2 w-56 bg-md-surface-container rounded-md-lg shadow-md-3 border border-md-outline-variant z-50">
-                            <div class="p-4 border-b border-md-outline-variant">
-                                <p class="text-body-medium text-md-on-surface">@userName</p>
-                                <p class="text-body-small text-md-on-surface-variant">@(context.User.FindFirst("email")?.Value)</p>
+                        <div class="cd-user-dropdown">
+                            <div class="cd-user-dropdown-header">
+                                <p class="cd-body-medium">@userName</p>
+                                <p class="cd-body-small">@(context.User.FindFirst("email")?.Value)</p>
                             </div>
-                            <div class="p-2">
-                                <a href="/profile" class="flex items-center space-x-3 p-3 rounded-md-sm hover:bg-md-on-surface hover:bg-opacity-8 transition-colors">
-                                    <svg class="w-5 h-5 text-md-on-surface-variant" fill="currentColor" viewBox="0 0 20 20">
+                            <div class="cd-user-dropdown-content">
+                                <a href="/profile" class="cd-dropdown-item">
+                                    <svg class="cd-dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
                                     </svg>
-                                    <span class="text-body-medium text-md-on-surface">Profilo</span>
+                                    <span>Profilo</span>
                                 </a>
-                                <a href="/settings" class="flex items-center space-x-3 p-3 rounded-md-sm hover:bg-md-on-surface hover:bg-opacity-8 transition-colors">
-                                    <svg class="w-5 h-5 text-md-on-surface-variant" fill="currentColor" viewBox="0 0 20 20">
+                                <a href="/settings" class="cd-dropdown-item">
+                                    <svg class="cd-dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
                                     </svg>
-                                    <span class="text-body-medium text-md-on-surface">Impostazioni</span>
+                                    <span>Impostazioni</span>
                                 </a>
-                                <hr class="my-2 border-md-outline-variant" />
-                                <button @onclick="LogoutAsync" class="w-full flex items-center space-x-3 p-3 rounded-md-sm hover:bg-md-error hover:bg-opacity-8 transition-colors text-left">
-                                    <svg class="w-5 h-5 text-md-error" fill="currentColor" viewBox="0 0 20 20">
+                                <hr class="cd-dropdown-divider" />
+                                <button @onclick="LogoutAsync" class="cd-dropdown-item cd-dropdown-item-danger">
+                                    <svg class="cd-dropdown-icon" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"></path>
                                     </svg>
-                                    <span class="text-body-medium text-md-error">Esci</span>
+                                    <span>Esci</span>
                                 </button>
                             </div>
                         </div>
@@ -131,10 +133,11 @@
     private bool showUserMenu = false;
     private bool isDarkMode = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
         // Initialize theme from localStorage or system preference
         // This would be implemented with JS interop
+        return Task.CompletedTask;
     }
 
     private string GetPageTitle()
@@ -173,7 +176,7 @@
         // Implement theme toggle with JS interop
     }
 
-    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    private void OnSearchKeyPress(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(searchQuery))
         {

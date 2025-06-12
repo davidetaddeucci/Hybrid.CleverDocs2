@@ -1,0 +1,9 @@
+@page "/"
+@namespace Hybrid.CleverDocs.WebUI.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@using Hybrid.CleverDocs.WebUI.Components
+@{
+    Layout = "_Layout";
+}
+
+<component type="typeof(App)" render-mode="Server" />

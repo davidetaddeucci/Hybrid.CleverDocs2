@@ -1,123 +1,72 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
-using MassTransit;
+using Hybrid.CleverDocs2.WebServices.Data;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Auth;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Document;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Collection;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Conversation;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Prompt;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Search;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Ingestion;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Graph;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Tools;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Maintenance;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Orchestration;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.LocalLLM;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Validation;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.McpTuning;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.WebDev;
 using Polly;
 using Polly.Extensions.Http;
-using RabbitMQ.Client;
-using Hybrid.CleverDocs2.WebServices.Data;
-using Hybrid.CleverDocs2.WebServices.Data.Models.Auth;
-using Hybrid.CleverDocs2.WebServices.Consumers;
-using Hybrid.CleverDocs2.WebServices.Workers;
-using Hybrid.CleverDocs2.WebServices.Services.R2R.Clients;
-using Hybrid.CleverDocs2.WebServices.Services.WebUI.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// PostgreSQL Database - Dynamically configured
-builder.Services.AddDbContext<ApplicationDbContext>(opts => {
-    var connectionString = builder.Configuration.GetConnectionString("Postgres") 
-        ?? throw new InvalidOperationException("PostgreSQL connection string 'Postgres' not found in configuration");
-    opts.UseNpgsql(connectionString);
-});
+// Add services to the container.
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
 
-// Auth Database Context
-builder.Services.AddDbContext<AuthDbContext>(opts => {
-    var connectionString = builder.Configuration.GetConnectionString("Postgres") 
-        ?? throw new InvalidOperationException("PostgreSQL connection string 'Postgres' not found in configuration");
-    opts.UseNpgsql(connectionString);
-});
+// Database Configuration (temporarily disabled for demo)
+// builder.Services.AddDbContext<AuthDbContext>(options =>
+//     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
-// Redis Cache - Dynamically configured
-builder.Services.AddStackExchangeRedisCache(opts => {
-    var redisConfig = builder.Configuration.GetSection("Redis");
-    opts.Configuration = redisConfig["Configuration"] 
-        ?? throw new InvalidOperationException("Redis configuration not found");
-    opts.InstanceName = redisConfig["InstanceName"] ?? "CleverDocs2";
-    
-    // Additional Redis options from configuration
-    if (int.TryParse(redisConfig["ConnectTimeout"], out var connectTimeout))
-        opts.ConfigurationOptions = StackExchange.Redis.ConfigurationOptions.Parse(opts.Configuration);
-});
+// builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
-// MassTransit / RabbitMQ - Dynamically configured
-builder.Services.AddMassTransit(x => {
-    x.AddConsumer<IngestionChunkConsumer>();
-    x.UsingRabbitMq((context, cfg) => {
-        var rmq = builder.Configuration.GetSection("RabbitMQ");
-        var host = rmq["Host"] ?? throw new InvalidOperationException("RabbitMQ Host not configured");
-        var virtualHost = rmq["VirtualHost"] ?? "/";
-        var username = rmq["Username"] ?? throw new InvalidOperationException("RabbitMQ Username not configured");
-        var password = rmq["Password"] ?? throw new InvalidOperationException("RabbitMQ Password not configured");
-        
-        cfg.Host(host, virtualHost, h => {
-            h.Username(username);
-            h.Password(password);
-            
-            // Additional RabbitMQ configuration from appsettings
-            if (int.TryParse(rmq["Heartbeat"], out var heartbeat))
-                h.Heartbeat((ushort)heartbeat);
-            if (int.TryParse(rmq["RequestedConnectionTimeout"], out var timeout))
-                h.RequestedConnectionTimeout(TimeSpan.FromMilliseconds(timeout));
-        });
-        
-        cfg.ReceiveEndpoint("ingestion-chunk-queue", e => {
-            e.ConfigureConsumer<IngestionChunkConsumer>(context);
-        });
+// JWT Configuration (simplified for demo)
+var jwtKey = "CleverDocs2-Super-Secret-JWT-Key-For-Authentication-2024-Very-Long-And-Secure";
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtKey)),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
     });
-});
 
-// Health Checks - Dynamically configured
-var healthChecksBuilder = builder.Services.AddHealthChecks();
-
-// PostgreSQL Health Check
-var postgresConnection = builder.Configuration.GetConnectionString("Postgres");
-if (!string.IsNullOrEmpty(postgresConnection))
-{
-    healthChecksBuilder.AddNpgSql(postgresConnection, name: "postgres");
-}
-
-// Redis Health Check
-var redisConnection = builder.Configuration["Redis:Configuration"];
-if (!string.IsNullOrEmpty(redisConnection))
-{
-    healthChecksBuilder.AddRedis(redisConnection, name: "redis");
-}
-
-// RabbitMQ Health Check (optional - commented out due to package compatibility)
-// var rabbitMqConfig = builder.Configuration.GetSection("RabbitMQ");
-// var enableRabbitMqHealthCheck = builder.Configuration.GetValue<bool>("HealthChecks:RabbitMQ:Enabled");
-// if (enableRabbitMqHealthCheck && !string.IsNullOrEmpty(rabbitMqConfig["Host"]))
-// {
-//     // RabbitMQ health check can be added when compatible package is available
-// }
-    // Note: RabbitMQ health check temporarily disabled due to package compatibility issues
-
-// Polly Policies
+// Polly Policies for R2R clients
 var retryPolicy = HttpPolicyExtensions
     .HandleTransientHttpError()
-    .WaitAndRetryAsync(builder.Configuration.GetSection("R2R").GetValue<int>("MaxRetries"), 
-        retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+    .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
-var circuitBreakerPolicy = HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
-
-// Register all R2R HTTP Clients with resilience policies
+// Register R2R HTTP Clients
 void RegisterR2RClient<TInterface, TImplementation>(IServiceCollection services)
     where TInterface : class
     where TImplementation : class, TInterface
 {
     services.AddHttpClient<TInterface, TImplementation>(client =>
     {
-        var cfg = builder.Configuration.GetSection("R2R");
-        var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
-        client.BaseAddress = new Uri(url);
-        client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
+        client.BaseAddress = new Uri("http://localhost:7272");
+        client.Timeout = TimeSpan.FromSeconds(30);
     })
-    .AddPolicyHandler(retryPolicy)
-    .AddPolicyHandler(circuitBreakerPolicy);
+    .AddPolicyHandler(retryPolicy);
 }
 
 // Register all R2R clients
@@ -126,9 +75,9 @@ RegisterR2RClient<IDocumentClient, DocumentClient>(builder.Services);
 RegisterR2RClient<ICollectionClient, CollectionClient>(builder.Services);
 RegisterR2RClient<IConversationClient, ConversationClient>(builder.Services);
 RegisterR2RClient<IPromptClient, PromptClient>(builder.Services);
+RegisterR2RClient<ISearchClient, SearchClient>(builder.Services);
 RegisterR2RClient<IIngestionClient, IngestionClient>(builder.Services);
 RegisterR2RClient<IGraphClient, GraphClient>(builder.Services);
-RegisterR2RClient<ISearchClient, SearchClient>(builder.Services);
 RegisterR2RClient<IToolsClient, ToolsClient>(builder.Services);
 RegisterR2RClient<IMaintenanceClient, MaintenanceClient>(builder.Services);
 RegisterR2RClient<IOrchestrationClient, OrchestrationClient>(builder.Services);
@@ -137,71 +86,35 @@ RegisterR2RClient<IValidationClient, ValidationClient>(builder.Services);
 RegisterR2RClient<IMcpTuningClient, McpTuningClient>(builder.Services);
 RegisterR2RClient<IWebDevClient, WebDevClient>(builder.Services);
 
-// JWT Configuration
-builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
-var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>() 
-    ?? throw new InvalidOperationException("JWT settings not configured");
-
-// Authentication & Authorization
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtSettings.SecretKey)),
-        ValidateIssuer = true,
-        ValidIssuer = jwtSettings.Issuer,
-        ValidateAudience = true,
-        ValidAudience = jwtSettings.Audience,
-        ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero
-    };
-});
-
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
-    options.AddPolicy("CompanyAdmin", policy => policy.RequireRole("Admin", "Company"));
-    options.AddPolicy("AllUsers", policy => policy.RequireRole("Admin", "Company", "User"));
-});
-
-// WebUI Auth Services
-builder.Services.AddScoped<IAuthService, AuthService>();
-
-// Background Workers
-builder.Services.AddHostedService<IngestionWorker>();
-
 // CORS
-builder.Services.AddCors(options => 
-    options.AddDefaultPolicy(p => 
-        p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
-
-// Controllers and OpenAPI
-builder.Services.AddControllers();
-builder.Services.AddOpenApi();
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader()));
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
+// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseDeveloperExceptionPage();
 }
 
 app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Health checks endpoint
-app.MapHealthChecks("/health");
-
-// Controllers
 app.MapControllers();
+
+// Health check endpoint
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+
+// Demo endpoint
+app.MapGet("/api/demo", () => Results.Ok(new { 
+    message = "CleverDocs2 WebServices Demo", 
+    version = "1.0.0",
+    features = new[] { "R2R Integration", "JWT Auth", "REST API" }
+}));
 
 app.Run();

@@ -1,0 +1,276 @@
+@page "/company"
+@namespace Hybrid.CleverDocs.WebUI.Components.Pages
+@using Hybrid.CleverDocs.WebUI.Models
+@using Hybrid.CleverDocs.WebUI.Services.Auth
+@using Microsoft.AspNetCore.Authorization
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "Company")]
+
+<PageTitle>Company Dashboard - CleverDocs</PageTitle>
+
+<div class="cd-dashboard-layout">
+    <!-- Header -->
+    <div class="cd-dashboard-header">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="cd-headline-large">Dashboard Aziendale</h1>
+                <p class="cd-body-medium text-gray-600">Gestione della tua organizzazione</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="cd-badge cd-badge-info">
+                    Piano: @subscriptionPlan
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="cd-stats-card">
+            <div class="cd-stats-icon cd-stats-icon-blue">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                </svg>
+            </div>
+            <div class="cd-stats-content">
+                <div class="cd-stats-value">@companyUsers</div>
+                <div class="cd-stats-label">Utenti Azienda</div>
+            </div>
+        </div>
+
+        <div class="cd-stats-card">
+            <div class="cd-stats-icon cd-stats-icon-green">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd"></path>
+                </svg>
+            </div>
+            <div class="cd-stats-content">
+                <div class="cd-stats-value">@companyCollections</div>
+                <div class="cd-stats-label">Collezioni</div>
+            </div>
+        </div>
+
+        <div class="cd-stats-card">
+            <div class="cd-stats-icon cd-stats-icon-purple">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v8H4V6z" clip-rule="evenodd"></path>
+                </svg>
+            </div>
+            <div class="cd-stats-content">
+                <div class="cd-stats-value">@companyDocuments</div>
+                <div class="cd-stats-label">Documenti</div>
+            </div>
+        </div>
+
+        <div class="cd-stats-card">
+            <div class="cd-stats-icon cd-stats-icon-orange">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"></path>
+                </svg>
+            </div>
+            <div class="cd-stats-content">
+                <div class="cd-stats-value">@monthlyQueries</div>
+                <div class="cd-stats-label">Query Mensili</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Company Management -->
+        <div class="lg:col-span-2">
+            <div class="cd-card">
+                <div class="cd-card-header">
+                    <h2 class="cd-headline-medium">Gestione Aziendale</h2>
+                </div>
+                <div class="cd-card-content">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button class="cd-action-card" @onclick="ManageTeam">
+                            <div class="cd-action-icon cd-action-icon-blue">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="cd-action-title">Gestione Team</div>
+                                <div class="cd-action-description">Invita e gestisci membri del team</div>
+                            </div>
+                        </button>
+
+                        <button class="cd-action-card" @onclick="ViewCollections">
+                            <div class="cd-action-icon cd-action-icon-green">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="cd-action-title">Collezioni</div>
+                                <div class="cd-action-description">Visualizza tutte le collezioni</div>
+                            </div>
+                        </button>
+
+                        <button class="cd-action-card" @onclick="ViewAnalytics">
+                            <div class="cd-action-icon cd-action-icon-purple">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="cd-action-title">Analytics</div>
+                                <div class="cd-action-description">Report e metriche aziendali</div>
+                            </div>
+                        </button>
+
+                        <button class="cd-action-card" @onclick="CompanySettings">
+                            <div class="cd-action-icon cd-action-icon-orange">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="cd-action-title">Impostazioni</div>
+                                <div class="cd-action-description">Configura impostazioni azienda</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage & Limits -->
+        <div class="lg:col-span-1">
+            <div class="cd-card">
+                <div class="cd-card-header">
+                    <h2 class="cd-headline-medium">Utilizzo & Limiti</h2>
+                </div>
+                <div class="cd-card-content space-y-4">
+                    <!-- Users Usage -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="cd-body-medium">Utenti</span>
+                            <span class="cd-body-small text-gray-500">@companyUsers / @maxUsers</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: @(((double)companyUsers / maxUsers) * 100)%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Documents Usage -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="cd-body-medium">Documenti</span>
+                            <span class="cd-body-small text-gray-500">@companyDocuments / @maxDocuments</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-green-600 h-2 rounded-full" style="width: @(((double)companyDocuments / maxDocuments) * 100)%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Queries Usage -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="cd-body-medium">Query Mensili</span>
+                            <span class="cd-body-small text-gray-500">@monthlyQueries / @maxQueries</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-purple-600 h-2 rounded-full" style="width: @(((double)monthlyQueries / maxQueries) * 100)%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Team Activity -->
+            <div class="cd-card mt-6">
+                <div class="cd-card-header">
+                    <h2 class="cd-headline-medium">Attività Team</h2>
+                </div>
+                <div class="cd-card-content">
+                    <div class="space-y-3">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                <span class="text-xs font-medium text-blue-600">MR</span>
+                            </div>
+                            <div>
+                                <p class="cd-body-small text-gray-900">Mario Rossi ha caricato 3 documenti</p>
+                                <p class="cd-body-small text-gray-500">15 minuti fa</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                <span class="text-xs font-medium text-green-600">LB</span>
+                            </div>
+                            <div>
+                                <p class="cd-body-small text-gray-900">Laura Bianchi ha creato una collezione</p>
+                                <p class="cd-body-small text-gray-500">1 ora fa</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                                <span class="text-xs font-medium text-purple-600">GV</span>
+                            </div>
+                            <div>
+                                <p class="cd-body-small text-gray-900">Giuseppe Verdi ha fatto 25 query</p>
+                                <p class="cd-body-small text-gray-500">2 ore fa</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string subscriptionPlan = "Professional";
+    private int companyUsers = 12;
+    private int companyCollections = 8;
+    private int companyDocuments = 156;
+    private int monthlyQueries = 2847;
+    
+    private int maxUsers = 50;
+    private int maxDocuments = 1000;
+    private int maxQueries = 10000;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if user has company role
+        if (!await AuthService.HasRoleAsync(UserRole.Company))
+        {
+            Navigation.NavigateTo("/", true);
+        }
+        
+        // Load company data
+        await LoadCompanyData();
+    }
+
+    private async Task LoadCompanyData()
+    {
+        var user = await AuthService.GetCurrentUserAsync();
+        if (user != null)
+        {
+            // TODO: Load real company data from API
+            await Task.Delay(100); // Simulate API call
+        }
+    }
+
+    private void ManageTeam()
+    {
+        Navigation.NavigateTo("/company/team");
+    }
+
+    private void ViewCollections()
+    {
+        Navigation.NavigateTo("/company/collections");
+    }
+
+    private void ViewAnalytics()
+    {
+        Navigation.NavigateTo("/company/analytics");
+    }
+
+    private void CompanySettings()
+    {
+        Navigation.NavigateTo("/company/settings");
+    }
+}

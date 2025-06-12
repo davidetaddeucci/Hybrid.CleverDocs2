@@ -1,0 +1,254 @@
+var builder = WebApplication.CreateBuilder(args);
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+app.UseStaticFiles();
+
+// Demo endpoint
+app.MapGet("/", () => Results.Content(GetDemoHtml(), "text/html"));
+
+// API status endpoint
+app.MapGet("/api/status", () => new { 
+    status = "healthy", 
+    timestamp = DateTime.UtcNow,
+    backend = "http://localhost:7271",
+    frontend = "http://localhost:53532"
+});
+
+app.Run();
+
+static string GetDemoHtml() => """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CleverDocs2 - Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-indigo-600">CleverDocs2</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-500">Demo Mode</span>
+                    <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <!-- Hero Section -->
+        <div class="text-center mb-12">
+            <h2 class="text-4xl font-extrabold text-gray-900 sm:text-5xl">
+                Welcome to <span class="text-indigo-600">CleverDocs2</span>
+            </h2>
+            <p class="mt-4 text-xl text-gray-600 max-w-3xl mx-auto">
+                Enterprise-grade RAG (Retrieval-Augmented Generation) platform with multi-tenant architecture
+            </p>
+        </div>
+
+        <!-- Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <!-- Backend Status -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">Backend API</h3>
+                        <p class="text-sm text-gray-500">Running on port 7271</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frontend Status -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">Frontend Demo</h3>
+                        <p class="text-sm text-gray-500">Running on port 53532</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- R2R Integration -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">R2R Integration</h3>
+                        <p class="text-sm text-gray-500">14 Clients Ready</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+            <!-- Authentication -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">JWT Authentication</h3>
+                <p class="text-gray-600">Complete authentication system with role-based authorization (Admin, Company, User)</p>
+            </div>
+
+            <!-- Multi-tenant -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Multi-tenant Architecture</h3>
+                <p class="text-gray-600">Isolated data and resources for different organizations with secure access control</p>
+            </div>
+
+            <!-- RAG Engine -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">RAG Engine</h3>
+                <p class="text-gray-600">Advanced Retrieval-Augmented Generation with R2R integration for intelligent document processing</p>
+            </div>
+
+            <!-- Document Management -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Document Management</h3>
+                <p class="text-gray-600">Upload, process, and manage documents with intelligent indexing and search capabilities</p>
+            </div>
+
+            <!-- Analytics -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Analytics & Insights</h3>
+                <p class="text-gray-600">Real-time analytics and insights on document usage, search patterns, and system performance</p>
+            </div>
+
+            <!-- API Integration -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">REST API</h3>
+                <p class="text-gray-600">Comprehensive REST API with 14 R2R client implementations for seamless integration</p>
+            </div>
+        </div>
+
+        <!-- Technical Details -->
+        <div class="bg-white rounded-lg shadow-md p-8 mb-12">
+            <h3 class="text-2xl font-bold text-gray-900 mb-6">Technical Implementation</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h4 class="text-lg font-semibold text-gray-900 mb-4">Backend (.NET 9.0)</h4>
+                    <ul class="space-y-2 text-gray-600">
+                        <li>• ASP.NET Core Web API</li>
+                        <li>• JWT Authentication & Authorization</li>
+                        <li>• Entity Framework Core with PostgreSQL</li>
+                        <li>• Redis Caching</li>
+                        <li>• RabbitMQ Message Queuing</li>
+                        <li>• 14 R2R Client Implementations</li>
+                        <li>• Polly Resilience Patterns</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-lg font-semibold text-gray-900 mb-4">Frontend (Blazor Server)</h4>
+                    <ul class="space-y-2 text-gray-600">
+                        <li>• .NET 9.0 Blazor Server</li>
+                        <li>• TailwindCSS + Material Design 3</li>
+                        <li>• Component-based Architecture</li>
+                        <li>• Real-time Updates</li>
+                        <li>• Responsive Design</li>
+                        <li>• Local Storage Integration</li>
+                        <li>• Progressive Web App Ready</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Access Information -->
+        <div class="bg-indigo-50 rounded-lg p-8 text-center">
+            <h3 class="text-xl font-bold text-indigo-900 mb-4">🚀 Application Access</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white rounded-lg p-4">
+                    <h4 class="font-semibold text-gray-900">Frontend Demo</h4>
+                    <p class="text-indigo-600 font-mono">http://localhost:53532</p>
+                    <p class="text-sm text-gray-500 mt-2">This page you're viewing now</p>
+                </div>
+                <div class="bg-white rounded-lg p-4">
+                    <h4 class="font-semibold text-gray-900">Backend API</h4>
+                    <p class="text-indigo-600 font-mono">http://localhost:7271</p>
+                    <p class="text-sm text-gray-500 mt-2">REST API with R2R integration</p>
+                </div>
+            </div>
+            
+            <!-- Test API Button -->
+            <div class="mt-6">
+                <button onclick="testAPI()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
+                    Test Backend API
+                </button>
+                <div id="api-result" class="mt-4 text-sm"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('api-result');
+            resultDiv.innerHTML = 'Testing API...';
+            
+            try {
+                const response = await fetch('http://localhost:7271/api/demo');
+                const data = await response.json();
+                resultDiv.innerHTML = `<div class="bg-green-100 text-green-800 p-3 rounded">✅ API Response: ${JSON.stringify(data, null, 2)}</div>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="bg-red-100 text-red-800 p-3 rounded">❌ API Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
+""";
