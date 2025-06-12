@@ -1,0 +1,74 @@
+### Test Authentication Endpoints
+
+# Variables
+@baseUrl = https://localhost:7272/api
+@email = admin@cleverdocs.ai
+@password = admin123
+
+### 1. Login with admin user
+POST {{baseUrl}}/webui/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "rememberMe": true
+}
+
+### 2. Get current user (requires token from login)
+GET {{baseUrl}}/webui/auth/me
+Authorization: Bearer {{token}}
+
+### 3. Refresh token
+POST {{baseUrl}}/webui/auth/refresh
+Authorization: Bearer {{token}}
+
+### 4. Logout
+POST {{baseUrl}}/webui/auth/logout
+Authorization: Bearer {{token}}
+
+### 5. Test with company user
+POST {{baseUrl}}/webui/auth/login
+Content-Type: application/json
+
+{
+  "email": "company@example.com",
+  "password": "company123",
+  "rememberMe": false
+}
+
+### 6. Test with regular user
+POST {{baseUrl}}/webui/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "user123",
+  "rememberMe": false
+}
+
+### 7. Test password change (requires token)
+POST {{baseUrl}}/webui/auth/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "currentPassword": "admin123",
+  "newPassword": "newpassword123"
+}
+
+### 8. Test forgot password
+POST {{baseUrl}}/webui/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "admin@cleverdocs.ai"
+}
+
+### 9. Get user sessions (requires token)
+GET {{baseUrl}}/webui/auth/sessions
+Authorization: Bearer {{token}}
+
+### 10. Logout all sessions (requires token)
+POST {{baseUrl}}/webui/auth/logout-all
+Authorization: Bearer {{token}}

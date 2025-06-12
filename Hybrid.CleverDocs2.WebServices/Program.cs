@@ -1,17 +1,29 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using MassTransit;
 using Polly;
 using Polly.Extensions.Http;
 using RabbitMQ.Client;
 using Hybrid.CleverDocs2.WebServices.Data;
+using Hybrid.CleverDocs2.WebServices.Data.Models.Auth;
 using Hybrid.CleverDocs2.WebServices.Consumers;
 using Hybrid.CleverDocs2.WebServices.Workers;
 using Hybrid.CleverDocs2.WebServices.Services.R2R.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.WebUI.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // PostgreSQL Database - Dynamically configured
 builder.Services.AddDbContext<ApplicationDbContext>(opts => {
+    var connectionString = builder.Configuration.GetConnectionString("Postgres") 
+        ?? throw new InvalidOperationException("PostgreSQL connection string 'Postgres' not found in configuration");
+    opts.UseNpgsql(connectionString);
+});
+
+// Auth Database Context
+builder.Services.AddDbContext<AuthDbContext>(opts => {
     var connectionString = builder.Configuration.GetConnectionString("Postgres") 
         ?? throw new InvalidOperationException("PostgreSQL connection string 'Postgres' not found in configuration");
     opts.UseNpgsql(connectionString);
@@ -124,6 +136,42 @@ RegisterR2RClient<ILocalLLMClient, LocalLLMClient>(builder.Services);
 RegisterR2RClient<IValidationClient, ValidationClient>(builder.Services);
 RegisterR2RClient<IMcpTuningClient, McpTuningClient>(builder.Services);
 RegisterR2RClient<IWebDevClient, WebDevClient>(builder.Services);
+
+// JWT Configuration
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>() 
+    ?? throw new InvalidOperationException("JWT settings not configured");
+
+// Authentication & Authorization
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtSettings.SecretKey)),
+        ValidateIssuer = true,
+        ValidIssuer = jwtSettings.Issuer,
+        ValidateAudience = true,
+        ValidAudience = jwtSettings.Audience,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("CompanyAdmin", policy => policy.RequireRole("Admin", "Company"));
+    options.AddPolicy("AllUsers", policy => policy.RequireRole("Admin", "Company", "User"));
+});
+
+// WebUI Auth Services
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Background Workers
 builder.Services.AddHostedService<IngestionWorker>();

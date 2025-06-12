@@ -1,0 +1,246 @@
+@page "/login"
+@namespace Hybrid.CleverDocs.WebUI.Components.Pages
+@using Hybrid.CleverDocs.WebUI.Models
+@using Hybrid.CleverDocs.WebUI.Services.Auth
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Accedi - CleverDocs</PageTitle>
+
+<div class="cd-login-layout">
+    <div class="cd-login-card cd-animate-fade-in">
+        <!-- Logo & Header -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl mb-4">
+                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h1 class="cd-headline-medium text-center mb-2">Benvenuto in CleverDocs</h1>
+            <p class="cd-body-medium text-center text-gray-600">Il tuo assistente AI per documenti intelligenti</p>
+        </div>
+
+        <!-- Login Form -->
+        <EditForm Model="loginRequest" OnValidSubmit="HandleLogin" class="space-y-6">
+            <DataAnnotationsValidator />
+            
+            <!-- Email Field -->
+            <div>
+                <label class="cd-input-label">Email</label>
+                <InputText @bind-Value="loginRequest.Email" 
+                          class="cd-input @(HasError("email") ? "border-red-500" : "")"
+                          placeholder="inserisci@email.com"
+                          autocomplete="email" />
+                <ValidationMessage For="@(() => loginRequest.Email)" class="text-red-500 text-sm mt-1" />
+            </div>
+
+            <!-- Password Field -->
+            <div>
+                <label class="cd-input-label">Password</label>
+                <div class="relative">
+                    <InputText @bind-Value="loginRequest.Password" 
+                              type="@(showPassword ? "text" : "password")"
+                              class="cd-input @(HasError("password") ? "border-red-500" : "") pr-12"
+                              placeholder="••••••••"
+                              autocomplete="current-password" />
+                    <button type="button" 
+                            @onclick="TogglePasswordVisibility"
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                        @if (showPassword)
+                        {
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clip-rule="evenodd"></path>
+                                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z"></path>
+                            </svg>
+                        }
+                        else
+                        {
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
+                                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path>
+                            </svg>
+                        }
+                    </button>
+                </div>
+                <ValidationMessage For="@(() => loginRequest.Password)" class="text-red-500 text-sm mt-1" />
+            </div>
+
+            <!-- Remember Me & Forgot Password -->
+            <div class="flex items-center justify-between">
+                <label class="flex items-center">
+                    <InputCheckbox @bind-Value="rememberMe" class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
+                    <span class="ml-2 cd-body-small text-gray-600">Ricordami</span>
+                </label>
+                <a href="/forgot-password" class="cd-body-small text-purple-600 hover:text-purple-800">
+                    Password dimenticata?
+                </a>
+            </div>
+
+            <!-- Error Message -->
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <svg class="w-5 h-5 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="cd-body-small text-red-800">@errorMessage</span>
+                    </div>
+                </div>
+            }
+
+            <!-- Login Button -->
+            <button type="submit" 
+                    disabled="@isLoading"
+                    class="cd-btn cd-btn-filled w-full cd-state-layer">
+                @if (isLoading)
+                {
+                    <svg class="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Accesso in corso...</span>
+                }
+                else
+                {
+                    <span>Accedi</span>
+                }
+            </button>
+        </EditForm>
+
+        <!-- Divider -->
+        <div class="relative my-6">
+            <div class="absolute inset-0 flex items-center">
+                <div class="w-full border-t border-gray-300"></div>
+            </div>
+            <div class="relative flex justify-center text-sm">
+                <span class="px-2 bg-white text-gray-500">oppure</span>
+            </div>
+        </div>
+
+        <!-- Demo Accounts -->
+        <div class="space-y-3">
+            <p class="cd-body-small text-center text-gray-600 mb-4">Account demo per test:</p>
+            
+            <button type="button" @onclick="() => LoginDemo(UserRole.Admin)" 
+                    class="cd-btn cd-btn-outlined w-full cd-state-layer">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd"></path>
+                </svg>
+                Accedi come Admin
+            </button>
+            
+            <button type="button" @onclick="() => LoginDemo(UserRole.Company)" 
+                    class="cd-btn cd-btn-outlined w-full cd-state-layer">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-6a1 1 0 00-1-1H9a1 1 0 00-1 1v6a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd"></path>
+                </svg>
+                Accedi come Azienda
+            </button>
+            
+            <button type="button" @onclick="() => LoginDemo(UserRole.User)" 
+                    class="cd-btn cd-btn-outlined w-full cd-state-layer">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                </svg>
+                Accedi come Utente
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8 pt-6 border-t border-gray-200">
+            <p class="cd-body-small text-gray-500">
+                © 2025 CleverDocs. Powered by 
+                <a href="https://sciphi.ai" target="_blank" class="text-purple-600 hover:text-purple-800">SciPhi AI R2R</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginRequest = new("", "");
+    private bool rememberMe = false;
+    private bool showPassword = false;
+    private bool isLoading = false;
+    private string errorMessage = "";
+    private Dictionary<string, string> fieldErrors = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if already authenticated
+        if (await AuthService.IsAuthenticatedAsync())
+        {
+            Navigation.NavigateTo("/", true);
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = "";
+        fieldErrors.Clear();
+        StateHasChanged();
+
+        try
+        {
+            var response = await AuthService.LoginAsync(loginRequest);
+            
+            if (response.Success)
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", "Login successful");
+                Navigation.NavigateTo("/", true);
+            }
+            else
+            {
+                errorMessage = response.Message ?? "Errore durante il login. Riprova.";
+                
+                // Handle field-specific errors
+                if (response.Errors != null)
+                {
+                    foreach (var error in response.Errors)
+                    {
+                        if (error.Contains("email", StringComparison.OrdinalIgnoreCase))
+                            fieldErrors["email"] = error;
+                        else if (error.Contains("password", StringComparison.OrdinalIgnoreCase))
+                            fieldErrors["password"] = error;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Errore di connessione. Verifica la tua connessione internet.";
+            await JSRuntime.InvokeVoidAsync("console.error", "Login error:", ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoginDemo(UserRole role)
+    {
+        var demoCredentials = role switch
+        {
+            UserRole.Admin => new LoginRequest("admin@cleverdocs.ai", "admin123"),
+            UserRole.Company => new LoginRequest("company@example.com", "company123"),
+            UserRole.User => new LoginRequest("user@example.com", "user123"),
+            _ => new LoginRequest("demo@cleverdocs.ai", "demo123")
+        };
+
+        loginRequest = demoCredentials;
+        await HandleLogin();
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+
+    private bool HasError(string fieldName)
+    {
+        return fieldErrors.ContainsKey(fieldName);
+    }
+}

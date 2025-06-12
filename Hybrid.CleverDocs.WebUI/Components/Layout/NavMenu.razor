@@ -1,0 +1,167 @@
+@namespace Hybrid.CleverDocs.WebUI.Components.Layout
+@using Microsoft.AspNetCore.Components.Authorization
+@using Hybrid.CleverDocs.WebUI.Services.Auth
+@using Hybrid.CleverDocs.WebUI.Models
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<div class="flex flex-col h-full">
+    <!-- Logo Section -->
+    <div class="p-6 border-b border-md-outline-variant">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-md-primary rounded-md-lg flex items-center justify-center">
+                <svg class="w-6 h-6 text-md-on-primary" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <div>
+                <h2 class="text-title-medium text-md-on-surface">CleverDocs</h2>
+                <p class="text-body-small text-md-on-surface-variant">AI Document Assistant</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Items -->
+    <nav class="flex-1 p-4 space-y-2">
+        <AuthorizeView>
+            <Authorized>
+                @{
+                    var user = context.User;
+                    var role = GetUserRole(user);
+                }
+
+                <!-- Dashboard -->
+                <NavItem Icon="home" Text="Dashboard" Href="/" />
+
+                @if (role == UserRole.Admin)
+                {
+                    <!-- Admin Navigation -->
+                    <NavSection Title="Amministrazione">
+                        <NavItem Icon="business" Text="Aziende" Href="/admin/companies" />
+                        <NavItem Icon="people" Text="Utenti" Href="/admin/users" />
+                        <NavItem Icon="key" Text="API Keys" Href="/admin/apikeys" />
+                        <NavItem Icon="settings" Text="Impostazioni Sistema" Href="/admin/settings" />
+                    </NavSection>
+                    
+                    <NavSection Title="Analytics">
+                        <NavItem Icon="analytics" Text="Metriche Globali" Href="/admin/analytics" />
+                        <NavItem Icon="chart" Text="Report Utilizzo" Href="/admin/reports" />
+                        <NavItem Icon="audit" Text="Audit Trail" Href="/admin/audit" />
+                    </NavSection>
+                    
+                    <NavSection Title="Sistema">
+                        <NavItem Icon="config" Text="Configurazione" Href="/admin/config" />
+                        <NavItem Icon="backup" Text="Backup" Href="/admin/backup" />
+                        <NavItem Icon="logs" Text="Log Sistema" Href="/admin/logs" />
+                        <NavItem Icon="health" Text="Health Check" Href="/admin/health" />
+                    </NavSection>
+                }
+                else if (role == UserRole.Company)
+                {
+                    <!-- Company Navigation -->
+                    <NavSection Title="Gestione Aziendale">
+                        <NavItem Icon="people" Text="Utenti" Href="/company/users" />
+                        <NavItem Icon="folder" Text="Collezioni" Href="/company/collections" />
+                        <NavItem Icon="chat" Text="Chat AI" Href="/company/chat" />
+                        <NavItem Icon="analytics" Text="Report" Href="/company/analytics" />
+                    </NavSection>
+                    
+                    <NavSection Title="Impostazioni">
+                        <NavItem Icon="business" Text="Profilo Azienda" Href="/company/profile" />
+                        <NavItem Icon="config" Text="Configurazione R2R" Href="/company/r2r-config" />
+                        <NavItem Icon="quota" Text="Quote e Limiti" Href="/company/quotas" />
+                    </NavSection>
+                    
+                    <!-- Future Features -->
+                    <NavSection Title="Collaborazione" IsComingSoon="true">
+                        <NavItem Icon="team" Text="Team Workspaces" Href="/company/workspaces" IsDisabled="true" />
+                        <NavItem Icon="shared" Text="Shared Collections" Href="/company/shared" IsDisabled="true" />
+                        <NavItem Icon="workflow" Text="Workflows" Href="/company/workflows" IsDisabled="true" />
+                    </NavSection>
+                }
+                else if (role == UserRole.User)
+                {
+                    <!-- User Navigation -->
+                    <NavSection Title="Le Mie Risorse">
+                        <NavItem Icon="folder" Text="Collezioni" Href="/user/collections" />
+                        <NavItem Icon="upload" Text="Documenti" Href="/user/documents" />
+                        <NavItem Icon="chat" Text="Chat AI" Href="/user/chat" />
+                        <NavItem Icon="history" Text="Conversazioni" Href="/user/conversations" />
+                    </NavSection>
+                    
+                    <!-- Future Features -->
+                    <NavSection Title="AI Features" IsComingSoon="true">
+                        <NavItem Icon="search" Text="Smart Search" Href="/user/smart-search" IsDisabled="true" />
+                        <NavItem Icon="summary" Text="Summarization" Href="/user/summary" IsDisabled="true" />
+                        <NavItem Icon="tag" Text="Auto-tagging" Href="/user/auto-tag" IsDisabled="true" />
+                    </NavSection>
+                    
+                    <NavSection Title="Collaborazione" IsComingSoon="true">
+                        <NavItem Icon="team" Text="Team Collections" Href="/user/team-collections" IsDisabled="true" />
+                        <NavItem Icon="shared" Text="Shared Conversations" Href="/user/shared-conversations" IsDisabled="true" />
+                        <NavItem Icon="annotation" Text="Annotations" Href="/user/annotations" IsDisabled="true" />
+                    </NavSection>
+                }
+
+                <!-- Common Navigation -->
+                <NavSection Title="Account">
+                    <NavItem Icon="person" Text="Profilo" Href="/profile" />
+                    <NavItem Icon="help" Text="Aiuto" Href="/help" />
+                </NavSection>
+            </Authorized>
+        </AuthorizeView>
+    </nav>
+
+    <!-- User Info & Logout -->
+    <div class="p-4 border-t border-md-outline-variant">
+        <AuthorizeView>
+            <Authorized>
+                @{
+                    var userName = context.User.Identity?.Name ?? "Utente";
+                    var userEmail = context.User.FindFirst("email")?.Value ?? "";
+                    var companyName = context.User.FindFirst("company_name")?.Value;
+                }
+                
+                <div class="flex items-center space-x-3 mb-3">
+                    <div class="w-10 h-10 bg-md-secondary rounded-full flex items-center justify-center">
+                        <span class="text-md-on-secondary text-label-large">
+                            @(userName.Substring(0, 1).ToUpper())
+                        </span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-body-medium text-md-on-surface truncate">@userName</p>
+                        @if (!string.IsNullOrEmpty(companyName))
+                        {
+                            <p class="text-body-small text-md-on-surface-variant truncate">@companyName</p>
+                        }
+                    </div>
+                </div>
+                
+                <button @onclick="LogoutAsync" class="btn-outlined w-full">
+                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"></path>
+                    </svg>
+                    Esci
+                </button>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+@code {
+    private UserRole GetUserRole(ClaimsPrincipal user)
+    {
+        var roleString = user.FindFirst("role")?.Value;
+        if (Enum.TryParse<UserRole>(roleString, out var role))
+        {
+            return role;
+        }
+        return UserRole.User;
+    }
+
+    private async Task LogoutAsync()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login", true);
+    }
+}

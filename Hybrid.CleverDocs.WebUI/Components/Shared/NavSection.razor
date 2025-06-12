@@ -1,0 +1,21 @@
+@namespace Hybrid.CleverDocs.WebUI.Components.Shared
+
+<div class="mb-6 @CssClass">
+    <h3 class="text-label-small text-md-on-surface-variant uppercase tracking-wider mb-3 px-3">
+        @Title
+        @if (IsComingSoon)
+        {
+            <span class="ml-2 text-xs bg-md-secondary text-md-on-secondary px-2 py-1 rounded-full">Prossimamente</span>
+        }
+    </h3>
+    <div class="space-y-1">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string CssClass { get; set; } = "";
+    [Parameter] public bool IsComingSoon { get; set; } = false;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

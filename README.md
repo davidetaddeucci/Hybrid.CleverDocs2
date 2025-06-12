@@ -3,10 +3,19 @@
 ## Overview
 Hybrid.CleverDocs2 is an enterprise-grade multi-tenant WebUI for managing document collections and interacting with the SciPhi AI R2R API engine. It comprises:
 
-- **Hybrid.CleverDocs2.WebServices**: .NET 9.0 Web API backend with **complete R2R client implementation** (14/14 clients), REST endpoints, JWT authentication, multi-tenant data isolation, and background workers for R2R queue consumption.
-- **Hybrid.CleverDocs.WebUI**: .NET 9.0 Blazor frontend (WebAssembly) with MudBlazor components, supporting multi-tenant login, document management, and AI chat interface.
+- **Hybrid.CleverDocs2.WebServices**: .NET 9.0 Web API backend with **complete R2R client implementation** (14/14 clients), **JWT authentication system**, REST endpoints, multi-tenant data isolation, and background workers for R2R queue consumption.
+- **Hybrid.CleverDocs.WebUI**: .NET 9.0 Blazor frontend with **Material Design 3** styling, supporting multi-tenant login, document management, and AI chat interface.
 
-## 🎉 **PROJECT STATUS: 100% COMPLETE**
+## 🎉 **PROJECT STATUS: AUTHENTICATION SYSTEM COMPLETED**
+✅ **Complete JWT Authentication System Implemented!**
+- PostgreSQL-based user management with multi-tenant support
+- JWT tokens with refresh mechanism and session management
+- Role-based authorization (Admin, Company, User)
+- Password security with BCrypt hashing
+- Email verification and password reset functionality
+- Session tracking with device and IP logging
+- Complete WebUI authentication integration
+
 ✅ **All 14 R2R Client implementations completed successfully!**
 - Complete R2R v3 API integration with 700+ methods
 - Comprehensive DTOs for all operations
@@ -18,9 +27,10 @@ Hybrid.CleverDocs2 is an enterprise-grade multi-tenant WebUI for managing docume
 - ✅ Implement robust queuing of R2R jobs to handle high document volumes
 - ✅ Ensure tenant data isolation
 - ✅ Optimize performance via advanced caching
-- ✅ Secure authentication and authorization with JWT
+- ✅ **Secure authentication and authorization with JWT** - **COMPLETED**
 - ✅ Enable monitoring and scalability
-- ✅ **Complete R2R API client wrapper implementation**
+- ✅ **Complete R2R API client wrapper implementation** - **COMPLETED**
+- ✅ **Multi-tenant authentication system** - **COMPLETED**
 
 ## Repository Structure
 ```
@@ -28,10 +38,17 @@ Hybrid.CleverDocs2/
 ├── docs/                          # General documentation and design artifacts
 ├── Hybrid.CleverDocs2.WebServices # Backend API server project
 ├── Hybrid.CleverDocs.WebUI        # Frontend Blazor project
+├── AUTHENTICATION_IMPLEMENTATION.md # Complete auth system documentation
+├── test-auth.http                 # Authentication API test endpoints
 └── README.md                      # This file
 ```
 
 ## Documentation
+### 🔐 **Authentication System Documentation**
+- **Complete Implementation Guide**: `AUTHENTICATION_IMPLEMENTATION.md`
+- **API Test Endpoints**: `test-auth.http`
+- **Database Migration**: `Hybrid.CleverDocs2.WebServices/Migrations/Auth/20241212_InitialAuthMigration.sql`
+
 ### General System Documentation (docs/)
 - **System Architecture**: `docs/Architettura del Sistema Hybrid.CleverDocs2.md`
 - **Auth Flows**: `docs/Flussi di Autenticazione e Autorizzazione.md`, `docs/autenticazione_autorizzazione.md`
@@ -68,6 +85,21 @@ Hybrid.CleverDocs2/
 
 ### WebServices API Endpoints
 
+#### 🔐 **Authentication Endpoints (WebUI)**
+- POST /api/webui/auth/login - User login with JWT
+- POST /api/webui/auth/refresh - Refresh access token
+- POST /api/webui/auth/logout - Logout current session
+- POST /api/webui/auth/logout-all - Logout all sessions
+- GET  /api/webui/auth/me - Get current user profile
+- POST /api/webui/auth/change-password - Change user password
+- POST /api/webui/auth/forgot-password - Request password reset
+- POST /api/webui/auth/reset-password - Reset password with token
+- POST /api/webui/auth/verify-email - Verify email address
+- POST /api/webui/auth/resend-verification - Resend verification email
+- GET  /api/webui/auth/sessions - Get user sessions
+- POST /api/webui/auth/revoke-session - Revoke specific session
+
+#### R2R API Endpoints
 - Auth:
   - POST /api/auth/login
   - POST /api/auth/refresh
@@ -218,6 +250,19 @@ In `appsettings.json` / `appsettings.Development.json`, configure the R2R sectio
 
 
 ## Quick Start
+
+### 🔐 **Authentication Setup**
+1. **Database Setup**: Create PostgreSQL database and run the migration:
+   ```bash
+   psql -h localhost -p 5433 -U cleverdocs_user -d cleverdocs_db -f Hybrid.CleverDocs2.WebServices/Migrations/Auth/20241212_InitialAuthMigration.sql
+   ```
+
+2. **Demo Accounts Available**:
+   - **Admin**: admin@cleverdocs.ai / admin123
+   - **Company Manager**: company@example.com / company123  
+   - **User**: user@example.com / user123
+
+### 🚀 **Application Startup**
 1. Prepare a `docker-compose.yml` for PostgreSQL, Redis, and RabbitMQ and note their endpoints.
 2. Clone the repository:
    ```bash
@@ -229,6 +274,7 @@ In `appsettings.json` / `appsettings.Development.json`, configure the R2R sectio
    - `Redis:Configuration`
    - `RabbitMQ:Host`
    - `SciPhi:R2R:Url`
+   - `Jwt:SecretKey` (for authentication)
 4. Run the backend:
    ```bash
    cd Hybrid.CleverDocs2.WebServices
@@ -240,6 +286,7 @@ In `appsettings.json` / `appsettings.Development.json`, configure the R2R sectio
    dotnet run
    ```
 6. Open your browser to the address shown (e.g., `https://localhost:7000`).
+7. **Test Authentication**: Use `test-auth.http` file to test all authentication endpoints.
 
 ## Contribution
 - Use feature branches, write tests, follow `.editorconfig`, and submit pull requests for review.

@@ -6,4 +6,30 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Authentication & Authorization -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="9.0.0" />
+    
+    <!-- HTTP Client -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    
+    <!-- JSON Serialization -->
+    <PackageReference Include="System.Text.Json" Version="9.0.0" />
+    
+    <!-- Logging -->
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    
+    <!-- State Management -->
+    <PackageReference Include="Blazored.LocalStorage" Version="4.5.0" />
+    
+    <!-- Charts for Analytics -->
+    <PackageReference Include="ApexCharts" Version="3.0.2" />
+    
+    <!-- File Upload -->
+    <PackageReference Include="BlazorInputFile" Version="0.2.0" />
+  </ItemGroup>
+
 </Project>

@@ -1,0 +1,19 @@
+{
+  "name": "hybrid-cleverdocs-webui",
+  "version": "1.0.0",
+  "description": "WebUI for Hybrid CleverDocs2 with Tailwind CSS and Material Design 3",
+  "scripts": {
+    "build:css": "tailwindcss -i ./Styles/input.css -o ./wwwroot/css/app.css --watch",
+    "build:css:prod": "tailwindcss -i ./Styles/input.css -o ./wwwroot/css/app.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.7",
+    "@tailwindcss/typography": "^0.5.10",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6"
+  },
+  "dependencies": {
+    "@material/web": "^1.0.1"
+  }
+}

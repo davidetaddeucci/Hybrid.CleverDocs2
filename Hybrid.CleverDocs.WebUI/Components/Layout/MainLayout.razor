@@ -1,9 +1,49 @@
 ﻿@inherits LayoutComponentBase
+@namespace Hybrid.CleverDocs.WebUI.Components.Layout
+@using Microsoft.AspNetCore.Components.Authorization
+@using Hybrid.CleverDocs.WebUI.Services.Auth
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
 
-@Body
+<CascadingAuthenticationState>
+    <AuthorizeView>
+        <Authorized>
+            <!-- Main Layout for Authenticated Users -->
+            <div class="cd-dashboard-layout">
+                <!-- Navigation Drawer -->
+                <nav class="cd-sidebar">
+                    <NavMenu />
+                </nav>
 
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+                <!-- Main Content Area -->
+                <div class="cd-main-content">
+                    <!-- Top App Bar -->
+                    <header class="cd-topbar">
+                        <TopAppBar />
+                    </header>
+
+                    <!-- Page Content -->
+                    <main class="cd-content-area">
+                        @Body
+                    </main>
+                </div>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <!-- Login Layout for Unauthenticated Users -->
+            @Body
+        </NotAuthorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+<!-- Error UI -->
+<div id="blazor-error-ui" data-nosnippet class="fixed bottom-4 right-4 bg-md-error text-md-on-error p-4 rounded-md-lg shadow-md-3 z-50 hidden">
+    <div class="flex items-center space-x-3">
+        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+        </svg>
+        <span>Si è verificato un errore imprevisto.</span>
+        <button class="btn-text text-md-on-error ml-4" onclick="location.reload()">Ricarica</button>
+        <button class="btn-text text-md-on-error" onclick="document.getElementById('blazor-error-ui').style.display='none'">✕</button>
+    </div>
 </div>
