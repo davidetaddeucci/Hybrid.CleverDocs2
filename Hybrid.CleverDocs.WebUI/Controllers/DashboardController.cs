@@ -31,9 +31,9 @@ public class DashboardController : Controller
 
             return user.Role.ToLower() switch
             {
-                "admin" => await AdminDashboard(),
-                "company" => await CompanyDashboard(user),
-                "user" => await UserDashboard(user),
+                "0" or "admin" => await AdminDashboard(),
+                "1" or "company" => await CompanyDashboard(user),
+                "2" or "user" => await UserDashboard(user),
                 _ => RedirectToAction("Login", "Auth")
             };
         }
