@@ -1,25 +1,24 @@
 @model Hybrid.CleverDocs.WebUI.ViewModels.RegisterViewModel
 @{
-    ViewData["Title"] = "Create Account";
+    ViewData["Title"] = "Sign Up";
     Layout = "_LoginLayout";
 }
 
-<div class="login-card fade-in" style="max-width: 500px;">
-    <div class="login-header">
-        <div class="login-logo">
-            <i class="fas fa-brain"></i>
+<div class="card z-index-0 fadeIn3 fadeInBottom">
+    <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+        <div class="bg-gradient-dark shadow-dark border-radius-lg py-3 pe-1">
+            <h4 class="text-white font-weight-bolder text-center mt-2 mb-0">Join us today</h4>
+            <p class="text-white text-center mt-2 mb-0">Enter your details to register</p>
         </div>
-        <h2 class="login-title">Create Account</h2>
-        <p class="login-subtitle">Join CleverDocs and start managing your documents with AI</p>
     </div>
-
-    @if (!string.IsNullOrEmpty(Model?.ErrorMessage))
-    {
-        <div class="alert alert-danger" role="alert">
-            <i class="fas fa-exclamation-circle me-2"></i>
-            @Model.ErrorMessage
-        </div>
-    }
+    <div class="card-body">
+        @if (!string.IsNullOrEmpty(Model?.ErrorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i>
+                @Model.ErrorMessage
+            </div>
+        }
 
     <form asp-action="Register" method="post" id="registerForm" novalidate>
         @Html.AntiForgeryToken()
