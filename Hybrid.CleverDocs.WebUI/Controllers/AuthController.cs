@@ -79,13 +79,13 @@ public class AuthController : Controller
                 // Sign in the user
                 await HttpContext.SignInAsync("Cookies", claimsPrincipal);
                 
-                // Redirect to return URL or home
+                // Redirect to return URL or role-based dashboard
                 if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
                 {
                     return Redirect(model.ReturnUrl);
                 }
                 
-                return RedirectToAction("Index", "Dashboard");
+                return RedirectToAction("Index", "RoleRedirect");
             }
             else
             {

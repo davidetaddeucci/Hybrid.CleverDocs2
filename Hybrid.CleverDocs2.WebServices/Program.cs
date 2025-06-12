@@ -34,7 +34,8 @@ builder.Services.AddStackExchangeRedisCache(opts => {
         opts.ConfigurationOptions = StackExchange.Redis.ConfigurationOptions.Parse(opts.Configuration);
 });
 
-// MassTransit / RabbitMQ - Dynamically configured
+// MassTransit / RabbitMQ - Temporarily disabled for testing
+/*
 builder.Services.AddMassTransit(x => {
     x.AddConsumer<IngestionChunkConsumer>();
     x.UsingRabbitMq((context, cfg) => {
@@ -60,6 +61,7 @@ builder.Services.AddMassTransit(x => {
         });
     });
 });
+*/
 
 // Health Checks - Dynamically configured
 var healthChecksBuilder = builder.Services.AddHealthChecks();
@@ -163,8 +165,8 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-// Background Workers
-builder.Services.AddHostedService<IngestionWorker>();
+// Background Workers - Temporarily disabled for testing
+// builder.Services.AddHostedService<IngestionWorker>();
 
 // CORS - Enhanced configuration
 var corsSection = builder.Configuration.GetSection("Cors");

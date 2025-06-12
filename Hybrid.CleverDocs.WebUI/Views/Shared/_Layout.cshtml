@@ -38,7 +38,17 @@
         </div>
         <hr class="horizontal dark mt-0 mb-2">
         <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
-            @await Html.PartialAsync("_Navigation")
+            @{
+                var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+                var navigationPartial = userRole switch
+                {
+                    "0" => "_AdminNavigation",
+                    "1" => "_CompanyNavigation", 
+                    "2" => "_UserNavigation",
+                    _ => "_UserNavigation"
+                };
+            }
+            @await Html.PartialAsync(navigationPartial)
         </div>
     </aside>
 
