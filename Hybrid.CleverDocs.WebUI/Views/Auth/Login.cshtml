@@ -50,13 +50,22 @@
 
             <div class="input-group input-group-outline my-3">
                 <label class="form-label">Email</label>
-                <input asp-for="Email" type="email" class="form-control" autocomplete="email" autofocus>
+                <input asp-for="Email" 
+                       type="email" 
+                       class="form-control" 
+                       autocomplete="email" 
+                       autofocus
+                       placeholder="Enter your email address">
             </div>
             <span asp-validation-for="Email" class="text-danger"></span>
 
             <div class="input-group input-group-outline mb-3">
                 <label class="form-label">Password</label>
-                <input asp-for="Password" type="password" class="form-control" autocomplete="current-password">
+                <input asp-for="Password" 
+                       type="password" 
+                       class="form-control" 
+                       autocomplete="current-password"
+                       placeholder="Enter your password">
             </div>
             <span asp-validation-for="Password" class="text-danger"></span>
 

@@ -54,7 +54,7 @@ public class SystemHealthDto
 public class CompanyStatsDto
 {
     public int CompanyId { get; set; }
-    public string CompanyName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
     public int UserCount { get; set; }
     public int DocumentCount { get; set; }
     public DateTime LastActivity { get; set; }
@@ -64,11 +64,11 @@ public class CompanyStatsDto
 public class UserStatsDto
 {
     public int UserId { get; set; }
-    public string UserName { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public int DocumentCount { get; set; }
-    public DateTime LastLogin { get; set; }
+    public DateTime? LastLoginAt { get; set; }
     public bool IsActive { get; set; }
 }
 
@@ -81,14 +81,16 @@ public class DocumentStatsDto
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
+    public int Count { get; set; }
 }
 
 public class RecentActivityDto
 {
-    public string ActivityType { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public string UserName { get; set; } = string.Empty;
-    public DateTime Timestamp { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string Details { get; set; } = string.Empty;
+    public string UserEmail { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
     public string Icon { get; set; } = "fas fa-info-circle";
     public string BadgeClass { get; set; } = "badge-info";
 }

@@ -64,7 +64,7 @@ public class AuthController : Controller
                 {
                     new Claim(ClaimTypes.Email, model.Email),
                     new Claim(ClaimTypes.Name, result.User?.FullName ?? model.Email),
-                    new Claim(ClaimTypes.NameIdentifier, result.User?.Id.ToString() ?? ""),
+                    new Claim(ClaimTypes.NameIdentifier, result.User?.Id.ToString() ?? Guid.NewGuid().ToString()),
                     new Claim(ClaimTypes.Role, result.User?.Role ?? "User")
                 };
 

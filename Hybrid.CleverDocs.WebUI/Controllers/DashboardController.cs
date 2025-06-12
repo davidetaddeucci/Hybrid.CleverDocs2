@@ -382,6 +382,8 @@ public class DashboardController : Controller
 
     private Models.UserInfo? GetCurrentUserFromClaims()
     {
+        _logger.LogInformation("GetCurrentUserFromClaims: IsAuthenticated = {IsAuthenticated}", User.Identity?.IsAuthenticated);
+        
         if (User.Identity?.IsAuthenticated != true)
             return null;
 
@@ -393,12 +395,21 @@ public class DashboardController : Controller
             var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
             var companyIdClaim = User.FindFirst("CompanyId")?.Value;
 
-            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(idClaim))
+            _logger.LogInformation("Claims: Email={Email}, Name={Name}, Id={Id}, Role={Role}", email, name, idClaim, role);
+
+            if (string.IsNullOrEmpty(email))
                 return null;
+
+            // Try to parse the ID, if it fails use a default GUID
+            Guid userId = Guid.NewGuid();
+            if (!string.IsNullOrEmpty(idClaim) && !Guid.TryParse(idClaim, out userId))
+            {
+                userId = Guid.NewGuid();
+            }
 
             var user = new Models.UserInfo
             {
-                Id = Guid.Parse(idClaim),
+                Id = userId,
                 Email = email,
                 Role = role ?? "User"
             };
