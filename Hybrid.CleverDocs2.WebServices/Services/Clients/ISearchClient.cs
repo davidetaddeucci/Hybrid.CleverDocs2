@@ -6,10 +6,21 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
 {
     public interface ISearchClient
     {
-        Task<SearchResponse> CreateAsync(SearchRequest request);
-        Task<SearchResponse> GetAsync(string id);
-        Task<IEnumerable<SearchResponse>> ListAsync();
-        Task<SearchResponse> UpdateAsync(string id, SearchRequest request);
-        Task DeleteAsync(string id);
+        // Search operations
+        Task<SearchResponse?> SearchAsync(SearchRequest request);
+
+        // RAG operations
+        Task<RAGResponse?> RAGAsync(RAGRequest request);
+        Task<IAsyncEnumerable<string>?> RAGStreamAsync(RAGRequest request);
+
+        // Agent operations
+        Task<AgentResponse?> AgentAsync(AgentRequest request);
+        Task<IAsyncEnumerable<string>?> AgentStreamAsync(AgentRequest request);
+
+        // Completion operations
+        Task<CompletionResponse?> CompletionAsync(CompletionRequest request);
+
+        // Embedding operations
+        Task<EmbeddingResponse?> EmbeddingAsync(EmbeddingRequest request);
     }
 }
