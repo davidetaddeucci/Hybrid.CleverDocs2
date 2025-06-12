@@ -23,7 +23,7 @@ public class DashboardController : Controller
     {
         try
         {
-            var user = await _authService.GetCurrentUserAsync();
+            var user = GetCurrentUserFromClaims();
             if (user == null)
             {
                 return RedirectToAction("Login", "Auth");
@@ -49,7 +49,7 @@ public class DashboardController : Controller
     {
         try
         {
-            var user = await _authService.GetCurrentUserAsync();
+            var user = GetCurrentUserFromClaims();
             SetViewBagUserInfo(user);
             
             var model = new AdminDashboardViewModel
@@ -321,101 +321,105 @@ public class DashboardController : Controller
 
     private async Task<int> GetUserDocuments(Guid userId)
     {
-        try
-        {
-            var result = await _apiService.GetAsync<int>($"/api/user/{userId}/documents/count");
-            return result;
-        }
-        catch
-        {
-            return 0;
-        }
+        // TODO: Implement API endpoint /api/user/{userId}/documents/count
+        // For now, return mock data to avoid slow API calls
+        await Task.Delay(1); // Simulate async operation
+        return 0;
     }
 
     private async Task<int> GetUserCollections(Guid userId)
     {
-        try
-        {
-            var result = await _apiService.GetAsync<int>($"/api/user/{userId}/collections/count");
-            return result;
-        }
-        catch
-        {
-            return 0;
-        }
+        // TODO: Implement API endpoint /api/user/{userId}/collections/count
+        // For now, return mock data to avoid slow API calls
+        await Task.Delay(1); // Simulate async operation
+        return 0;
     }
 
     private async Task<int> GetUserConversations(Guid userId)
     {
-        try
-        {
-            var result = await _apiService.GetAsync<int>($"/api/user/{userId}/conversations/count");
-            return result;
-        }
-        catch
-        {
-            return 0;
-        }
+        // TODO: Implement API endpoint /api/user/{userId}/conversations/count
+        // For now, return mock data to avoid slow API calls
+        await Task.Delay(1); // Simulate async operation
+        return 0;
     }
 
     private async Task<int> GetUserDocumentsThisWeek(Guid userId)
     {
-        try
-        {
-            var result = await _apiService.GetAsync<int>($"/api/user/{userId}/documents/count/week");
-            return result;
-        }
-        catch
-        {
-            return 0;
-        }
+        // TODO: Implement API endpoint /api/user/{userId}/documents/count/week
+        // For now, return mock data to avoid slow API calls
+        await Task.Delay(1); // Simulate async operation
+        return 0;
     }
 
     private async Task<List<RecentDocumentDto>> GetUserRecentDocuments(Guid userId)
     {
-        try
-        {
-            var result = await _apiService.GetAsync<List<RecentDocumentDto>>($"/api/user/{userId}/documents/recent");
-            return result ?? new List<RecentDocumentDto>();
-        }
-        catch
-        {
-            return new List<RecentDocumentDto>();
-        }
+        // TODO: Implement API endpoint /api/user/{userId}/documents/recent
+        // For now, return empty list to avoid slow API calls
+        await Task.Delay(1); // Simulate async operation
+        return new List<RecentDocumentDto>();
     }
 
     private async Task<List<RecentConversationDto>> GetUserRecentConversations(Guid userId)
     {
-        try
-        {
-            var result = await _apiService.GetAsync<List<RecentConversationDto>>($"/api/user/{userId}/conversations/recent");
-            return result ?? new List<RecentConversationDto>();
-        }
-        catch
-        {
-            return new List<RecentConversationDto>();
-        }
+        // TODO: Implement API endpoint /api/user/{userId}/conversations/recent
+        // For now, return empty list to avoid slow API calls
+        await Task.Delay(1); // Simulate async operation
+        return new List<RecentConversationDto>();
     }
 
     private async Task<QuotaUsageDto?> GetUserQuotaUsage(Guid userId)
     {
+        // TODO: Implement API endpoint /api/user/{userId}/quota
+        // For now, return mock data to avoid slow API calls
+        await Task.Delay(1); // Simulate async operation
+        return new QuotaUsageDto
+        {
+            DocumentQuotaLimit = 100,
+            QueryQuotaLimit = 50,
+            QuotaResetDate = DateTime.UtcNow.AddDays(30)
+        };
+    }
+
+    private Models.UserInfo? GetCurrentUserFromClaims()
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return null;
+
         try
         {
-            return await _apiService.GetAsync<QuotaUsageDto>($"/api/user/{userId}/quota") ?? new QuotaUsageDto
+            var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+            var name = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
+            var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var companyIdClaim = User.FindFirst("CompanyId")?.Value;
+
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(idClaim))
+                return null;
+
+            var user = new Models.UserInfo
             {
-                DocumentQuotaLimit = 100,
-                QueryQuotaLimit = 50,
-                QuotaResetDate = DateTime.UtcNow.AddDays(30)
+                Id = Guid.Parse(idClaim),
+                Email = email,
+                Role = role ?? "User"
             };
+
+            if (!string.IsNullOrEmpty(name))
+            {
+                var nameParts = name.Split(' ', 2);
+                user.FirstName = nameParts[0];
+                user.LastName = nameParts.Length > 1 ? nameParts[1] : "";
+            }
+
+            if (!string.IsNullOrEmpty(companyIdClaim) && Guid.TryParse(companyIdClaim, out var companyId))
+            {
+                user.CompanyId = companyId;
+            }
+
+            return user;
         }
         catch
         {
-            return new QuotaUsageDto
-            {
-                DocumentQuotaLimit = 100,
-                QueryQuotaLimit = 50,
-                QuotaResetDate = DateTime.UtcNow.AddDays(30)
-            };
+            return null;
         }
     }
 }

@@ -216,6 +216,175 @@ body {
   margin-right: 0;
 }
 
+/* Navigation Toggle */
+.nav-toggle {
+  background: none;
+  border: none;
+  color: inherit;
+  margin-left: auto;
+  padding: 0.25rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-toggle.rotated {
+  transform: rotate(180deg);
+}
+
+.nav-toggle i {
+  font-size: 0.8rem;
+  transition: transform 0.3s ease;
+}
+
+/* Submenu */
+.nav-submenu {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  background: rgba(0, 0, 0, 0.05);
+  margin: 0.25rem 0;
+  border-radius: 8px;
+}
+
+.nav-submenu.show {
+  max-height: 300px;
+}
+
+.nav-submenu .nav-link {
+  padding: 0.5rem 1rem 0.5rem 3rem;
+  margin-right: 0;
+  border-radius: 0;
+  font-size: 0.9rem;
+}
+
+.nav-submenu .nav-link:hover {
+  background: rgba(233, 30, 99, 0.1);
+  transform: translateX(3px);
+}
+
+.nav-submenu .nav-link i {
+  width: 16px;
+  height: 16px;
+  font-size: 0.8rem;
+  margin-right: 0.5rem;
+}
+
+.sidebar.collapsed .nav-submenu {
+  display: none;
+}
+
+.sidebar.collapsed .nav-toggle {
+  display: none;
+}
+
+/* Main Content Area */
+.main-content {
+  margin-left: var(--md-sidebar-width);
+  min-height: 100vh;
+  background: var(--md-bg-secondary);
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content.sidebar-collapsed {
+  margin-left: var(--md-sidebar-collapsed-width);
+}
+
+/* Header */
+.main-header {
+  background: var(--md-bg-primary);
+  padding: 1rem 1.5rem;
+  box-shadow: var(--md-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.sidebar-toggle {
+  background: none;
+  border: none;
+  color: var(--md-text-secondary);
+  font-size: 1.2rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--md-bg-secondary);
+  color: var(--md-primary);
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--md-text-primary);
+  margin: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.theme-toggle {
+  background: none;
+  border: none;
+  color: var(--md-text-secondary);
+  font-size: 1.1rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.theme-toggle:hover {
+  background: var(--md-bg-secondary);
+  color: var(--md-primary);
+}
+
+.user-menu .user-avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--md-primary), var(--md-secondary));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.user-menu .user-avatar:hover {
+  transform: scale(1.05);
+}
+
+/* Content Area */
+.content-area {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
 /* Login Page Styles */
 .login-wrapper {
   min-height: 100vh;

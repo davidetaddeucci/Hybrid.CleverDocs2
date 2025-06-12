@@ -23,7 +23,7 @@ public class AuthController : Controller
     public IActionResult Login(string? returnUrl = null)
     {
         // If user is already authenticated, redirect to dashboard
-        if (_authService.IsAuthenticated)
+        if (User.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Dashboard");
         }
@@ -107,7 +107,7 @@ public class AuthController : Controller
     public IActionResult Register()
     {
         // If user is already authenticated, redirect to dashboard
-        if (_authService.IsAuthenticated)
+        if (User.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Dashboard");
         }
