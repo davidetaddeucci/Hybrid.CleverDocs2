@@ -1,7 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Hybrid.CleverDocs2.WebServices.Services.Clients;
-using Hybrid.CleverDocs2.WebServices.Services.DTOs.Auth;
-using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using Hybrid.CleverDocs2.WebServices.Data;
+using Hybrid.CleverDocs2.WebServices.Data.Entities;
+using Hybrid.CleverDocs2.WebServices.Services.Auth;
+using Hybrid.CleverDocs2.WebServices.Middleware;
 
 namespace Hybrid.CleverDocs2.WebServices.Controllers
 {
@@ -9,84 +13,494 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
     [Route("api/auth")]
     public class AuthController : ControllerBase
     {
-        private readonly IAuthClient _client;
-        public AuthController(IAuthClient client) => _client = client;
+        private readonly IAuthService _authService;
+        private readonly IJwtService _jwtService;
+        private readonly ApplicationDbContext _context;
+        private readonly ILogger<AuthController> _logger;
+
+        public AuthController(
+            IAuthService authService,
+            IJwtService jwtService,
+            ApplicationDbContext context,
+            ILogger<AuthController> logger)
+        {
+            _authService = authService;
+            _jwtService = jwtService;
+            _context = context;
+            _logger = logger;
+        }
 
         // Authentication operations
         [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginRequest request) => Ok(await _client.LoginAsync(request));
+        public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "Invalid request data",
+                        Errors = ModelState.Values.SelectMany(v => v.Errors.Select(e => e.ErrorMessage)).ToList()
+                    });
+                }
+
+                var result = await _authService.LoginAsync(request.Email, request.Password, 
+                    HttpContext.Connection.RemoteIpAddress?.ToString(), 
+                    HttpContext.Request.Headers.UserAgent.ToString());
+                
+                if (result.Success && result.User != null)
+                {
+                    // Update last login
+                    result.User.LastLoginAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+
+                    var userInfo = new UserInfoDto
+                    {
+                        Id = result.User.Id,
+                        Email = result.User.Email,
+                        FirstName = result.User.FirstName,
+                        LastName = result.User.LastName,
+                        Role = result.User.Role.ToString(),
+                        CompanyId = result.User.CompanyId,
+                        CompanyName = result.User.Company?.Name,
+                        IsEmailVerified = result.User.IsEmailVerified,
+                        CreatedAt = result.User.CreatedAt,
+                        LastLoginAt = result.User.LastLoginAt
+                    };
+
+                    return Ok(new LoginResponseDto
+                    {
+                        Success = true,
+                        Message = "Login successful",
+                        AccessToken = result.AccessToken!,
+                        RefreshToken = result.RefreshToken!,
+                        User = userInfo
+                    });
+                }
+
+                return Unauthorized(new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = result.ErrorMessage ?? "Login failed" 
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during login for {Email}", request.Email);
+                return StatusCode(500, new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = "An internal error occurred" 
+                });
+            }
+        }
 
         [HttpPost("refresh")]
-        public async Task<IActionResult> RefreshToken(RefreshTokenRequest request) => Ok(await _client.RefreshTokenAsync(request));
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequestDto request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request.RefreshToken))
+                {
+                    return BadRequest(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "Refresh token is required" 
+                    });
+                }
+
+                var result = await _authService.RefreshTokenAsync(request.RefreshToken, 
+                    HttpContext.Connection.RemoteIpAddress?.ToString(), 
+                    HttpContext.Request.Headers.UserAgent.ToString());
+                
+                if (result.Success)
+                {
+                    return Ok(new LoginResponseDto
+                    {
+                        Success = true,
+                        Message = "Token refreshed successfully",
+                        AccessToken = result.AccessToken!,
+                        RefreshToken = result.RefreshToken!
+                    });
+                }
+
+                return Unauthorized(new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = result.ErrorMessage ?? "Token refresh failed" 
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during token refresh");
+                return StatusCode(500, new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = "An internal error occurred" 
+                });
+            }
+        }
 
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout(LogoutRequest request) => Ok(await _client.LogoutAsync(request));
+        [Authorize]
+        public async Task<IActionResult> Logout()
+        {
+            try
+            {
+                var userId = HttpContext.GetUserId();
+                var token = HttpContext.Items["AccessToken"] as string;
+                
+                if (userId.HasValue)
+                {
+                    await _authService.LogoutAsync(userId.Value, token);
+                }
+
+                return Ok(new ApiResponseDto 
+                { 
+                    Success = true, 
+                    Message = "Logged out successfully" 
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during logout");
+                return StatusCode(500, new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = "An internal error occurred" 
+                });
+            }
+        }
 
         // User registration and management
         [HttpPost("register")]
-        public async Task<IActionResult> Register(UserRequest request) => Ok(await _client.RegisterUserAsync(request));
-
-        [HttpGet("user")]
-        public async Task<IActionResult> GetCurrentUser() => Ok(await _client.GetCurrentUserAsync());
-
-        [HttpPut("user")]
-        public async Task<IActionResult> UpdateCurrentUser(UserUpdateRequest request) => Ok(await _client.UpdateCurrentUserAsync(request));
-
-        [HttpDelete("user")]
-        public async Task<IActionResult> DeleteCurrentUser()
+        public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
         {
-            await _client.DeleteCurrentUserAsync();
-            return NoContent();
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "Invalid request data",
+                        Errors = ModelState.Values.SelectMany(v => v.Errors.Select(e => e.ErrorMessage)).ToList()
+                    });
+                }
+
+                if (request.Password != request.ConfirmPassword)
+                {
+                    return BadRequest(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "Passwords do not match" 
+                    });
+                }
+
+                // Check if email is available
+                if (!await _authService.IsEmailAvailableAsync(request.Email))
+                {
+                    return BadRequest(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "Email is already registered" 
+                    });
+                }
+
+                // For now, create a default company if none provided
+                Guid companyId;
+                if (!string.IsNullOrEmpty(request.CompanyName))
+                {
+                    // Create new company
+                    var company = new Company
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = request.CompanyName,
+                        CreatedAt = DateTime.UtcNow,
+                        IsActive = true
+                    };
+                    _context.Companies.Add(company);
+                    await _context.SaveChangesAsync();
+                    companyId = company.Id;
+                }
+                else
+                {
+                    // Use default company or create one
+                    var defaultCompany = await _context.Companies.FirstOrDefaultAsync(c => c.Name == "Default Company");
+                    if (defaultCompany == null)
+                    {
+                        defaultCompany = new Company
+                        {
+                            Id = Guid.NewGuid(),
+                            Name = "Default Company",
+                            CreatedAt = DateTime.UtcNow,
+                            IsActive = true
+                        };
+                        _context.Companies.Add(defaultCompany);
+                        await _context.SaveChangesAsync();
+                    }
+                    companyId = defaultCompany.Id;
+                }
+
+                var user = await _authService.RegisterUserAsync(
+                    request.Email, 
+                    request.Password, 
+                    request.FirstName, 
+                    request.LastName, 
+                    companyId);
+
+                return Ok(new ApiResponseDto 
+                { 
+                    Success = true, 
+                    Message = "Registration successful. Please check your email for verification." 
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during registration for {Email}", request.Email);
+                return StatusCode(500, new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = "An internal error occurred" 
+                });
+            }
         }
 
-        [HttpGet("users/{userId}")]
-        public async Task<IActionResult> GetUser(string userId) => Ok(await _client.GetUserAsync(userId));
-
-        [HttpGet("users")]
-        public async Task<IActionResult> ListUsers([FromQuery] int offset = 0, [FromQuery] int limit = 100) => Ok(await _client.ListUsersAsync(offset, limit));
-
-        [HttpPut("users/{userId}")]
-        public async Task<IActionResult> UpdateUser(string userId, UserUpdateRequest request) => Ok(await _client.UpdateUserAsync(userId, request));
-
-        [HttpDelete("users/{userId}")]
-        public async Task<IActionResult> DeleteUser(string userId)
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<IActionResult> GetCurrentUser()
         {
-            await _client.DeleteUserAsync(userId);
-            return NoContent();
+            try
+            {
+                var userId = HttpContext.GetUserId();
+                if (!userId.HasValue)
+                {
+                    return Unauthorized(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "User not found" 
+                    });
+                }
+
+                var user = await _context.Users
+                    .Include(u => u.Company)
+                    .FirstOrDefaultAsync(u => u.Id == userId.Value);
+
+                if (user == null)
+                {
+                    return NotFound(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "User not found" 
+                    });
+                }
+
+                var userInfo = new UserInfoDto
+                {
+                    Id = user.Id,
+                    Email = user.Email,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Role = user.Role.ToString(),
+                    CompanyId = user.CompanyId,
+                    CompanyName = user.Company?.Name,
+                    IsEmailVerified = user.IsEmailVerified,
+                    CreatedAt = user.CreatedAt,
+                    LastLoginAt = user.LastLoginAt
+                };
+
+                return Ok(new ApiResponseDto<UserInfoDto> 
+                { 
+                    Success = true, 
+                    Data = userInfo 
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting current user");
+                return StatusCode(500, new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = "An internal error occurred" 
+                });
+            }
         }
 
-        // Password management
-        [HttpPost("password/reset/request")]
-        public async Task<IActionResult> RequestPasswordReset(PasswordResetRequest request) => Ok(await _client.RequestPasswordResetAsync(request));
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "Invalid request data",
+                        Errors = ModelState.Values.SelectMany(v => v.Errors.Select(e => e.ErrorMessage)).ToList()
+                    });
+                }
 
-        [HttpPost("password/reset/confirm")]
-        public async Task<IActionResult> ConfirmPasswordReset(PasswordResetConfirmRequest request) => Ok(await _client.ConfirmPasswordResetAsync(request));
+                if (request.NewPassword != request.ConfirmNewPassword)
+                {
+                    return BadRequest(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "New passwords do not match" 
+                    });
+                }
 
-        [HttpPost("password/change")]
-        public async Task<IActionResult> ChangePassword(ChangePasswordRequest request) => Ok(await _client.ChangePasswordAsync(request));
+                var userId = HttpContext.GetUserId();
+                if (!userId.HasValue)
+                {
+                    return Unauthorized();
+                }
 
-        // Email verification
-        [HttpPost("email/verify")]
-        public async Task<IActionResult> VerifyEmail(EmailVerificationRequest request) => Ok(await _client.VerifyEmailAsync(request));
+                var result = await _authService.ChangePasswordAsync(userId.Value, request.CurrentPassword, request.NewPassword);
+                
+                if (result)
+                {
+                    return Ok(new ApiResponseDto 
+                    { 
+                        Success = true, 
+                        Message = "Password changed successfully" 
+                    });
+                }
 
-        [HttpPost("email/resend")]
-        public async Task<IActionResult> ResendVerificationEmail(ResendVerificationRequest request) => Ok(await _client.ResendVerificationEmailAsync(request));
+                return BadRequest(new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = "Failed to change password. Please check your current password." 
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during password change");
+                return StatusCode(500, new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = "An internal error occurred" 
+                });
+            }
+        }
 
-        // User status management
-        [HttpPost("users/{userId}/deactivate")]
-        public async Task<IActionResult> DeactivateUser(string userId) => Ok(await _client.DeactivateUserAsync(userId));
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request.Email))
+                {
+                    return BadRequest(new ApiResponseDto 
+                    { 
+                        Success = false, 
+                        Message = "Email is required" 
+                    });
+                }
 
-        [HttpPost("users/{userId}/activate")]
-        public async Task<IActionResult> ActivateUser(string userId) => Ok(await _client.ActivateUserAsync(userId));
-
-        [HttpPost("users/{userId}/make-superuser")]
-        public async Task<IActionResult> MakeSuperuser(string userId) => Ok(await _client.MakeSuperuserAsync(userId));
-
-        [HttpPost("users/{userId}/remove-superuser")]
-        public async Task<IActionResult> RemoveSuperuser(string userId) => Ok(await _client.RemoveSuperuserAsync(userId));
+                await _authService.ResetPasswordAsync(request.Email);
+                
+                // Always return success for security reasons (don't reveal if email exists)
+                return Ok(new ApiResponseDto 
+                { 
+                    Success = true, 
+                    Message = "If the email exists, a password reset link has been sent." 
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during forgot password for {Email}", request.Email);
+                return StatusCode(500, new ApiResponseDto 
+                { 
+                    Success = false, 
+                    Message = "An internal error occurred" 
+                });
+            }
+        }
 
         // Health check
         [HttpGet("health")]
-        public async Task<IActionResult> HealthCheck() => Ok(await _client.HealthCheckAsync());
+        public IActionResult HealthCheck()
+        {
+            return Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow });
+        }
+    }
+
+    // DTOs for API requests and responses
+    public class LoginRequestDto
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public bool RememberMe { get; set; }
+    }
+
+    public class LoginResponseDto
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public string AccessToken { get; set; } = string.Empty;
+        public string RefreshToken { get; set; } = string.Empty;
+        public UserInfoDto? User { get; set; }
+    }
+
+    public class RegisterRequestDto
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? CompanyName { get; set; }
+    }
+
+    public class UserInfoDto
+    {
+        public Guid Id { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public Guid? CompanyId { get; set; }
+        public string? CompanyName { get; set; }
+        public bool IsEmailVerified { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? LastLoginAt { get; set; }
+
+        public string FullName => $"{FirstName} {LastName}".Trim();
+        public bool IsAdmin => Role == "Admin";
+        public bool IsCompanyUser => Role == "Company";
+        public bool IsRegularUser => Role == "User";
+    }
+
+    public class RefreshTokenRequestDto
+    {
+        public string RefreshToken { get; set; } = string.Empty;
+    }
+
+    public class ChangePasswordRequestDto
+    {
+        public string CurrentPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+        public string ConfirmNewPassword { get; set; } = string.Empty;
+    }
+
+    public class ForgotPasswordRequestDto
+    {
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class ApiResponseDto<T>
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public T? Data { get; set; }
+        public List<string> Errors { get; set; } = new();
+    }
+
+    public class ApiResponseDto : ApiResponseDto<object>
+    {
     }
 }
