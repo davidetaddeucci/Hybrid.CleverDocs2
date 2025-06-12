@@ -35,6 +35,7 @@ namespace Hybrid.CleverDocs.WebUI.Models
         public string Role { get; set; } = string.Empty;
         public Guid? CompanyId { get; set; }
         public string? CompanyName { get; set; }
+        public string? LogoUrl { get; set; }
         public bool IsEmailVerified { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? LastLoginAt { get; set; }

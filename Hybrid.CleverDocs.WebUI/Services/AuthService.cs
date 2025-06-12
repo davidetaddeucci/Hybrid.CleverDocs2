@@ -160,8 +160,8 @@ namespace Hybrid.CleverDocs.WebUI.Services
                     
                     if (loginResponse?.Success == true && !string.IsNullOrEmpty(loginResponse.AccessToken))
                     {
-                        await StoreTokenAsync(loginResponse.AccessToken);
-                        await StoreRefreshTokenAsync(loginResponse.RefreshToken);
+                        StoreTokenInCookie(loginResponse.AccessToken);
+                        StoreRefreshTokenInCookie(loginResponse.RefreshToken);
                         
                         _httpClient.DefaultRequestHeaders.Authorization = 
                             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResponse.AccessToken);
@@ -332,9 +332,8 @@ namespace Hybrid.CleverDocs.WebUI.Services
 
         public string? GetStoredToken()
         {
-            // This is a synchronous version for immediate access
-            // Note: This won't work in Blazor Server due to JS interop limitations
-            return null;
+            var context = _httpContextAccessor.HttpContext;
+            return context?.Request.Cookies[TokenKey];
         }
 
         public async Task<string?> GetTokenAsync()
@@ -400,11 +399,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
             }
         }
 
-        private string? GetStoredToken()
-        {
-            var context = _httpContextAccessor.HttpContext;
-            return context?.Request.Cookies[TokenKey];
-        }
+
 
         private string? GetStoredRefreshToken()
         {

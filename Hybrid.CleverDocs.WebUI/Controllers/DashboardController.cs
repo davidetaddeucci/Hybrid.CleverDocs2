@@ -50,6 +50,8 @@ public class DashboardController : Controller
         try
         {
             var user = await _authService.GetCurrentUserAsync();
+            SetViewBagUserInfo(user);
+            
             var model = new AdminDashboardViewModel
             {
                 CurrentUser = user,
@@ -74,6 +76,8 @@ public class DashboardController : Controller
     {
         try
         {
+            SetViewBagUserInfo(user);
+            
             var model = new CompanyDashboardViewModel
             {
                 CurrentUser = user,
@@ -99,6 +103,8 @@ public class DashboardController : Controller
     {
         try
         {
+            SetViewBagUserInfo(user);
+            
             var model = new UserDashboardViewModel
             {
                 CurrentUser = user,
@@ -120,12 +126,24 @@ public class DashboardController : Controller
         }
     }
 
+    private void SetViewBagUserInfo(Models.UserInfo? user)
+    {
+        if (user != null)
+        {
+            ViewBag.UserName = user.FullName;
+            ViewBag.CompanyName = user.CompanyName ?? "Unknown Company";
+            ViewBag.UserRole = user.Role;
+            ViewBag.LogoUrl = user.LogoUrl;
+        }
+    }
+
     // Helper methods for data retrieval
     private async Task<int> GetTotalCompanies()
     {
         try
         {
-            return await _apiService.GetAsync<int>("/api/admin/companies/count") ?? 0;
+            var result = await _apiService.GetAsync<int>("/api/admin/companies/count");
+            return result;
         }
         catch
         {
@@ -137,7 +155,8 @@ public class DashboardController : Controller
     {
         try
         {
-            return await _apiService.GetAsync<int>("/api/admin/users/count") ?? 0;
+            var result = await _apiService.GetAsync<int>("/api/admin/users/count");
+            return result;
         }
         catch
         {
@@ -149,7 +168,8 @@ public class DashboardController : Controller
     {
         try
         {
-            return await _apiService.GetAsync<int>("/api/admin/documents/count") ?? 0;
+            var result = await _apiService.GetAsync<int>("/api/admin/documents/count");
+            return result;
         }
         catch
         {
@@ -203,11 +223,13 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<int> GetCompanyUsers(int companyId)
+    private async Task<int> GetCompanyUsers(Guid? companyId)
     {
         try
         {
-            return await _apiService.GetAsync<int>($"/api/company/{companyId}/users/count") ?? 0;
+            if (companyId == null) return 0;
+            var result = await _apiService.GetAsync<int>($"/api/company/{companyId}/users/count");
+            return result;
         }
         catch
         {
@@ -215,11 +237,13 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<int> GetCompanyDocuments(int companyId)
+    private async Task<int> GetCompanyDocuments(Guid? companyId)
     {
         try
         {
-            return await _apiService.GetAsync<int>($"/api/company/{companyId}/documents/count") ?? 0;
+            if (companyId == null) return 0;
+            var result = await _apiService.GetAsync<int>($"/api/company/{companyId}/documents/count");
+            return result;
         }
         catch
         {
@@ -227,11 +251,13 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<int> GetCompanyCollections(int companyId)
+    private async Task<int> GetCompanyCollections(Guid? companyId)
     {
         try
         {
-            return await _apiService.GetAsync<int>($"/api/company/{companyId}/collections/count") ?? 0;
+            if (companyId == null) return 0;
+            var result = await _apiService.GetAsync<int>($"/api/company/{companyId}/collections/count");
+            return result;
         }
         catch
         {
@@ -239,11 +265,13 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<int> GetCompanyDocumentsThisMonth(int companyId)
+    private async Task<int> GetCompanyDocumentsThisMonth(Guid? companyId)
     {
         try
         {
-            return await _apiService.GetAsync<int>($"/api/company/{companyId}/documents/count/month") ?? 0;
+            if (companyId == null) return 0;
+            var result = await _apiService.GetAsync<int>($"/api/company/{companyId}/documents/count/month");
+            return result;
         }
         catch
         {
@@ -251,11 +279,13 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<List<UserStatsDto>> GetCompanyUserStats(int companyId)
+    private async Task<List<UserStatsDto>> GetCompanyUserStats(Guid? companyId)
     {
         try
         {
-            return await _apiService.GetAsync<List<UserStatsDto>>($"/api/company/{companyId}/users/stats") ?? new List<UserStatsDto>();
+            if (companyId == null) return new List<UserStatsDto>();
+            var result = await _apiService.GetAsync<List<UserStatsDto>>($"/api/company/{companyId}/users/stats");
+            return result ?? new List<UserStatsDto>();
         }
         catch
         {
@@ -263,11 +293,13 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<List<DocumentStatsDto>> GetCompanyDocumentStats(int companyId)
+    private async Task<List<DocumentStatsDto>> GetCompanyDocumentStats(Guid? companyId)
     {
         try
         {
-            return await _apiService.GetAsync<List<DocumentStatsDto>>($"/api/company/{companyId}/documents/stats") ?? new List<DocumentStatsDto>();
+            if (companyId == null) return new List<DocumentStatsDto>();
+            var result = await _apiService.GetAsync<List<DocumentStatsDto>>($"/api/company/{companyId}/documents/stats");
+            return result ?? new List<DocumentStatsDto>();
         }
         catch
         {
@@ -275,7 +307,7 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<List<RecentActivityDto>> GetCompanyRecentActivities(int companyId)
+    private async Task<List<RecentActivityDto>> GetCompanyRecentActivities(Guid? companyId)
     {
         try
         {
@@ -287,11 +319,12 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<int> GetUserDocuments(int userId)
+    private async Task<int> GetUserDocuments(Guid userId)
     {
         try
         {
-            return await _apiService.GetAsync<int>($"/api/user/{userId}/documents/count") ?? 0;
+            var result = await _apiService.GetAsync<int>($"/api/user/{userId}/documents/count");
+            return result;
         }
         catch
         {
@@ -299,11 +332,12 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<int> GetUserCollections(int userId)
+    private async Task<int> GetUserCollections(Guid userId)
     {
         try
         {
-            return await _apiService.GetAsync<int>($"/api/user/{userId}/collections/count") ?? 0;
+            var result = await _apiService.GetAsync<int>($"/api/user/{userId}/collections/count");
+            return result;
         }
         catch
         {
@@ -311,11 +345,12 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<int> GetUserConversations(int userId)
+    private async Task<int> GetUserConversations(Guid userId)
     {
         try
         {
-            return await _apiService.GetAsync<int>($"/api/user/{userId}/conversations/count") ?? 0;
+            var result = await _apiService.GetAsync<int>($"/api/user/{userId}/conversations/count");
+            return result;
         }
         catch
         {
@@ -323,11 +358,12 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<int> GetUserDocumentsThisWeek(int userId)
+    private async Task<int> GetUserDocumentsThisWeek(Guid userId)
     {
         try
         {
-            return await _apiService.GetAsync<int>($"/api/user/{userId}/documents/count/week") ?? 0;
+            var result = await _apiService.GetAsync<int>($"/api/user/{userId}/documents/count/week");
+            return result;
         }
         catch
         {
@@ -335,11 +371,12 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<List<RecentDocumentDto>> GetUserRecentDocuments(int userId)
+    private async Task<List<RecentDocumentDto>> GetUserRecentDocuments(Guid userId)
     {
         try
         {
-            return await _apiService.GetAsync<List<RecentDocumentDto>>($"/api/user/{userId}/documents/recent") ?? new List<RecentDocumentDto>();
+            var result = await _apiService.GetAsync<List<RecentDocumentDto>>($"/api/user/{userId}/documents/recent");
+            return result ?? new List<RecentDocumentDto>();
         }
         catch
         {
@@ -347,11 +384,12 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<List<RecentConversationDto>> GetUserRecentConversations(int userId)
+    private async Task<List<RecentConversationDto>> GetUserRecentConversations(Guid userId)
     {
         try
         {
-            return await _apiService.GetAsync<List<RecentConversationDto>>($"/api/user/{userId}/conversations/recent") ?? new List<RecentConversationDto>();
+            var result = await _apiService.GetAsync<List<RecentConversationDto>>($"/api/user/{userId}/conversations/recent");
+            return result ?? new List<RecentConversationDto>();
         }
         catch
         {
@@ -359,7 +397,7 @@ public class DashboardController : Controller
         }
     }
 
-    private async Task<QuotaUsageDto?> GetUserQuotaUsage(int userId)
+    private async Task<QuotaUsageDto?> GetUserQuotaUsage(Guid userId)
     {
         try
         {

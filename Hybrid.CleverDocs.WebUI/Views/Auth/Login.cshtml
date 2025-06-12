@@ -1,0 +1,242 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.LoginViewModel
+@{
+    ViewData["Title"] = "Sign In";
+    Layout = "_LoginLayout";
+}
+
+<div class="login-card fade-in">
+    <div class="login-header">
+        <div class="login-logo">
+            <i class="fas fa-brain"></i>
+        </div>
+        <h2 class="login-title">Welcome Back</h2>
+        <p class="login-subtitle">Sign in to your CleverDocs account</p>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success" role="alert">
+            <i class="fas fa-check-circle me-2"></i>
+            @TempData["SuccessMessage"]
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model?.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            @Model.ErrorMessage
+        </div>
+    }
+
+    <form asp-action="Login" method="post" id="loginForm" novalidate>
+        @Html.AntiForgeryToken()
+        
+        <input type="hidden" asp-for="ReturnUrl" />
+
+        <div class="form-group">
+            <label asp-for="Email" class="form-label">
+                <i class="fas fa-envelope me-2"></i>Email Address
+            </label>
+            <input asp-for="Email" 
+                   class="form-control" 
+                   placeholder="Enter your email address"
+                   autocomplete="email"
+                   autofocus />
+            <span asp-validation-for="Email" class="text-danger"></span>
+        </div>
+
+        <div class="form-group">
+            <label asp-for="Password" class="form-label">
+                <i class="fas fa-lock me-2"></i>Password
+            </label>
+            <div class="position-relative">
+                <input asp-for="Password" 
+                       class="form-control" 
+                       placeholder="Enter your password"
+                       autocomplete="current-password"
+                       id="passwordField" />
+                <button type="button" 
+                        class="btn btn-link position-absolute end-0 top-50 translate-middle-y pe-3" 
+                        style="border: none; background: none; color: var(--md-text-muted);"
+                        onclick="togglePassword()">
+                    <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                </button>
+            </div>
+            <span asp-validation-for="Password" class="text-danger"></span>
+        </div>
+
+        <div class="form-group d-flex justify-content-between align-items-center">
+            <div class="form-check">
+                <input asp-for="RememberMe" class="form-check-input" />
+                <label asp-for="RememberMe" class="form-check-label">
+                    Remember me
+                </label>
+            </div>
+            <a asp-action="ForgotPassword" class="text-decoration-none" style="color: var(--md-primary);">
+                Forgot password?
+            </a>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-sign-in-alt me-2"></i>
+            Sign In
+        </button>
+    </form>
+
+    <div class="text-center mt-3">
+        <p class="text-muted mb-2">Don't have an account?</p>
+        <a asp-action="Register" class="btn btn-outline">
+            <i class="fas fa-user-plus me-2"></i>
+            Create Account
+        </a>
+    </div>
+
+    <!-- Social Login (Optional) -->
+    <div class="text-center mt-4">
+        <div class="d-flex align-items-center mb-3">
+            <hr class="flex-grow-1">
+            <span class="px-3 text-muted small">or continue with</span>
+            <hr class="flex-grow-1">
+        </div>
+        
+        <div class="d-flex gap-2 justify-content-center">
+            <button type="button" class="btn btn-outline" style="flex: 1;" disabled>
+                <i class="fab fa-google me-2"></i>
+                Google
+            </button>
+            <button type="button" class="btn btn-outline" style="flex: 1;" disabled>
+                <i class="fab fa-microsoft me-2"></i>
+                Microsoft
+            </button>
+        </div>
+        <small class="text-muted d-block mt-2">
+            <i class="fas fa-info-circle me-1"></i>
+            Social login coming soon
+        </small>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center mt-4 pt-3" style="border-top: 1px solid var(--md-border-light);">
+        <small class="text-muted">
+            © 2025 CleverDocs. All rights reserved.
+        </small>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function togglePassword() {
+            const passwordField = document.getElementById('passwordField');
+            const toggleIcon = document.getElementById('passwordToggleIcon');
+            
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordField.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
+
+        // Add loading state to form submission
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing In...';
+            submitBtn.disabled = true;
+            
+            // Re-enable button after 5 seconds in case of error
+            setTimeout(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }, 5000);
+        });
+
+        // Auto-focus on email field if empty
+        document.addEventListener('DOMContentLoaded', function() {
+            const emailField = document.querySelector('input[type="email"]');
+            if (emailField && !emailField.value) {
+                emailField.focus();
+            }
+        });
+    </script>
+}
+
+@section Styles {
+    <style>
+        .alert {
+            border-radius: 8px;
+            border: none;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .alert-success {
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(76, 175, 80, 0.05));
+            color: #2e7d32;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .alert-danger {
+            background: linear-gradient(135deg, rgba(244, 67, 54, 0.1), rgba(244, 67, 54, 0.05));
+            color: #c62828;
+            border-left: 4px solid #f44336;
+        }
+        
+        .form-check-input:checked {
+            background-color: var(--md-primary);
+            border-color: var(--md-primary);
+        }
+        
+        .form-check-input:focus {
+            box-shadow: 0 0 0 0.2rem rgba(233, 30, 99, 0.25);
+        }
+        
+        .position-relative {
+            position: relative;
+        }
+        
+        .position-absolute {
+            position: absolute;
+        }
+        
+        .end-0 {
+            right: 0;
+        }
+        
+        .top-50 {
+            top: 50%;
+        }
+        
+        .translate-middle-y {
+            transform: translateY(-50%);
+        }
+        
+        .pe-3 {
+            padding-right: 1rem;
+        }
+        
+        hr {
+            border: none;
+            height: 1px;
+            background: var(--md-border-light);
+        }
+        
+        .flex-grow-1 {
+            flex-grow: 1;
+        }
+        
+        .px-3 {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        
+        .small {
+            font-size: 0.875rem;
+        }
+    </style>
+}

@@ -1,0 +1,315 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.RegisterViewModel
+@{
+    ViewData["Title"] = "Create Account";
+    Layout = "_LoginLayout";
+}
+
+<div class="login-card fade-in" style="max-width: 500px;">
+    <div class="login-header">
+        <div class="login-logo">
+            <i class="fas fa-brain"></i>
+        </div>
+        <h2 class="login-title">Create Account</h2>
+        <p class="login-subtitle">Join CleverDocs and start managing your documents with AI</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model?.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            @Model.ErrorMessage
+        </div>
+    }
+
+    <form asp-action="Register" method="post" id="registerForm" novalidate>
+        @Html.AntiForgeryToken()
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label asp-for="FirstName" class="form-label">
+                        <i class="fas fa-user me-2"></i>First Name
+                    </label>
+                    <input asp-for="FirstName" 
+                           class="form-control" 
+                           placeholder="Enter your first name"
+                           autocomplete="given-name"
+                           autofocus />
+                    <span asp-validation-for="FirstName" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label asp-for="LastName" class="form-label">
+                        <i class="fas fa-user me-2"></i>Last Name
+                    </label>
+                    <input asp-for="LastName" 
+                           class="form-control" 
+                           placeholder="Enter your last name"
+                           autocomplete="family-name" />
+                    <span asp-validation-for="LastName" class="text-danger"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label asp-for="Email" class="form-label">
+                <i class="fas fa-envelope me-2"></i>Email Address
+            </label>
+            <input asp-for="Email" 
+                   class="form-control" 
+                   placeholder="Enter your email address"
+                   autocomplete="email" />
+            <span asp-validation-for="Email" class="text-danger"></span>
+        </div>
+
+        <div class="form-group">
+            <label asp-for="CompanyName" class="form-label">
+                <i class="fas fa-building me-2"></i>Company Name
+            </label>
+            <input asp-for="CompanyName" 
+                   class="form-control" 
+                   placeholder="Enter your company name"
+                   autocomplete="organization" />
+            <span asp-validation-for="CompanyName" class="text-danger"></span>
+        </div>
+
+        <div class="form-group">
+            <label asp-for="Password" class="form-label">
+                <i class="fas fa-lock me-2"></i>Password
+            </label>
+            <div class="position-relative">
+                <input asp-for="Password" 
+                       class="form-control" 
+                       placeholder="Create a strong password"
+                       autocomplete="new-password"
+                       id="passwordField" />
+                <button type="button" 
+                        class="btn btn-link position-absolute end-0 top-50 translate-middle-y pe-3" 
+                        style="border: none; background: none; color: var(--md-text-muted);"
+                        onclick="togglePassword('passwordField', 'passwordToggleIcon')">
+                    <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                </button>
+            </div>
+            <div class="password-strength mt-2">
+                <div class="password-strength-bar">
+                    <div class="password-strength-fill" id="passwordStrengthFill"></div>
+                </div>
+                <small class="password-strength-text" id="passwordStrengthText">Password strength</small>
+            </div>
+            <span asp-validation-for="Password" class="text-danger"></span>
+        </div>
+
+        <div class="form-group">
+            <label asp-for="ConfirmPassword" class="form-label">
+                <i class="fas fa-lock me-2"></i>Confirm Password
+            </label>
+            <div class="position-relative">
+                <input asp-for="ConfirmPassword" 
+                       class="form-control" 
+                       placeholder="Confirm your password"
+                       autocomplete="new-password"
+                       id="confirmPasswordField" />
+                <button type="button" 
+                        class="btn btn-link position-absolute end-0 top-50 translate-middle-y pe-3" 
+                        style="border: none; background: none; color: var(--md-text-muted);"
+                        onclick="togglePassword('confirmPasswordField', 'confirmPasswordToggleIcon')">
+                    <i class="fas fa-eye" id="confirmPasswordToggleIcon"></i>
+                </button>
+            </div>
+            <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+        </div>
+
+        <div class="form-group">
+            <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="agreeTerms" required />
+                <label class="form-check-label" for="agreeTerms">
+                    I agree to the <a href="#" style="color: var(--md-primary);">Terms of Service</a> 
+                    and <a href="#" style="color: var(--md-primary);">Privacy Policy</a>
+                </label>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-user-plus me-2"></i>
+            Create Account
+        </button>
+    </form>
+
+    <div class="text-center mt-3">
+        <p class="text-muted mb-2">Already have an account?</p>
+        <a asp-action="Login" class="btn btn-outline">
+            <i class="fas fa-sign-in-alt me-2"></i>
+            Sign In
+        </a>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center mt-4 pt-3" style="border-top: 1px solid var(--md-border-light);">
+        <small class="text-muted">
+            © 2025 CleverDocs. All rights reserved.
+        </small>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function togglePassword(fieldId, iconId) {
+            const passwordField = document.getElementById(fieldId);
+            const toggleIcon = document.getElementById(iconId);
+            
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordField.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
+
+        // Password strength checker
+        function checkPasswordStrength(password) {
+            let strength = 0;
+            let feedback = [];
+
+            if (password.length >= 8) strength += 1;
+            else feedback.push('at least 8 characters');
+
+            if (/[a-z]/.test(password)) strength += 1;
+            else feedback.push('lowercase letter');
+
+            if (/[A-Z]/.test(password)) strength += 1;
+            else feedback.push('uppercase letter');
+
+            if (/[0-9]/.test(password)) strength += 1;
+            else feedback.push('number');
+
+            if (/[^A-Za-z0-9]/.test(password)) strength += 1;
+            else feedback.push('special character');
+
+            return { strength, feedback };
+        }
+
+        // Update password strength indicator
+        document.getElementById('passwordField').addEventListener('input', function() {
+            const password = this.value;
+            const { strength, feedback } = checkPasswordStrength(password);
+            const strengthFill = document.getElementById('passwordStrengthFill');
+            const strengthText = document.getElementById('passwordStrengthText');
+
+            const percentage = (strength / 5) * 100;
+            strengthFill.style.width = percentage + '%';
+
+            if (strength === 0) {
+                strengthFill.style.background = '#f44336';
+                strengthText.textContent = 'Very weak';
+                strengthText.style.color = '#f44336';
+            } else if (strength <= 2) {
+                strengthFill.style.background = '#ff9800';
+                strengthText.textContent = 'Weak';
+                strengthText.style.color = '#ff9800';
+            } else if (strength <= 3) {
+                strengthFill.style.background = '#ffc107';
+                strengthText.textContent = 'Fair';
+                strengthText.style.color = '#ffc107';
+            } else if (strength <= 4) {
+                strengthFill.style.background = '#4caf50';
+                strengthText.textContent = 'Good';
+                strengthText.style.color = '#4caf50';
+            } else {
+                strengthFill.style.background = '#2e7d32';
+                strengthText.textContent = 'Strong';
+                strengthText.style.color = '#2e7d32';
+            }
+
+            if (feedback.length > 0 && password.length > 0) {
+                strengthText.textContent += ' (needs: ' + feedback.join(', ') + ')';
+            }
+        });
+
+        // Add loading state to form submission
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Account...';
+            submitBtn.disabled = true;
+            
+            // Re-enable button after 10 seconds in case of error
+            setTimeout(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }, 10000);
+        });
+    </script>
+}
+
+@section Styles {
+    <style>
+        .row {
+            margin-left: -0.5rem;
+            margin-right: -0.5rem;
+        }
+        
+        .col-md-6 {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        
+        @@media (min-width: 768px) {
+            .col-md-6 {
+                flex: 0 0 50%;
+                max-width: 50%;
+            }
+        }
+        
+        .password-strength {
+            margin-top: 0.5rem;
+        }
+        
+        .password-strength-bar {
+            height: 4px;
+            background: var(--md-border-light);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .password-strength-fill {
+            height: 100%;
+            width: 0%;
+            transition: all 0.3s ease;
+            border-radius: 2px;
+        }
+        
+        .password-strength-text {
+            display: block;
+            margin-top: 0.25rem;
+            font-size: 0.75rem;
+            transition: color 0.3s ease;
+        }
+        
+        .alert {
+            border-radius: 8px;
+            border: none;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .alert-danger {
+            background: linear-gradient(135deg, rgba(244, 67, 54, 0.1), rgba(244, 67, 54, 0.05));
+            color: #c62828;
+            border-left: 4px solid #f44336;
+        }
+        
+        .form-check-input:checked {
+            background-color: var(--md-primary);
+            border-color: var(--md-primary);
+        }
+        
+        .form-check-input:focus {
+            box-shadow: 0 0 0 0.2rem rgba(233, 30, 99, 0.25);
+        }
+    </style>
+}

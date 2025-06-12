@@ -1,0 +1,303 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.UserDashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewBag.UserName = Model.UserName;
+    ViewBag.CompanyName = Model.CompanyName;
+    ViewBag.UserRole = Model.UserRole;
+}
+
+<!-- Welcome Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-1">Welcome back, @Model.CurrentUser?.FirstName! 👋</h3>
+                        <p class="text-muted mb-0">Here's what's happening with your documents today.</p>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-muted">@DateTime.Now.ToString("MMMM dd, yyyy")</small>
+                        <br>
+                        <small class="text-muted">@DateTime.Now.ToString("HH:mm")</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #e91e63, #ad1457);">
+            <div class="stats-icon">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <div class="stats-number">@Model.DocumentCount</div>
+            <p class="stats-label">Total Documents</p>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #7b1fa2, #4a148c);">
+            <div class="stats-icon">
+                <i class="fas fa-folder"></i>
+            </div>
+            <div class="stats-number">@Model.CollectionCount</div>
+            <p class="stats-label">Collections</p>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #00bcd4, #0097a7);">
+            <div class="stats-icon">
+                <i class="fas fa-comments"></i>
+            </div>
+            <div class="stats-number">@Model.ConversationCount</div>
+            <p class="stats-label">AI Conversations</p>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stats-card" style="background: linear-gradient(135deg, #4caf50, #388e3c);">
+            <div class="stats-icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="stats-number">@Model.DocumentsThisWeek</div>
+            <p class="stats-label">This Week</p>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Row -->
+<div class="row">
+    <!-- Recent Documents -->
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-file-alt me-2"></i>Recent Documents
+                </h5>
+                <a href="@Url.Action("Index", "Documents")" class="btn btn-sm btn-outline-primary">
+                    View All
+                </a>
+            </div>
+            <div class="card-body">
+                @if (Model.RecentDocuments.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Document</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var doc in Model.RecentDocuments.Take(5))
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-file-@(doc.FileType.ToLower() == "pdf" ? "pdf" : doc.FileType.ToLower() == "docx" ? "word" : "alt") me-2 text-muted"></i>
+                                                <div>
+                                                    <div class="fw-medium">@doc.FileName</div>
+                                                    <small class="text-muted">ID: @doc.DocumentId</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark">@doc.FileType.ToUpper()</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge @doc.StatusBadgeClass">@doc.Status</span>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">@doc.CreatedAt.ToString("MMM dd, yyyy")</small>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary btn-sm" title="View">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-outline-secondary btn-sm" title="Download">
+                                                    <i class="fas fa-download"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                        <h6 class="text-muted">No documents yet</h6>
+                        <p class="text-muted mb-3">Upload your first document to get started</p>
+                        <a href="@Url.Action("Upload", "Documents")" class="btn btn-primary">
+                            <i class="fas fa-upload me-2"></i>Upload Document
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Quota Usage -->
+        @if (Model.QuotaUsage != null)
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>Usage & Limits
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <!-- Document Quota -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-medium">Documents</span>
+                            <span class="small text-muted">@Model.QuotaUsage.DocumentQuotaUsed / @Model.QuotaUsage.DocumentQuotaLimit</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="@Model.QuotaUsage.DocumentQuotaClass" 
+                                 style="width: @Model.QuotaUsage.DocumentQuotaPercentage%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Query Quota -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-medium">AI Queries</span>
+                            <span class="small text-muted">@Model.QuotaUsage.QueryQuotaUsed / @Model.QuotaUsage.QueryQuotaLimit</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="@Model.QuotaUsage.QueryQuotaClass" 
+                                 style="width: @Model.QuotaUsage.QueryQuotaPercentage%"></div>
+                        </div>
+                    </div>
+
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        Resets on @Model.QuotaUsage.QuotaResetDate.ToString("MMM dd, yyyy")
+                    </small>
+                </div>
+            </div>
+        }
+
+        <!-- Recent Conversations -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-comments me-2"></i>Recent Chats
+                </h6>
+                <a href="@Url.Action("Index", "Chat")" class="btn btn-sm btn-outline-primary">
+                    New Chat
+                </a>
+            </div>
+            <div class="card-body">
+                @if (Model.RecentConversations.Any())
+                {
+                    @foreach (var conversation in Model.RecentConversations.Take(3))
+                    {
+                        <div class="d-flex align-items-start mb-3 pb-3 border-bottom">
+                            <div class="flex-shrink-0 me-3">
+                                <div class="avatar-sm bg-primary rounded-circle d-flex align-items-center justify-content-center">
+                                    <i class="fas fa-robot text-white"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">@conversation.Title</h6>
+                                <p class="text-muted small mb-1">@conversation.MessageCount messages</p>
+                                <small class="text-muted">@conversation.LastMessage.ToString("MMM dd, HH:mm")</small>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center py-3">
+                        <i class="fas fa-comments fa-2x text-muted mb-2"></i>
+                        <p class="text-muted small mb-0">No conversations yet</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="@Url.Action("Upload", "Documents")" class="btn btn-primary">
+                        <i class="fas fa-upload me-2"></i>Upload Document
+                    </a>
+                    <a href="@Url.Action("Create", "Collections")" class="btn btn-outline-primary">
+                        <i class="fas fa-folder-plus me-2"></i>New Collection
+                    </a>
+                    <a href="@Url.Action("Index", "Chat")" class="btn btn-outline-primary">
+                        <i class="fas fa-comment me-2"></i>Start AI Chat
+                    </a>
+                    <a href="@Url.Action("Index", "Search")" class="btn btn-outline-primary">
+                        <i class="fas fa-search me-2"></i>Search Documents
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <style>
+        .avatar-sm {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .progress {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        
+        .badge-success { background-color: #28a745 !important; }
+        .badge-warning { background-color: #ffc107 !important; color: #212529 !important; }
+        .badge-danger { background-color: #dc3545 !important; }
+        .badge-secondary { background-color: #6c757d !important; }
+        
+        .table th {
+            border-top: none;
+            font-weight: 600;
+            color: var(--md-text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .btn-group-sm > .btn, .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .fw-medium {
+            font-weight: 500;
+        }
+        
+        .d-grid {
+            display: grid;
+        }
+        
+        .gap-2 {
+            gap: 0.5rem;
+        }
+    </style>
+}
