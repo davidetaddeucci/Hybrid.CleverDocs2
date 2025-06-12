@@ -3,8 +3,8 @@ using MassTransit;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Data.Entities;
 using Hybrid.CleverDocs2.WebServices.Messages;
-using Hybrid.CleverDocs2.WebServices.Services.Clients;
-using Hybrid.CleverDocs2.WebServices.Services.DTOs.Ingestion;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Ingestion;
 
 namespace Hybrid.CleverDocs2.WebServices.Consumers
 {

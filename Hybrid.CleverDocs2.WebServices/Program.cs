@@ -6,7 +6,7 @@ using RabbitMQ.Client;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Consumers;
 using Hybrid.CleverDocs2.WebServices.Workers;
-using Hybrid.CleverDocs2.WebServices.Services.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.Clients;
 
 var builder = WebApplication.CreateBuilder(args);
 

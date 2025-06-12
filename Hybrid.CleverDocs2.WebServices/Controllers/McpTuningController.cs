@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Hybrid.CleverDocs2.WebServices.Services.Clients;
-using Hybrid.CleverDocs2.WebServices.Services.DTOs.McpTuning;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.McpTuning;
 using System.Threading.Tasks;
 
 namespace Hybrid.CleverDocs2.WebServices.Controllers

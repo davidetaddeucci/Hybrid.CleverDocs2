@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Hybrid.CleverDocs2.WebServices.Services.Clients;
-using Hybrid.CleverDocs2.WebServices.Services.DTOs.Validation;
-using Hybrid.CleverDocs2.WebServices.Services.DTOs.Validation;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Validation;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Validation;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 

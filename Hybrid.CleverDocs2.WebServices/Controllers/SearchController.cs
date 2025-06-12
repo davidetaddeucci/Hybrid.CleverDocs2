@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Hybrid.CleverDocs2.WebServices.Services.Clients;
-using Hybrid.CleverDocs2.WebServices.Services.DTOs.Search;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.R2R.DTOs.Search;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
