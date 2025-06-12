@@ -23,15 +23,24 @@ namespace Hybrid.CleverDocs2.WebServices.Consumers
         {
             var msg = context.Message;
             // Call R2R ingestion API
-            var request = new IngestionRequest { JobId = msg.JobId, Sequence = msg.Sequence, Data = msg.Data };
-            var result = await _r2rClient.CreateAsync(request);
+            var request = new IngestionRequest 
+            { 
+                DocumentId = msg.JobId.ToString(),
+                Metadata = new Dictionary<string, object>
+                {
+                    ["sequence"] = msg.Sequence,
+                    ["chunk_id"] = msg.ChunkId,
+                    ["data"] = msg.Data ?? ""
+                }
+            };
+            var result = await _r2rClient.CreateIngestionAsync(request);
 
             // Update DB
             var chunk = await _db.DocumentChunks.FindAsync(msg.ChunkId);
             if (chunk != null)
             {
                 chunk.Status = ChunkStatus.Completed;
-                chunk.R2RResult = result.ToString();
+                chunk.R2RResult = result?.ToString() ?? "No result";
             }
             await _db.SaveChangesAsync(context.CancellationToken);
         }
