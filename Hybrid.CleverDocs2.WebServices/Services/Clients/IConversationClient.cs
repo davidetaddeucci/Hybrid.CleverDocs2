@@ -6,10 +6,35 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
 {
     public interface IConversationClient
     {
-        Task<ConversationResponse> CreateAsync(ConversationRequest request);
-        Task<ConversationResponse> GetAsync(string id);
-        Task<IEnumerable<ConversationResponse>> ListAsync();
-        Task<ConversationResponse> UpdateAsync(string id, ConversationRequest request);
-        Task DeleteAsync(string id);
+        // Conversation CRUD operations
+        Task<ConversationCreateResponse?> CreateConversationAsync(ConversationRequest request);
+        Task<ConversationResponse?> GetConversationAsync(string conversationId);
+        Task<ConversationListResponse?> ListConversationsAsync(ConversationListRequest? request = null);
+        Task<ConversationResponse?> UpdateConversationAsync(string conversationId, ConversationUpdateRequest request);
+        Task DeleteConversationAsync(string conversationId);
+
+        // Message operations
+        Task<MessageCreateResponse?> AddMessageAsync(string conversationId, MessageRequest request);
+        Task<MessageResponse?> GetMessageAsync(string conversationId, string messageId);
+        Task<MessageListResponse?> ListMessagesAsync(string conversationId, int offset = 0, int limit = 100);
+        Task<MessageResponse?> UpdateMessageAsync(string conversationId, string messageId, MessageRequest request);
+        Task DeleteMessageAsync(string conversationId, string messageId);
+
+        // Conversation branching
+        Task<ConversationBranchResponse?> BranchConversationAsync(string conversationId, ConversationBranchRequest request);
+
+        // Conversation analytics
+        Task<ConversationStatsResponse?> GetConversationStatsAsync(string conversationId);
+
+        // Streaming support
+        Task<IAsyncEnumerable<string>?> StreamMessageAsync(string conversationId, MessageRequest request);
+
+        // Bulk operations
+        Task<MessageResponse2?> DeleteMultipleMessagesAsync(string conversationId, List<string> messageIds);
+        Task<MessageResponse2?> ExportConversationAsync(string conversationId);
+        Task<ConversationCreateResponse?> ImportConversationAsync(ConversationRequest request, Stream dataStream);
+
+        // Search within conversation
+        Task<MessageListResponse?> SearchMessagesAsync(string conversationId, string query, int offset = 0, int limit = 100);
     }
 }
