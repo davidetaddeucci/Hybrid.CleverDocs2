@@ -14,23 +14,22 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
         private readonly IToolsClient _client;
         public ToolsController(IToolsClient client) => _client = client;
 
-        [HttpPost]
-        public async Task<IActionResult> Create(ToolsRequest request) => Ok(await _client.CreateAsync(request));
+        [HttpPost("execute")]
+        public async Task<IActionResult> ExecuteTool(ToolsRequest request) => Ok(await _client.ExecuteToolAsync(request));
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> Get(string id) => Ok(await _client.GetAsync(id));
+        [HttpPost("register")]
+        public async Task<IActionResult> RegisterTool(ToolRegistrationRequest request) => Ok(await _client.RegisterToolAsync(request));
+
+        [HttpGet("{toolId}")]
+        public async Task<IActionResult> GetTool(string toolId) => Ok(await _client.GetToolAsync(toolId));
 
         [HttpGet]
-        public async Task<IActionResult> List() => Ok(await _client.ListAsync());
+        public async Task<IActionResult> ListTools([FromQuery] ToolListRequest request) => Ok(await _client.ListToolsAsync(request));
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(string id, ToolsRequest request) => Ok(await _client.UpdateAsync(id, request));
+        [HttpPut("{toolId}")]
+        public async Task<IActionResult> UpdateTool(string toolId, ToolRegistrationRequest request) => Ok(await _client.UpdateToolAsync(toolId, request));
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(string id)
-        {
-            await _client.DeleteAsync(id);
-            return NoContent();
-        }
+        [HttpDelete("{toolId}")]
+        public async Task<IActionResult> DeleteTool(string toolId) => Ok(await _client.DeleteToolAsync(toolId));
     }
 }

@@ -14,23 +14,25 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
         private readonly IWebDevClient _client;
         public WebDevController(IWebDevClient client) => _client = client;
 
-        [HttpPost]
-        public async Task<IActionResult> Create(WebDevRequest request) => Ok(await _client.CreateAsync(request));
+        [HttpPost("projects")]
+        public async Task<IActionResult> CreateProject(ProjectCreateRequest request) => Ok(await _client.CreateProjectAsync(request));
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> Get(string id) => Ok(await _client.GetAsync(id));
+        [HttpGet("projects/{projectId}")]
+        public async Task<IActionResult> GetProject(string projectId) => Ok(await _client.GetProjectAsync(projectId));
 
-        [HttpGet]
-        public async Task<IActionResult> List() => Ok(await _client.ListAsync());
+        [HttpGet("projects")]
+        public async Task<IActionResult> ListProjects(int page = 1, int pageSize = 50, string? filter = null) => Ok(await _client.ListProjectsAsync(page, pageSize, filter));
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(string id, WebDevRequest request) => Ok(await _client.UpdateAsync(id, request));
+        [HttpPost("builds")]
+        public async Task<IActionResult> StartBuild(BuildRequest request) => Ok(await _client.StartBuildAsync(request));
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(string id)
-        {
-            await _client.DeleteAsync(id);
-            return NoContent();
-        }
+        [HttpPost("deployments")]
+        public async Task<IActionResult> Deploy(DeploymentRequest request) => Ok(await _client.DeployAsync(request));
+
+        [HttpGet("projects/{projectId}/monitoring")]
+        public async Task<IActionResult> GetMonitoring(string projectId, MonitoringRequest request) => Ok(await _client.GetMonitoringDataAsync(request));
+
+        [HttpPost("projects/{projectId}/optimization")]
+        public async Task<IActionResult> AnalyzeProject(string projectId, OptimizationRequest request) => Ok(await _client.AnalyzeProjectAsync(request));
     }
 }

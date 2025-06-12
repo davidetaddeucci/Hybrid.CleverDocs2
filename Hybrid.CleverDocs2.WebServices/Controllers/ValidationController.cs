@@ -14,23 +14,22 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
         private readonly IValidationClient _client;
         public ValidationController(IValidationClient client) => _client = client;
 
-        [HttpPost]
-        public async Task<IActionResult> Create(ValidationRequest request) => Ok(await _client.CreateAsync(request));
+        [HttpPost("validate-data")]
+        public async Task<IActionResult> ValidateData(ValidationRequest request) => Ok(await _client.ValidateDataAsync(request));
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> Get(string id) => Ok(await _client.GetAsync(id));
+        [HttpPost("validate-schema")]
+        public async Task<IActionResult> ValidateSchema(ValidationRequest request) => Ok(await _client.ValidateSchemaAsync(request));
 
-        [HttpGet]
-        public async Task<IActionResult> List() => Ok(await _client.ListAsync());
+        [HttpGet("results/{validationId}")]
+        public async Task<IActionResult> GetValidationResult(string validationId) => Ok(await _client.GetValidationResultAsync(validationId));
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(string id, ValidationRequest request) => Ok(await _client.UpdateAsync(id, request));
+        [HttpPost("validate-content")]
+        public async Task<IActionResult> ValidateContent(ContentValidationRequest request) => Ok(await _client.ValidateContentAsync(request));
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(string id)
-        {
-            await _client.DeleteAsync(id);
-            return NoContent();
-        }
+        [HttpPost("validate-compliance")]
+        public async Task<IActionResult> ValidateCompliance(ComplianceValidationRequest request) => Ok(await _client.ValidateComplianceAsync(request));
+
+        [HttpPost("validate-business-rules")]
+        public async Task<IActionResult> ValidateBusinessRules(BusinessRuleValidationRequest request) => Ok(await _client.ValidateBusinessRulesAsync(request));
     }
 }
