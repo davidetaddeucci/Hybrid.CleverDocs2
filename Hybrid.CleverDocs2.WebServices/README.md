@@ -42,6 +42,17 @@ Hybrid.CleverDocs2.WebServices/
 - RabbitMQ 3.12+
 - SciPhi AI R2R API server attivo
 
+## Configurazione Database
+
+**Credenziali PostgreSQL:**
+- Host: localhost
+- Port: 5433
+- Database: cleverdocs
+- Username: admin
+- Password: MiaPassword123
+
+**Status:** ✅ Database configurato con schema completo (8 tabelle create via Entity Framework migrations)
+
 ## Documentazione
 
 Per una comprensione approfondita del backend, consultare i seguenti documenti:

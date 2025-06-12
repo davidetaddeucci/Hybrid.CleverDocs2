@@ -1,8 +1,17 @@
-# Modello Dati SQL Server per WebUI Multitenant SciPhi AI R2R
+# Modello Dati PostgreSQL per WebUI Multitenant SciPhi AI R2R
 
 ## Panoramica
 
-Questo documento descrive il modello dati SQL Server per il sistema WebUI multitenant di SciPhi AI R2R. Il modello è progettato seguendo l'approccio "Shared Database, Separate Schema" per garantire un efficace isolamento dei dati tra tenant mantenendo l'efficienza delle risorse.
+Questo documento descrive il modello dati PostgreSQL per il sistema WebUI multitenant di SciPhi AI R2R. Il modello è progettato con Entity Framework Core utilizzando un approccio "Shared Database, Shared Schema" con isolamento a livello di CompanyId per garantire un efficace isolamento dei dati tra tenant mantenendo l'efficienza delle risorse.
+
+## Configurazione Database
+
+**Credenziali di Accesso:**
+- Host: localhost
+- Port: 5433
+- Database: cleverdocs
+- Username: admin
+- Password: MiaPassword123
 
 ## Struttura degli Schemi
 
