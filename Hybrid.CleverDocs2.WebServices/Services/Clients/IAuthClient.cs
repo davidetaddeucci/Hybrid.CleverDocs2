@@ -6,15 +6,37 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
 {
     public interface IAuthClient
     {
-        Task<LoginResponse> LoginAsync(LoginRequest request);
-        Task<RefreshTokenResponse> RefreshTokenAsync(RefreshTokenRequest request);
-        Task LogoutAsync(LogoutRequest request);
+        // Authentication operations
+        Task<LoginResponse?> LoginAsync(LoginRequest request);
+        Task<RefreshTokenResponse?> RefreshTokenAsync(RefreshTokenRequest request);
+        Task<MessageResponse?> LogoutAsync(LogoutRequest request);
 
-        // User management endpoints
-        Task<UserResponse> CreateUserAsync(UserRequest request);
-        Task<UserResponse> GetUserAsync(string id);
-        Task<IEnumerable<UserResponse>> ListUsersAsync();
-        Task<UserResponse> UpdateUserAsync(string id, UserRequest request);
-        Task DeleteUserAsync(string id);
+        // User registration and management
+        Task<UserCreateResponse?> RegisterUserAsync(UserRequest request);
+        Task<UserResponse?> GetUserAsync(string userId);
+        Task<UserResponse?> GetCurrentUserAsync();
+        Task<UserListResponse?> ListUsersAsync(int offset = 0, int limit = 100);
+        Task<UserResponse?> UpdateUserAsync(string userId, UserUpdateRequest request);
+        Task<UserResponse?> UpdateCurrentUserAsync(UserUpdateRequest request);
+        Task DeleteUserAsync(string userId);
+        Task DeleteCurrentUserAsync();
+
+        // Password management
+        Task<MessageResponse?> RequestPasswordResetAsync(PasswordResetRequest request);
+        Task<MessageResponse?> ConfirmPasswordResetAsync(PasswordResetConfirmRequest request);
+        Task<MessageResponse?> ChangePasswordAsync(ChangePasswordRequest request);
+
+        // Email verification
+        Task<MessageResponse?> VerifyEmailAsync(EmailVerificationRequest request);
+        Task<MessageResponse?> ResendVerificationEmailAsync(ResendVerificationRequest request);
+
+        // User status management
+        Task<UserResponse?> DeactivateUserAsync(string userId);
+        Task<UserResponse?> ActivateUserAsync(string userId);
+        Task<UserResponse?> MakeSuperuserAsync(string userId);
+        Task<UserResponse?> RemoveSuperuserAsync(string userId);
+
+        // Health check
+        Task<MessageResponse?> HealthCheckAsync();
     }
 }

@@ -1,8 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Auth
 {
     public class LogoutRequest
     {
-        // Refresh token to invalidate
+        [JsonPropertyName("refresh_token")]
         public string RefreshToken { get; set; } = string.Empty;
     }
 }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
-using Hybrid.CleverDocs2.WebServices.Services.Clients;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.Auth;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Clients
@@ -17,59 +16,288 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
             _httpClient = httpClient;
         }
 
-        public async Task<LoginResponse> LoginAsync(LoginRequest request)
+        // Authentication operations
+        public async Task<LoginResponse?> LoginAsync(LoginRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("/auth/login", request);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<LoginResponse>()!;
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/v3/login", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<LoginResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
         }
 
-        public async Task<RefreshTokenResponse> RefreshTokenAsync(RefreshTokenRequest request)
+        public async Task<RefreshTokenResponse?> RefreshTokenAsync(RefreshTokenRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("/auth/refresh", request);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<RefreshTokenResponse>()!;
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/v3/refresh_access_token", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<RefreshTokenResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
         }
 
-        public async Task LogoutAsync(LogoutRequest request)
+        public async Task<MessageResponse?> LogoutAsync(LogoutRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("/auth/logout", request);
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/v3/logout", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<MessageResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        // User registration and management
+        public async Task<UserCreateResponse?> RegisterUserAsync(UserRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/v3/users", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserCreateResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<UserResponse?> GetUserAsync(string userId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"/v3/users/{userId}");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<UserResponse?> GetCurrentUserAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync("/v3/user");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<UserListResponse?> ListUsersAsync(int offset = 0, int limit = 100)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"/v3/users?offset={offset}&limit={limit}");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserListResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<UserResponse?> UpdateUserAsync(string userId, UserUpdateRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync($"/v3/users/{userId}", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<UserResponse?> UpdateCurrentUserAsync(UserUpdateRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync("/v3/user", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task DeleteUserAsync(string userId)
+        {
+            var response = await _httpClient.DeleteAsync($"/v3/users/{userId}");
             response.EnsureSuccessStatusCode();
         }
 
-        // User management
-        public async Task<UserResponse> CreateUserAsync(UserRequest request)
+        public async Task DeleteCurrentUserAsync()
         {
-            var response = await _httpClient.PostAsJsonAsync("/users", request);
+            var response = await _httpClient.DeleteAsync("/v3/user");
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<UserResponse>()!;
         }
 
-        public async Task<UserResponse> GetUserAsync(string id)
+        // Password management
+        public async Task<MessageResponse?> RequestPasswordResetAsync(PasswordResetRequest request)
         {
-            var response = await _httpClient.GetAsync($"/users/{id}");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<UserResponse>()!;
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/v3/request_password_reset", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<MessageResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
         }
 
-        public async Task<IEnumerable<UserResponse>> ListUsersAsync()
+        public async Task<MessageResponse?> ConfirmPasswordResetAsync(PasswordResetConfirmRequest request)
         {
-            var response = await _httpClient.GetAsync("/users");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<IEnumerable<UserResponse>>()!;
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/v3/confirm_password_reset", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<MessageResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
         }
 
-        public async Task<UserResponse> UpdateUserAsync(string id, UserRequest request)
+        public async Task<MessageResponse?> ChangePasswordAsync(ChangePasswordRequest request)
         {
-            var response = await _httpClient.PutAsJsonAsync($"/users/{id}", request);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<UserResponse>()!;
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/v3/change_password", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<MessageResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
         }
 
-        public async Task DeleteUserAsync(string id)
+        // Email verification
+        public async Task<MessageResponse?> VerifyEmailAsync(EmailVerificationRequest request)
         {
-            var response = await _httpClient.DeleteAsync($"/users/{id}");
-            response.EnsureSuccessStatusCode();
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/v3/verify_email", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<MessageResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<MessageResponse?> ResendVerificationEmailAsync(ResendVerificationRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/v3/send_reset_email", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<MessageResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        // User status management
+        public async Task<UserResponse?> DeactivateUserAsync(string userId)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsync($"/v3/users/{userId}/deactivate", null);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<UserResponse?> ActivateUserAsync(string userId)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsync($"/v3/users/{userId}/activate", null);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<UserResponse?> MakeSuperuserAsync(string userId)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsync($"/v3/users/{userId}/make_superuser", null);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<UserResponse?> RemoveSuperuserAsync(string userId)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsync($"/v3/users/{userId}/remove_superuser", null);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<UserResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+        }
+
+        // Health check
+        public async Task<MessageResponse?> HealthCheckAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync("/v3/health");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<MessageResponse>();
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
         }
     }
 }
