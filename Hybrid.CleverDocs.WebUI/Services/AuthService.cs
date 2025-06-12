@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.JSInterop;
 using Hybrid.CleverDocs.WebUI.Models;
 
 namespace Hybrid.CleverDocs.WebUI.Services
@@ -8,18 +7,21 @@ namespace Hybrid.CleverDocs.WebUI.Services
     public class AuthService : IAuthService
     {
         private readonly HttpClient _httpClient;
-        private readonly IJSRuntime _jsRuntime;
+        private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AuthService> _logger;
         private const string TokenKey = "access_token";
         private const string RefreshTokenKey = "refresh_token";
         private const string UserKey = "user_info";
 
-        public AuthService(HttpClient httpClient, IJSRuntime jsRuntime, ILogger<AuthService> logger)
+        public AuthService(HttpClient httpClient, IHttpContextAccessor httpContextAccessor, ILogger<AuthService> logger)
         {
             _httpClient = httpClient;
-            _jsRuntime = jsRuntime;
+            _httpContextAccessor = httpContextAccessor;
             _logger = logger;
         }
+
+        public bool IsAuthenticated => !string.IsNullOrEmpty(GetStoredToken());
+        public string? UserRole => GetCurrentUserAsync().Result?.Role;
 
         public async Task<LoginResponse> LoginAsync(LoginRequest request)
         {
@@ -33,13 +35,13 @@ namespace Hybrid.CleverDocs.WebUI.Services
                     
                     if (loginResponse?.Success == true && !string.IsNullOrEmpty(loginResponse.AccessToken))
                     {
-                        // Store tokens and user info
-                        await StoreTokenAsync(loginResponse.AccessToken);
-                        await StoreRefreshTokenAsync(loginResponse.RefreshToken);
+                        // Store tokens and user info in cookies
+                        StoreTokenInCookie(loginResponse.AccessToken);
+                        StoreRefreshTokenInCookie(loginResponse.RefreshToken);
                         
                         if (loginResponse.User != null)
                         {
-                            await StoreUserInfoAsync(loginResponse.User);
+                            StoreUserInfoInCookie(loginResponse.User);
                         }
 
                         // Set authorization header for future requests
@@ -282,18 +284,22 @@ namespace Hybrid.CleverDocs.WebUI.Services
         {
             try
             {
-                // First try to get from local storage
-                var userJson = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", UserKey);
-                if (!string.IsNullOrEmpty(userJson))
+                // First try to get from cookie
+                var context = _httpContextAccessor.HttpContext;
+                if (context != null)
                 {
-                    var user = JsonSerializer.Deserialize<UserInfo>(userJson);
-                    if (user != null)
+                    var userJson = context.Request.Cookies[UserKey];
+                    if (!string.IsNullOrEmpty(userJson))
                     {
-                        return user;
+                        var user = JsonSerializer.Deserialize<UserInfo>(userJson);
+                        if (user != null)
+                        {
+                            return user;
+                        }
                     }
                 }
 
-                // If not in local storage, try to get from API
+                // If not in cookie, try to get from API
                 var token = await GetStoredTokenAsync();
                 if (!string.IsNullOrEmpty(token))
                 {
@@ -303,7 +309,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
                         var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<UserInfo>>();
                         if (apiResponse?.Success == true && apiResponse.Data != null)
                         {
-                            await StoreUserInfoAsync(apiResponse.Data);
+                            StoreUserInfoInCookie(apiResponse.Data);
                             return apiResponse.Data;
                         }
                     }
@@ -331,38 +337,89 @@ namespace Hybrid.CleverDocs.WebUI.Services
             return null;
         }
 
+        public async Task<string?> GetTokenAsync()
+        {
+            return GetStoredToken();
+        }
+
         public async Task ClearTokensAsync()
         {
-            await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", TokenKey);
-            await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", RefreshTokenKey);
-            await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", UserKey);
+            var context = _httpContextAccessor.HttpContext;
+            if (context != null)
+            {
+                context.Response.Cookies.Delete(TokenKey);
+                context.Response.Cookies.Delete(RefreshTokenKey);
+                context.Response.Cookies.Delete(UserKey);
+            }
         }
 
         // Private helper methods
-        private async Task StoreTokenAsync(string token)
+        private void StoreTokenInCookie(string token)
         {
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", TokenKey, token);
+            var context = _httpContextAccessor.HttpContext;
+            if (context != null)
+            {
+                context.Response.Cookies.Append(TokenKey, token, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddHours(8)
+                });
+            }
         }
 
-        private async Task StoreRefreshTokenAsync(string refreshToken)
+        private void StoreRefreshTokenInCookie(string refreshToken)
         {
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", RefreshTokenKey, refreshToken);
+            var context = _httpContextAccessor.HttpContext;
+            if (context != null)
+            {
+                context.Response.Cookies.Append(RefreshTokenKey, refreshToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddDays(7)
+                });
+            }
         }
 
-        private async Task StoreUserInfoAsync(UserInfo user)
+        private void StoreUserInfoInCookie(UserInfo user)
         {
-            var userJson = JsonSerializer.Serialize(user);
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", UserKey, userJson);
+            var context = _httpContextAccessor.HttpContext;
+            if (context != null)
+            {
+                var userJson = JsonSerializer.Serialize(user);
+                context.Response.Cookies.Append(UserKey, userJson, new CookieOptions
+                {
+                    HttpOnly = false, // Allow JS access for user info
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddHours(8)
+                });
+            }
+        }
+
+        private string? GetStoredToken()
+        {
+            var context = _httpContextAccessor.HttpContext;
+            return context?.Request.Cookies[TokenKey];
+        }
+
+        private string? GetStoredRefreshToken()
+        {
+            var context = _httpContextAccessor.HttpContext;
+            return context?.Request.Cookies[RefreshTokenKey];
         }
 
         private async Task<string?> GetStoredTokenAsync()
         {
-            return await _jsRuntime.InvokeAsync<string>("localStorage.getItem", TokenKey);
+            return GetStoredToken();
         }
 
         private async Task<string?> GetStoredRefreshTokenAsync()
         {
-            return await _jsRuntime.InvokeAsync<string>("localStorage.getItem", RefreshTokenKey);
+            return GetStoredRefreshToken();
         }
     }
 }

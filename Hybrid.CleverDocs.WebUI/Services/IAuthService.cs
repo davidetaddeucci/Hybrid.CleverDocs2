@@ -13,7 +13,10 @@ namespace Hybrid.CleverDocs.WebUI.Services
         Task<ApiResponse> ResetPasswordAsync(ResetPasswordRequest request);
         Task<UserInfo?> GetCurrentUserAsync();
         Task<bool> IsAuthenticatedAsync();
+        Task<string?> GetTokenAsync();
         string? GetStoredToken();
         Task ClearTokensAsync();
+        bool IsAuthenticated { get; }
+        string? UserRole { get; }
     }
 }
