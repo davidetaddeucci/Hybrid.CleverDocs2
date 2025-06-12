@@ -1,4 +1,7 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using MassTransit;
 using Polly;
 using Polly.Extensions.Http;
@@ -7,6 +10,8 @@ using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Consumers;
 using Hybrid.CleverDocs2.WebServices.Workers;
 using Hybrid.CleverDocs2.WebServices.Services.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.Auth;
+using Hybrid.CleverDocs2.WebServices.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -125,13 +130,86 @@ RegisterR2RClient<IValidationClient, ValidationClient>(builder.Services);
 RegisterR2RClient<IMcpTuningClient, McpTuningClient>(builder.Services);
 RegisterR2RClient<IWebDevClient, WebDevClient>(builder.Services);
 
+// Authentication & Authorization
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var secretKey = jwtSection["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
+var issuer = jwtSection["Issuer"] ?? throw new InvalidOperationException("JWT Issuer not configured");
+var audience = jwtSection["Audience"] ?? throw new InvalidOperationException("JWT Audience not configured");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(secretKey)),
+            ValidateIssuer = true,
+            ValidIssuer = issuer,
+            ValidateAudience = true,
+            ValidAudience = audience,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("CompanyOrAdmin", policy => policy.RequireRole("Admin", "Company"));
+    options.AddPolicy("AuthenticatedUser", policy => policy.RequireAuthenticatedUser());
+});
+
+// Auth Services
+builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
 // Background Workers
 builder.Services.AddHostedService<IngestionWorker>();
 
-// CORS
-builder.Services.AddCors(options => 
-    options.AddDefaultPolicy(p => 
-        p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+// CORS - Enhanced configuration
+var corsSection = builder.Configuration.GetSection("Cors");
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>() ?? new[] { "*" };
+        var allowedMethods = corsSection.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
+        var allowedHeaders = corsSection.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "*" };
+        var allowCredentials = corsSection.GetValue<bool>("AllowCredentials");
+
+        if (allowedOrigins.Contains("*"))
+        {
+            policy.AllowAnyOrigin();
+        }
+        else
+        {
+            policy.WithOrigins(allowedOrigins);
+        }
+
+        if (allowedMethods.Contains("*"))
+        {
+            policy.AllowAnyMethod();
+        }
+        else
+        {
+            policy.WithMethods(allowedMethods);
+        }
+
+        if (allowedHeaders.Contains("*"))
+        {
+            policy.AllowAnyHeader();
+        }
+        else
+        {
+            policy.WithHeaders(allowedHeaders);
+        }
+
+        if (allowCredentials && !allowedOrigins.Contains("*"))
+        {
+            policy.AllowCredentials();
+        }
+    });
+});
 
 // Controllers and OpenAPI
 builder.Services.AddControllers();
@@ -147,6 +225,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors();
+
+// Add custom middleware
+app.UseMiddleware<JwtMiddleware>();
+app.UseMiddleware<TenantResolutionMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
