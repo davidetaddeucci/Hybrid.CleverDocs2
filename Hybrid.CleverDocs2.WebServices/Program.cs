@@ -1,18 +1,15 @@
-using Microsoft.Extensions.Configuration;
-using RabbitMQ.Client;
 using Microsoft.EntityFrameworkCore;
+using MassTransit;
+using Polly;
+using Polly.Extensions.Http;
+using RabbitMQ.Client;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Consumers;
 using Hybrid.CleverDocs2.WebServices.Workers;
-using MassTransit;
-using System;
 using Hybrid.CleverDocs2.WebServices.Services.Clients;
-using Hybrid.CleverDocs2.WebServices.Services.DTOs;
-using Microsoft.Extensions.Options;
-using Polly;
-using Polly.Extensions.Http;
-using System.Net.Http;
-using Microsoft.Extensions.DependencyInjection;
+
+var builder = WebApplication.CreateBuilder(args);
+
 // DbContext / PostgreSQL
 builder.Services.AddDbContext<ApplicationDbContext>(opts =>
     opts.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
@@ -37,100 +34,69 @@ builder.Services.AddMassTransit(x => {
     });
 });
 
-// HealthChecks
-
+// Health Checks
 builder.Services.AddHealthChecks()
-    .AddNpgSql(builder.Configuration.GetConnectionString("Postgres"), name: "postgres")
-    .AddRedis(builder.Configuration["Redis:Configuration"], name: "redis")
-builder.Services.AddCors(options => options.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+    .AddNpgSql(builder.Configuration.GetConnectionString("Postgres")!, name: "postgres")
+    .AddRedis(builder.Configuration["Redis:Configuration"]!, name: "redis");
+    // Note: RabbitMQ health check temporarily disabled due to package compatibility issues
 
+// Polly Policies
+var retryPolicy = HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .WaitAndRetryAsync(builder.Configuration.GetSection("R2R").GetValue<int>("MaxRetries"), 
+        retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
-builder.Services.AddHealthChecks()
-    .AddNpgSql(builder.Configuration.GetConnectionString("Postgres"), name: "postgres")
-    .AddRedis(builder.Configuration["Redis:Configuration"], name: "redis")
-    .AddRabbitMQ($"amqp://{builder.Configuration["RabbitMQ:Username"]}:{builder.Configuration["RabbitMQ:Password"]}@{builder.Configuration["RabbitMQ:Host"]}/{builder.Configuration["RabbitMQ:VirtualHost"]}", name: "rabbitmq");
-    var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
-    client.BaseAddress = new Uri(url);
-    client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
-})
-.AddPolicyHandler(HttpPolicyExtensions
+var circuitBreakerPolicy = HttpPolicyExtensions
     .HandleTransientHttpError()
-    .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
-// Register WebDevClient with resilience policies
-builder.Services.AddHttpClient<IWebDevClient, WebDevClient>(client =>
+    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
+
+// Register all R2R HTTP Clients with resilience policies
+void RegisterR2RClient<TInterface, TImplementation>(IServiceCollection services)
+    where TInterface : class
+    where TImplementation : class, TInterface
 {
-    var cfg = builder.Configuration.GetSection("R2R");
-    var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
-    client.BaseAddress = new Uri(url);
-    client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
-})
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .WaitAndRetryAsync(builder.Configuration.GetSection("R2R").GetValue<int>("MaxRetries"), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+    services.AddHttpClient<TInterface, TImplementation>(client =>
+    {
+        var cfg = builder.Configuration.GetSection("R2R");
+        var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
+        client.BaseAddress = new Uri(url);
+        client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
+    })
+    .AddPolicyHandler(retryPolicy)
+    .AddPolicyHandler(circuitBreakerPolicy);
+}
 
+// Register all R2R clients
+RegisterR2RClient<IAuthClient, AuthClient>(builder.Services);
+RegisterR2RClient<IDocumentClient, DocumentClient>(builder.Services);
+RegisterR2RClient<IConversationClient, ConversationClient>(builder.Services);
+RegisterR2RClient<IPromptClient, PromptClient>(builder.Services);
+RegisterR2RClient<IIngestionClient, IngestionClient>(builder.Services);
+RegisterR2RClient<IGraphClient, GraphClient>(builder.Services);
+RegisterR2RClient<ISearchClient, SearchClient>(builder.Services);
+RegisterR2RClient<IToolsClient, ToolsClient>(builder.Services);
+RegisterR2RClient<IMaintenanceClient, MaintenanceClient>(builder.Services);
+RegisterR2RClient<IOrchestrationClient, OrchestrationClient>(builder.Services);
+RegisterR2RClient<ILocalLLMClient, LocalLLMClient>(builder.Services);
+RegisterR2RClient<IValidationClient, ValidationClient>(builder.Services);
+RegisterR2RClient<IMcpTuningClient, McpTuningClient>(builder.Services);
+RegisterR2RClient<IWebDevClient, WebDevClient>(builder.Services);
 
-// Add services to the container.
+// Background Workers
+builder.Services.AddHostedService<IngestionWorker>();
 
-// Register WebDevClient with resilience policies
-builder.Services.AddHttpClient<IWebDevClient, WebDevClient>(client =>
-{
-    var cfg = builder.Configuration.GetSection("R2R");
-    var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
-    client.BaseAddress = new Uri(url);
-    client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
-})
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .WaitAndRetryAsync(builder.Configuration.GetSection("R2R").GetValue<int>("MaxRetries"), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
-// Register DocumentClient with resilience policies
-builder.Services.AddHttpClient<IDocumentClient, DocumentClient>(client =>
-{
-    var cfg = builder.Configuration.GetSection("R2R");
-    var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
-    client.BaseAddress = new Uri(url);
-    client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
-})
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .WaitAndRetryAsync(builder.Configuration.GetSection("R2R").GetValue<int>("MaxRetries"), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
-// Register WebDevClient with resilience policies
-builder.Services.AddHttpClient<IWebDevClient, WebDevClient>(client =>
-{
-    var cfg = builder.Configuration.GetSection("R2R");
-    var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
-    client.BaseAddress = new Uri(url);
-    client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
-})
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .WaitAndRetryAsync(builder.Configuration.GetSection("R2R").GetValue<int>("MaxRetries"), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+// CORS
+builder.Services.AddCors(options => 
+    options.AddDefaultPolicy(p => 
+        p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
-// Add services to the container.
-
+// Controllers and OpenAPI
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
-// Run background ingestion worker
-builder.Services.AddHostedService<IngestionWorker>();
 
-// Configure the HTTP request pipeline.
+// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -140,11 +106,11 @@ app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Health checks endpoint
 app.MapHealthChecks("/health");
 
-
-app.UseAuthorization();
-
+// Controllers
 app.MapControllers();
 
 app.Run();

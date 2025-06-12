@@ -38,6 +38,12 @@ Hybrid.CleverDocs2/
 - **Backend (WebServices)**: `Hybrid.CleverDocs2.WebServices/README.md`, `docs/R2R WebUI Backend API Server.md`, `docs/Documenti Specifici per WebServices.md`
 
 ## Known Gaps
+
+## Tasks & To-Do
+- For a high-level roadmap of features and design tasks, see `docs/todo.md`.
+- For detailed pending fixes and cleanup items, see `docs/to_fix.md`.
+
+## Known Gaps
 - Missing OpenAPI/Swagger specification (`.yaml` file)
 - No automated test suites (API unit tests, Blazor component tests, E2E, load tests)
 - Missing CI/CD pipeline definitions
@@ -51,6 +57,109 @@ Hybrid.CleverDocs2/
 - SciPhi AI R2R API server up and running
 
 ## Service Endpoints
+
+### WebServices API Endpoints
+
+- Auth:
+  - POST /api/auth/login
+  - POST /api/auth/refresh
+  - POST /api/auth/logout
+  - POST /api/auth/users
+  - GET  /api/auth/users
+  - GET  /api/auth/users/{id}
+  - PUT  /api/auth/users/{id}
+  - DELETE /api/auth/users/{id}
+
+- Documents:
+  - POST   /api/documents
+  - GET    /api/documents
+  - GET    /api/documents/{id}
+  - PUT    /api/documents/{id}
+  - DELETE /api/documents/{id}
+
+- Conversations:
+  - POST   /api/conversations
+  - GET    /api/conversations
+  - GET    /api/conversations/{id}
+  - PUT    /api/conversations/{id}
+  - DELETE /api/conversations/{id}
+
+- Prompts:
+  - POST   /api/prompts
+  - GET    /api/prompts
+  - GET    /api/prompts/{id}
+  - PUT    /api/prompts/{id}
+  - DELETE /api/prompts/{id}
+
+- Ingestions:
+  - POST   /api/ingestions
+  - GET    /api/ingestions
+  - GET    /api/ingestions/{id}
+  - PUT    /api/ingestions/{id}
+  - DELETE /api/ingestions/{id}
+
+- Graphs:
+  - POST   /api/graphs
+  - GET    /api/graphs
+  - GET    /api/graphs/{id}
+  - PUT    /api/graphs/{id}
+  - DELETE /api/graphs/{id}
+
+- Search:
+  - POST   /api/search
+  - GET    /api/search
+  - GET    /api/search/{id}
+  - PUT    /api/search/{id}
+  - DELETE /api/search/{id}
+
+- Tools:
+  - POST   /api/tools
+  - GET    /api/tools
+  - GET    /api/tools/{id}
+  - PUT    /api/tools/{id}
+  - DELETE /api/tools/{id}
+
+- Maintenance:
+  - POST   /api/maintenance
+  - GET    /api/maintenance
+  - GET    /api/maintenance/{id}
+  - PUT    /api/maintenance/{id}
+  - DELETE /api/maintenance/{id}
+
+- Orchestrations:
+  - POST   /api/orchestrations
+  - GET    /api/orchestrations
+  - GET    /api/orchestrations/{id}
+  - PUT    /api/orchestrations/{id}
+  - DELETE /api/orchestrations/{id}
+
+- Local-LLM:
+  - POST   /api/local-llm
+  - GET    /api/local-llm
+  - GET    /api/local-llm/{id}
+  - PUT    /api/local-llm/{id}
+  - DELETE /api/local-llm/{id}
+
+- Validations:
+  - POST   /api/validations
+  - GET    /api/validations
+  - GET    /api/validations/{id}
+  - PUT    /api/validations/{id}
+  - DELETE /api/validations/{id}
+
+- MCP Tuning:
+  - POST   /api/mcp-tuning
+  - GET    /api/mcp-tuning
+  - GET    /api/mcp-tuning/{id}
+  - PUT    /api/mcp-tuning/{id}
+  - DELETE /api/mcp-tuning/{id}
+
+- WebDev:
+  - POST   /api/webdev
+  - GET    /api/webdev
+  - GET    /api/webdev/{id}
+  - PUT    /api/webdev/{id}
+  - DELETE /api/webdev/{id}
 The following endpoints correspond to the Docker Compose setup:
 - **PostgreSQL**: `localhost:5433`, database: `mydatabase`, user: `your_postgres_user`, password: `your_strong_password`
 - **Redis**: `localhost:6380`, password: `your_redis_password`

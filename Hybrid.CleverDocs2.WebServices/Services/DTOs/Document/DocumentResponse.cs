@@ -1,5 +1,5 @@
-namespace $ns;
-public class $res
+namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Document;
+public class DocumentResponse
 {
     // TODO: add response properties
 }

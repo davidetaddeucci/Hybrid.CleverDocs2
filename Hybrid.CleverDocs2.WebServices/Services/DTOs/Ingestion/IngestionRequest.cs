@@ -1,7 +1,11 @@
+using System;
+
 namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Ingestion
 {
     public class IngestionRequest
     {
-        // TODO: add request properties (e.g., DocumentId, PipelineId)
+        public Guid JobId { get; set; }
+        public int Sequence { get; set; }
+        public string? Data { get; set; }
     }
 }
