@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
 using Hybrid.CleverDocs.WebUI.Services;
 using Hybrid.CleverDocs.WebUI.ViewModels;
 using Hybrid.CleverDocs.WebUI.Models;
@@ -57,7 +59,27 @@ public class AuthController : Controller
             {
                 _logger.LogInformation("User {Email} logged in successfully", model.Email);
                 
-                // Redirect to return URL or dashboard
+                // Create claims for ASP.NET Core authentication
+                var claims = new List<Claim>
+                {
+                    new Claim(ClaimTypes.Email, model.Email),
+                    new Claim(ClaimTypes.Name, result.User?.FullName ?? model.Email),
+                    new Claim(ClaimTypes.NameIdentifier, result.User?.Id.ToString() ?? ""),
+                    new Claim(ClaimTypes.Role, result.User?.Role ?? "User")
+                };
+
+                if (result.User?.CompanyId != null)
+                {
+                    claims.Add(new Claim("CompanyId", result.User.CompanyId.ToString()));
+                }
+
+                var claimsIdentity = new ClaimsIdentity(claims, "Cookies");
+                var claimsPrincipal = new ClaimsPrincipal(claimsIdentity);
+
+                // Sign in the user
+                await HttpContext.SignInAsync("Cookies", claimsPrincipal);
+                
+                // Redirect to return URL or home
                 if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
                 {
                     return Redirect(model.ReturnUrl);
@@ -145,6 +167,7 @@ public class AuthController : Controller
         try
         {
             await _authService.LogoutAsync();
+            await HttpContext.SignOutAsync("Cookies");
             _logger.LogInformation("User logged out successfully");
         }
         catch (Exception ex)

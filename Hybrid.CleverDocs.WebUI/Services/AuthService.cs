@@ -31,7 +31,12 @@ namespace Hybrid.CleverDocs.WebUI.Services
                 
                 if (response.IsSuccessStatusCode)
                 {
-                    var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                    var jsonOptions = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    };
+                    var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>(jsonOptions);
                     
                     if (loginResponse?.Success == true && !string.IsNullOrEmpty(loginResponse.AccessToken))
                     {
@@ -81,7 +86,12 @@ namespace Hybrid.CleverDocs.WebUI.Services
                 
                 if (response.IsSuccessStatusCode)
                 {
-                    var result = await response.Content.ReadFromJsonAsync<ApiResponse>();
+                    var jsonOptions = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    };
+                    var result = await response.Content.ReadFromJsonAsync<ApiResponse>(jsonOptions);
                     _logger.LogInformation("User registered successfully: {Email}", request.Email);
                     return result ?? new ApiResponse { Success = true, Message = "Registration successful" };
                 }
@@ -156,7 +166,12 @@ namespace Hybrid.CleverDocs.WebUI.Services
                 
                 if (response.IsSuccessStatusCode)
                 {
-                    var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                    var jsonOptions = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    };
+                    var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>(jsonOptions);
                     
                     if (loginResponse?.Success == true && !string.IsNullOrEmpty(loginResponse.AccessToken))
                     {

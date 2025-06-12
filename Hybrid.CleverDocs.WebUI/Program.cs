@@ -3,19 +3,42 @@ using Hybrid.CleverDocs.WebUI.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
 builder.Services.AddHttpContextAccessor();
 
 // Configure HttpClient for API calls
 builder.Services.AddHttpClient<IApiService, ApiService>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7001");
+    client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7219");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new HttpClientHandler();
+    if (builder.Environment.IsDevelopment())
+    {
+        handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
+    }
+    return handler;
 });
 
-// Add custom services
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IApiService, ApiService>();
+builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7219");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new HttpClientHandler();
+    if (builder.Environment.IsDevelopment())
+    {
+        handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
+    }
+    return handler;
+});
 
 // Add authentication
 builder.Services.AddAuthentication("Cookies")
