@@ -13,10 +13,6 @@ using Polly;
 using Polly.Extensions.Http;
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
-
-var builder = WebApplication.CreateBuilder(args);
-// Configure R2R options
-builder.Services.Configure<R2ROptions>(builder.Configuration.GetSection("R2R"));
 // DbContext / PostgreSQL
 builder.Services.AddDbContext<ApplicationDbContext>(opts =>
     opts.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
@@ -49,10 +45,10 @@ builder.Services.AddHealthChecks()
 builder.Services.AddCors(options => options.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 
-// Register AuthClient with resilience policies
-builder.Services.AddHttpClient<IAuthClient, AuthClient>(client =>
-{
-    var cfg = builder.Configuration.GetSection("R2R");
+builder.Services.AddHealthChecks()
+    .AddNpgSql(builder.Configuration.GetConnectionString("Postgres"), name: "postgres")
+    .AddRedis(builder.Configuration["Redis:Configuration"], name: "redis")
+    .AddRabbitMQ($"amqp://{builder.Configuration["RabbitMQ:Username"]}:{builder.Configuration["RabbitMQ:Password"]}@{builder.Configuration["RabbitMQ:Host"]}/{builder.Configuration["RabbitMQ:VirtualHost"]}", name: "rabbitmq");
     var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
     client.BaseAddress = new Uri(url);
     client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
