@@ -6,8 +6,8 @@ using Hybrid.CleverDocs2.WebServices.Data;
 namespace Hybrid.CleverDocs2.WebServices.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
-    [Authorize]
+    [Route("admin")]
+    [Authorize(Roles = "Admin")]
     public class AdminController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

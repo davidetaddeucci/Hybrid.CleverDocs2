@@ -398,16 +398,19 @@ public class DashboardController : Controller
         return new List<RecentConversationDto>();
     }
 
-    private async Task<QuotaUsageDto?> GetUserQuotaUsage(Guid userId)
+    private async Task<UserQuotaUsageDto?> GetUserQuotaUsage(Guid userId)
     {
         // TODO: Implement API endpoint /api/user/{userId}/quota
         // For now, return mock data to avoid slow API calls
         await Task.Delay(1); // Simulate async operation
-        return new QuotaUsageDto
+        return new UserQuotaUsageDto
         {
-            DocumentQuotaLimit = 100,
-            QueryQuotaLimit = 50,
-            QuotaResetDate = DateTime.UtcNow.AddDays(30)
+            DocumentsLimit = 100,
+            QueriesLimit = 50,
+            DocumentsUsed = 25,
+            QueriesUsed = 12,
+            StorageLimit = 1000000000, // 1GB
+            StorageUsed = 250000000    // 250MB
         };
     }
 

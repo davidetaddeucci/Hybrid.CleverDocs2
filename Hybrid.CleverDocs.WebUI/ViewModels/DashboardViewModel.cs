@@ -41,7 +41,7 @@ public class UserDashboardViewModel : DashboardViewModel
     public int DocumentsThisWeek { get; set; }
     public List<RecentDocumentDto> RecentDocuments { get; set; } = new();
     public List<RecentConversationDto> RecentConversations { get; set; } = new();
-    public QuotaUsageDto? QuotaUsage { get; set; }
+    public UserQuotaUsageDto? QuotaUsage { get; set; }
 }
 
 // Supporting DTOs
@@ -143,6 +143,47 @@ public class QuotaUsageDto
         _ => "progress-bar bg-success"
     };
     
+    public string QueryQuotaClass => QueryQuotaPercentage switch
+    {
+        >= 90 => "progress-bar bg-danger",
+        >= 75 => "progress-bar bg-warning",
+        _ => "progress-bar bg-success"
+    };
+}
+
+public class UserQuotaUsageDto
+{
+    public int DocumentsUsed { get; set; }
+    public int DocumentsLimit { get; set; }
+    public long StorageUsed { get; set; }
+    public long StorageLimit { get; set; }
+    public int QueriesUsed { get; set; }
+    public int QueriesLimit { get; set; }
+    public DateTime QuotaResetDate { get; set; } = DateTime.UtcNow.AddDays(30);
+
+    // Compatibility properties for Views
+    public int DocumentQuotaUsed => DocumentsUsed;
+    public int DocumentQuotaLimit => DocumentsLimit;
+    public int QueryQuotaUsed => QueriesUsed;
+    public int QueryQuotaLimit => QueriesLimit;
+
+    // Percentage calculations
+    public double DocumentsUsagePercentage => DocumentsLimit > 0 ? (double)DocumentsUsed / DocumentsLimit * 100 : 0;
+    public double StorageUsagePercentage => StorageLimit > 0 ? (double)StorageUsed / StorageLimit * 100 : 0;
+    public double QueriesUsagePercentage => QueriesLimit > 0 ? (double)QueriesUsed / QueriesLimit * 100 : 0;
+
+    // Compatibility percentage properties for Views
+    public double DocumentQuotaPercentage => DocumentsUsagePercentage;
+    public double QueryQuotaPercentage => QueriesUsagePercentage;
+
+    // CSS classes for progress bars
+    public string DocumentQuotaClass => DocumentQuotaPercentage switch
+    {
+        >= 90 => "progress-bar bg-danger",
+        >= 75 => "progress-bar bg-warning",
+        _ => "progress-bar bg-success"
+    };
+
     public string QueryQuotaClass => QueryQuotaPercentage switch
     {
         >= 90 => "progress-bar bg-danger",

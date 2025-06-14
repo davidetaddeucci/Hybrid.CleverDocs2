@@ -1,39 +1,48 @@
-# README: Frontend Blazor per Hybrid.CleverDocs2
+# README: Frontend MVC per Hybrid.CleverDocs2
 
 ## Panoramica
 
-Hybrid.CleverDocs2.WebUI è l'interfaccia utente del sistema, sviluppata in .NET 9.0 Blazor con MudBlazor. Fornisce un'esperienza utente intuitiva e accattivante per la gestione di collezioni di documenti e l'interazione con il chatbot basato su LLM.
+Hybrid.CleverDocs2.WebUI è l'interfaccia utente del sistema, sviluppata in .NET 9.0 ASP.NET Core MVC con Material Design 3. Fornisce un'esperienza utente intuitiva e accattivante per la gestione di collezioni di documenti e l'interazione con il chatbot basato su LLM.
 
-Questo documento fornisce una guida specifica per il frontend Blazor, con riferimenti alla documentazione dettagliata disponibile nella directory `docs/`.
+Questo documento fornisce una guida specifica per il frontend MVC, con riferimenti alla documentazione dettagliata disponibile nella directory `docs/`.
 
 ## Caratteristiche Principali
 
 - Dashboard personalizzate per ruoli Admin, Company e User
 - Gestione collezioni e documenti
 - Interfaccia chatbot per interazione in linguaggio naturale
-- Design responsive e accessibile
+- Design responsive e accessibile con Material Design 3
 - Supporto multitenancy
-- Tema personalizzabile con MudBlazor e opzionalmente TailwindCSS
+- Architettura MVC con pattern MVVM per ViewModels
+- **🚀 Ottimizzazioni Performance**:
+  - Caching Redis con autenticazione (192.168.1.4:6380)
+  - Caching dual-layer (Memory + Redis)
+  - Caricamento API parallelo per dashboard
+  - Tempo di caricamento dashboard < 2 secondi
+  - Endpoint di monitoraggio performance
 
 ## Prerequisiti
 
 - .NET 9.0 SDK
-- Visual Studio 2022+ o Visual Studio Code con estensioni C# e Blazor
-- Node.js e npm (opzionale, per TailwindCSS)
+- Visual Studio 2022+ o Visual Studio Code con estensioni C#
 - Backend WebServices in esecuzione
 
 ## Struttura del Progetto
 
 ```
-Hybrid.CleverDocs2.WebUI/
-├── docs/                                 # Documentazione specifica del frontend
-├── src/                                  # Codice sorgente
-│   ├── Pages/                            # Componenti Razor per le pagine
-│   ├── Shared/                           # Componenti condivisi e layout
-│   ├── Services/                         # Servizi frontend
-│   ├── Models/                           # Modelli e DTOs
-│   └── wwwroot/                          # File statici (CSS, JS, immagini)
-├── tests/                                # Test unitari, di integrazione e E2E
+Hybrid.CleverDocs.WebUI/
+├── Controllers/                          # MVC Controllers per gestione richieste
+├── Views/                                # Razor Views (.cshtml) per UI
+│   ├── Auth/                             # Views per autenticazione
+│   ├── Dashboard/                        # Views per dashboard
+│   ├── AdminDashboard/                   # Views per admin
+│   ├── CompanyDashboard/                 # Views per company admin
+│   ├── UserDashboard/                    # Views per utenti
+│   └── Shared/                           # Layout e componenti condivisi
+├── ViewModels/                           # ViewModels per pattern MVVM
+├── Services/                             # Servizi frontend (API clients)
+├── Models/                               # Modelli e DTOs
+├── wwwroot/                              # File statici (CSS, JS, immagini)
 └── README.md                             # Questo file
 ```
 

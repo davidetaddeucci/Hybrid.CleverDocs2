@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using MassTransit;
 using Polly;
 using Polly.Extensions.Http;
@@ -15,11 +16,33 @@ using Hybrid.CleverDocs2.WebServices.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// PostgreSQL Database - Dynamically configured
+// PostgreSQL Database - Optimized Configuration (192.168.1.4:5433)
 builder.Services.AddDbContext<ApplicationDbContext>(opts => {
-    var connectionString = builder.Configuration.GetConnectionString("Postgres") 
+    var connectionString = builder.Configuration.GetConnectionString("Postgres")
         ?? throw new InvalidOperationException("PostgreSQL connection string 'Postgres' not found in configuration");
-    opts.UseNpgsql(connectionString);
+
+    opts.UseNpgsql(connectionString, npgsqlOpts => {
+        npgsqlOpts.EnableRetryOnFailure(
+            maxRetryCount: builder.Configuration.GetValue<int>("Database:RetryPolicy:MaxRetryAttempts", 3),
+            maxRetryDelay: TimeSpan.FromMilliseconds(builder.Configuration.GetValue<int>("Database:RetryPolicy:MaxDelayMs", 5000)),
+            errorCodesToAdd: null);
+        npgsqlOpts.CommandTimeout(builder.Configuration.GetValue<int>("Database:CommandTimeout", 30));
+    });
+
+    // Development optimizations
+    if (builder.Environment.IsDevelopment())
+    {
+        opts.EnableSensitiveDataLogging();
+        opts.EnableDetailedErrors();
+        opts.LogTo(Console.WriteLine, LogLevel.Information);
+    }
+
+    // Production optimizations
+    if (builder.Environment.IsProduction())
+    {
+        opts.EnableServiceProviderCaching();
+        opts.EnableSensitiveDataLogging(false);
+    }
 });
 
 // Redis Cache - Dynamically configured
@@ -66,11 +89,20 @@ builder.Services.AddMassTransit(x => {
 // Health Checks - Dynamically configured
 var healthChecksBuilder = builder.Services.AddHealthChecks();
 
-// PostgreSQL Health Check
+// PostgreSQL Health Check - Enhanced Configuration
 var postgresConnection = builder.Configuration.GetConnectionString("Postgres");
 if (!string.IsNullOrEmpty(postgresConnection))
 {
-    healthChecksBuilder.AddNpgSql(postgresConnection, name: "postgres");
+    var dbHealthCheckTimeout = TimeSpan.FromSeconds(
+        builder.Configuration.GetValue<int>("Database:HealthCheck:TimeoutSeconds", 10));
+
+    healthChecksBuilder.AddNpgSql(
+        connectionString: postgresConnection,
+        healthQuery: "SELECT 1;",
+        name: "postgresql-database",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: new[] { "database", "postgresql", "external" },
+        timeout: dbHealthCheckTimeout);
 }
 
 // Redis Health Check

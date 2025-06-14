@@ -34,8 +34,9 @@ Hybrid.CleverDocs2/
 - **Deployment Guide**: `docs/README_ Architettura e Deployment.md`
 
 ### Subproject Documentation
-- **Frontend (Blazor)**: `Hybrid.CleverDocs.WebUI/README.md`, `docs/R2R WebUI Frontend Blazor.md`, `docs/interfaccia_utente.md`
+- **Frontend (MVC)**: `Hybrid.CleverDocs.WebUI/README.md`, `docs/interfaccia_utente.md`
 - **Backend (WebServices)**: `Hybrid.CleverDocs2.WebServices/README.md`, `docs/R2R WebUI Backend API Server.md`, `docs/Documenti Specifici per WebServices.md`
+- **Architecture Correction**: `docs/ARCHITECTURAL_CORRECTION_MVC_vs_Blazor.md`
 
 ## Current Development Status 🚀
 
@@ -58,6 +59,12 @@ Hybrid.CleverDocs2/
 - **Role-Based Access**: Admin (1), Company (2), User (3) roles working correctly
 - **Error Handling**: Robust fallback system and comprehensive error handling
 - **Package Management**: Updated to EF Core 8.0.10, compatible versions across all packages
+- **🚀 PERFORMANCE OPTIMIZATION**: Dashboard loading speed optimized to < 2 seconds
+  - **Redis Caching**: Dual-layer caching (Memory + Redis) with authentication
+  - **Parallel API Loading**: All dashboard API calls executed in parallel
+  - **Cache Strategy**: Configurable TTL from 1 minute to 24 hours
+  - **Performance Monitoring**: Endpoints for cache status and metrics
+  - **Graceful Fallback**: Robust error handling with default values
 
 ### 🔄 In Progress
 - **Frontend Development**: Basic structure without Blazor (removed MudBlazor packages as requested)

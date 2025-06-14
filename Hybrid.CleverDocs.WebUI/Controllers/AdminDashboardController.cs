@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Hybrid.CleverDocs.WebUI.Services;
 using Hybrid.CleverDocs.WebUI.ViewModels;
+using System.Diagnostics;
 using Hybrid.CleverDocs.WebUI.Models;
 using System.Security.Claims;
 
@@ -29,14 +30,28 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
                     return RedirectToAction("Login", "Auth");
                 }
 
+                // Load data in parallel
+                var companiesTask = _apiService.GetAsync<int>("admin/companies/count");
+                var usersTask = _apiService.GetAsync<int>("admin/users/count");
+                var documentsTask = _apiService.GetAsync<int>("admin/documents/count");
+                var companyStatsTask = _apiService.GetAsync<List<CompanyStatsDto>>("admin/companies/stats");
+                var activitiesTask = _apiService.GetAsync<List<RecentActivityDto>>("admin/activities/recent");
+
+                // Wait for all tasks to complete
+                var companies = await companiesTask;
+                var users = await usersTask;
+                var documents = await documentsTask;
+                var companyStats = await companyStatsTask;
+                var activities = await activitiesTask;
+
                 var viewModel = new AdminDashboardViewModel
                 {
                     CurrentUser = user,
-                    TotalCompanies = await _apiService.GetAsync<int>("admin/companies/count"),
-                    TotalUsers = await _apiService.GetAsync<int>("admin/users/count"),
-                    TotalDocuments = await _apiService.GetAsync<int>("admin/documents/count"),
-                    CompanyStats = await _apiService.GetAsync<List<CompanyStatsDto>>("admin/companies/stats") ?? new(),
-                    RecentActivities = await _apiService.GetAsync<List<RecentActivityDto>>("admin/activities/recent") ?? new()
+                    TotalCompanies = companies,
+                    TotalUsers = users,
+                    TotalDocuments = documents,
+                    CompanyStats = companyStats ?? new List<CompanyStatsDto>(),
+                    RecentActivities = activities ?? new List<RecentActivityDto>()
                 };
 
                 return View(viewModel);

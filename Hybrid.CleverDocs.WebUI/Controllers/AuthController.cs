@@ -20,13 +20,11 @@ public class AuthController : Controller
     }
 
     [HttpGet]
-    public IActionResult Login(string? returnUrl = null)
+    public async Task<IActionResult> Login(string? returnUrl = null)
     {
-        // If user is already authenticated, redirect to dashboard
-        if (User.Identity?.IsAuthenticated == true)
-        {
-            return RedirectToAction("Index", "Dashboard");
-        }
+        // Always clear authentication for fresh login
+        await HttpContext.SignOutAsync("Cookies");
+        HttpContext.Session.Clear();
 
         var model = new LoginViewModel
         {
@@ -193,6 +191,8 @@ public class AuthController : Controller
 
         return RedirectToAction("Login");
     }
+
+
 
     [HttpGet]
     public IActionResult ForgotPassword()

@@ -11,6 +11,20 @@ builder.Services.AddControllersWithViews()
     });
 builder.Services.AddHttpContextAccessor();
 
+// Configure Redis Distributed Cache with authentication
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = "192.168.1.4:6380,password=your_redis_password,abortConnect=false,connectRetry=5,connectTimeout=30000,syncTimeout=10000,asyncTimeout=10000,responseTimeout=10000";
+    options.InstanceName = "CleverDocs2WebUI";
+});
+
+// Add Memory Cache for fast local caching
+builder.Services.AddMemoryCache();
+
+// Register caching services
+builder.Services.AddScoped<ICacheService, CacheService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+
 // Add session support for redirect loop prevention
 builder.Services.AddSession(options =>
 {
