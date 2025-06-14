@@ -26,23 +26,54 @@ public class DashboardController : Controller
             var user = GetCurrentUserFromClaims();
             if (user == null)
             {
+                _logger.LogWarning("No user claims found, redirecting to login");
                 return RedirectToAction("Login", "Auth");
             }
 
-            return user.Role.ToLower() switch
+            _logger.LogInformation("Fallback dashboard accessed by user {Email} with role {Role}",
+                user.Email, user.Role);
+
+            // This is a fallback dashboard - try to redirect to appropriate role-based dashboard
+            var roleValue = user.Role?.ToLowerInvariant();
+
+            return roleValue switch
             {
-                "0" or "admin" => await AdminDashboard(),
-                "1" or "company" => await CompanyDashboard(user),
-                "2" or "user" => await UserDashboard(user),
-                _ => RedirectToAction("Login", "Auth")
+                "1" => RedirectToAction("Index", "AdminDashboard"),
+                "2" => RedirectToAction("Index", "CompanyDashboard"),
+                "3" => RedirectToAction("Index", "UserDashboard"),
+                _ => await ShowFallbackDashboard(user)
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading dashboard");
-            TempData["ErrorMessage"] = "Error loading dashboard. Please try again.";
-            return RedirectToAction("Login", "Auth");
+            _logger.LogError(ex, "Error in fallback dashboard");
+            return await ShowErrorDashboard();
         }
+    }
+
+    private async Task<IActionResult> ShowFallbackDashboard(Models.UserInfo user)
+    {
+        _logger.LogInformation("Showing fallback dashboard for user {Email}", user.Email);
+
+        var model = new DashboardViewModel
+        {
+            CurrentUser = user,
+            Message = "Welcome! Your dashboard is loading...",
+            IsError = false
+        };
+
+        return View("Fallback", model);
+    }
+
+    private async Task<IActionResult> ShowErrorDashboard()
+    {
+        var model = new DashboardViewModel
+        {
+            Message = "An error occurred loading your dashboard. Please try logging in again.",
+            IsError = true
+        };
+
+        return View("Error", model);
     }
 
     private async Task<IActionResult> AdminDashboard()

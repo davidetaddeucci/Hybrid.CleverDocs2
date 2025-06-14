@@ -6,7 +6,7 @@ using System.Security.Claims;
 
 namespace Hybrid.CleverDocs.WebUI.Controllers
 {
-    [Authorize(Roles = "2")] // Only User role
+    [Authorize(Roles = "3")] // Only User role (Backend enum: User=3)
     public class UserDashboardController : Controller
     {
         private readonly IApiService _apiService;

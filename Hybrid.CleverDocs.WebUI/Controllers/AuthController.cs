@@ -58,14 +58,18 @@ public class AuthController : Controller
             if (result.Success)
             {
                 _logger.LogInformation("User {Email} logged in successfully", model.Email);
-                
+
+                // Map role string to numeric value for consistent authorization
+                var roleValue = MapRoleToNumericString(result.User?.Role ?? "User");
+
                 // Create claims for ASP.NET Core authentication
                 var claims = new List<Claim>
                 {
                     new Claim(ClaimTypes.Email, model.Email),
                     new Claim(ClaimTypes.Name, result.User?.FullName ?? model.Email),
                     new Claim(ClaimTypes.NameIdentifier, result.User?.Id.ToString() ?? Guid.NewGuid().ToString()),
-                    new Claim(ClaimTypes.Role, result.User?.Role ?? "User")
+                    new Claim(ClaimTypes.Role, roleValue),
+                    new Claim("RoleName", result.User?.Role ?? "User") // Keep original role name for display
                 };
 
                 if (result.User?.CompanyId != null)
@@ -78,13 +82,25 @@ public class AuthController : Controller
 
                 // Sign in the user
                 await HttpContext.SignInAsync("Cookies", claimsPrincipal);
-                
+
+                // Add redirect tracking to prevent loops
+                var redirectCount = HttpContext.Session.GetInt32("RedirectCount") ?? 0;
+                if (redirectCount > 3)
+                {
+                    _logger.LogWarning("Redirect loop detected for user {Email}, redirecting to fallback", model.Email);
+                    HttpContext.Session.Remove("RedirectCount");
+                    return RedirectToAction("Index", "Dashboard"); // Fallback dashboard
+                }
+
+                HttpContext.Session.SetInt32("RedirectCount", redirectCount + 1);
+
                 // Redirect to return URL or role-based dashboard
                 if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
                 {
+                    HttpContext.Session.Remove("RedirectCount");
                     return Redirect(model.ReturnUrl);
                 }
-                
+
                 return RedirectToAction("Index", "RoleRedirect");
             }
             else
@@ -265,5 +281,20 @@ public class AuthController : Controller
     public IActionResult AccessDenied()
     {
         return View();
+    }
+
+    /// <summary>
+    /// Maps role names to numeric strings for consistent authorization
+    /// Backend enum: Admin=1, Company=2, User=3
+    /// </summary>
+    private static string MapRoleToNumericString(string roleName)
+    {
+        return roleName.ToLowerInvariant() switch
+        {
+            "admin" => "1",
+            "company" => "2",
+            "user" => "3",
+            _ => "3" // Default to User role
+        };
     }
 }

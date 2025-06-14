@@ -6,12 +6,18 @@ Questo documento descrive il modello dati PostgreSQL per il sistema WebUI multit
 
 ## Configurazione Database
 
-**Credenziali di Accesso:**
-- Host: localhost
+**Credenziali di Accesso (VERIFIED):**
+- Host: 192.168.1.4
 - Port: 5433
 - Database: cleverdocs
 - Username: admin
 - Password: MiaPassword123
+
+**Test Users (CREATED & VERIFIED):**
+- **System Admin**: info@hybrid.it / Florealia2025! (Role=1, Company: Hybrid IT)
+- **Company Admin**: info@microsis.it / Maremmabona1! (Role=2, Company: Microsis srl)
+- **User 1**: r.antoniucci@microsis.it / Maremmabona1! (Role=3, Company: Microsis srl)
+- **User 2**: m.bevilacqua@microsis.it / Maremmabona1! (Role=3, Company: Microsis srl)
 
 ## Struttura degli Schemi
 

@@ -11,11 +11,21 @@ builder.Services.AddControllersWithViews()
     });
 builder.Services.AddHttpContextAccessor();
 
+// Add session support for redirect loop prevention
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
 // Configure HttpClient for API calls
 builder.Services.AddHttpClient<IApiService, ApiService>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7219");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "Hybrid.CleverDocs.WebUI/1.0");
+    client.Timeout = TimeSpan.FromSeconds(45); // Optimized timeout for API calls
 }).ConfigurePrimaryHttpMessageHandler(() =>
 {
     var handler = new HttpClientHandler();
@@ -23,6 +33,7 @@ builder.Services.AddHttpClient<IApiService, ApiService>(client =>
     {
         handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
     }
+    handler.MaxConnectionsPerServer = 10;
     return handler;
 });
 
@@ -30,6 +41,8 @@ builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7219");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "Hybrid.CleverDocs.WebUI/1.0");
+    client.Timeout = TimeSpan.FromSeconds(60); // Increased timeout for authentication
 }).ConfigurePrimaryHttpMessageHandler(() =>
 {
     var handler = new HttpClientHandler();
@@ -37,6 +50,8 @@ builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
     {
         handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
     }
+    // Optimize connection pooling
+    handler.MaxConnectionsPerServer = 10;
     return handler;
 });
 
@@ -64,6 +79,7 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseRouting();
 
+app.UseSession(); // Enable session support
 app.UseAuthentication();
 app.UseAuthorization();
 

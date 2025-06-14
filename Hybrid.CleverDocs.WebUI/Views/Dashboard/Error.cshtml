@@ -1,0 +1,65 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard Error";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header pb-0 text-center">
+                    <h4 class="text-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Dashboard Error
+                    </h4>
+                </div>
+                <div class="card-body text-center">
+                    <div class="alert alert-danger" role="alert">
+                        <i class="fas fa-times-circle me-2"></i>
+                        @Model.Message
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5>What you can do:</h5>
+                            <div class="d-grid gap-2 d-md-block">
+                                <a href="/Auth/Login" class="btn btn-primary">
+                                    <i class="fas fa-sign-in-alt me-2"></i>Login Again
+                                </a>
+                                <button class="btn btn-outline-secondary" onclick="location.reload()">
+                                    <i class="fas fa-sync-alt me-2"></i>Refresh Page
+                                </button>
+                                <a href="/Auth/Logout" class="btn btn-outline-danger">
+                                    <i class="fas fa-sign-out-alt me-2"></i>Logout
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <small class="text-muted">
+                            If this problem persists, please contact your system administrator.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: none;
+}
+
+.alert {
+    border-radius: 10px;
+}
+
+.btn {
+    border-radius: 8px;
+    margin: 0.25rem;
+}
+</style>

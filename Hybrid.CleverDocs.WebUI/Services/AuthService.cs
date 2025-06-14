@@ -27,8 +27,16 @@ namespace Hybrid.CleverDocs.WebUI.Services
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync("/api/auth/login", request);
-                
+                _logger.LogInformation("Attempting login for user {Email}", request.Email);
+
+                // Use CancellationToken with timeout for better control
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+                var response = await _httpClient.PostAsJsonAsync("/api/auth/login", request, cts.Token);
+
+                _logger.LogInformation("Login API response status: {StatusCode} for user {Email}",
+                    response.StatusCode, request.Email);
+
                 if (response.IsSuccessStatusCode)
                 {
                     var jsonOptions = new JsonSerializerOptions
@@ -36,21 +44,21 @@ namespace Hybrid.CleverDocs.WebUI.Services
                         PropertyNameCaseInsensitive = true,
                         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                     };
-                    var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>(jsonOptions);
-                    
+                    var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>(jsonOptions, cts.Token);
+
                     if (loginResponse?.Success == true && !string.IsNullOrEmpty(loginResponse.AccessToken))
                     {
                         // Store tokens and user info in cookies
                         StoreTokenInCookie(loginResponse.AccessToken);
                         StoreRefreshTokenInCookie(loginResponse.RefreshToken);
-                        
+
                         if (loginResponse.User != null)
                         {
                             StoreUserInfoInCookie(loginResponse.User);
                         }
 
                         // Set authorization header for future requests
-                        _httpClient.DefaultRequestHeaders.Authorization = 
+                        _httpClient.DefaultRequestHeaders.Authorization =
                             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResponse.AccessToken);
 
                         _logger.LogInformation("User logged in successfully: {Email}", request.Email);
@@ -58,22 +66,41 @@ namespace Hybrid.CleverDocs.WebUI.Services
                     }
                 }
 
-                var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Login failed for {Email}: {Error}", request.Email, errorContent);
-                
-                return new LoginResponse 
-                { 
-                    Success = false, 
-                    Message = "Login failed. Please check your credentials." 
+                var errorContent = await response.Content.ReadAsStringAsync(cts.Token);
+                _logger.LogWarning("Login failed for {Email}: {StatusCode} - {Error}",
+                    request.Email, response.StatusCode, errorContent);
+
+                return new LoginResponse
+                {
+                    Success = false,
+                    Message = "Login failed. Please check your credentials."
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogError("Login timeout for user {Email}", request.Email);
+                return new LoginResponse
+                {
+                    Success = false,
+                    Message = "Login request timed out. Please try again."
+                };
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "HTTP error during login for {Email}", request.Email);
+                return new LoginResponse
+                {
+                    Success = false,
+                    Message = "Unable to connect to authentication service. Please try again."
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during login for {Email}", request.Email);
-                return new LoginResponse 
-                { 
-                    Success = false, 
-                    Message = "An error occurred during login. Please try again." 
+                _logger.LogError(ex, "Unexpected error during login for {Email}", request.Email);
+                return new LoginResponse
+                {
+                    Success = false,
+                    Message = "An error occurred during login. Please try again."
                 };
             }
         }

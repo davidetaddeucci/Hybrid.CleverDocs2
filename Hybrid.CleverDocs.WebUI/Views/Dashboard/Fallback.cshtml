@@ -1,0 +1,89 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header pb-0">
+                    <div class="d-flex align-items-center">
+                        <p class="mb-0">Welcome, @Model.UserName</p>
+                        <button class="btn btn-primary btn-sm ms-auto" onclick="location.reload()">Refresh</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="alert alert-info" role="alert">
+                                <i class="fas fa-info-circle me-2"></i>
+                                @Model.Message
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-user fa-3x text-primary mb-3"></i>
+                                    <h5>User Information</h5>
+                                    <p class="text-muted">
+                                        <strong>Email:</strong> @Model.CurrentUser?.Email<br>
+                                        <strong>Role:</strong> @Model.UserRole<br>
+                                        <strong>Company:</strong> @Model.CompanyName
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-cogs fa-3x text-success mb-3"></i>
+                                    <h5>Quick Actions</h5>
+                                    <div class="d-grid gap-2">
+                                        <a href="/Auth/Logout" class="btn btn-outline-danger">
+                                            <i class="fas fa-sign-out-alt me-2"></i>Logout
+                                        </a>
+                                        <button class="btn btn-outline-primary" onclick="tryRedirect()">
+                                            <i class="fas fa-sync-alt me-2"></i>Try Dashboard Again
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function tryRedirect() {
+    const role = '@Model.UserRole';
+    let targetUrl = '/Dashboard';
+    
+    switch(role) {
+        case '1':
+            targetUrl = '/AdminDashboard';
+            break;
+        case '2':
+            targetUrl = '/CompanyDashboard';
+            break;
+        case '3':
+            targetUrl = '/UserDashboard';
+            break;
+    }
+    
+    window.location.href = targetUrl;
+}
+
+// Auto-refresh after 5 seconds
+setTimeout(() => {
+    tryRedirect();
+}, 5000);
+</script>

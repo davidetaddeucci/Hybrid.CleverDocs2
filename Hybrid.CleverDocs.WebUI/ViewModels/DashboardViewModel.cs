@@ -8,6 +8,8 @@ public class DashboardViewModel
     public string UserRole => CurrentUser?.Role ?? "User";
     public string UserName => $"{CurrentUser?.FirstName} {CurrentUser?.LastName}".Trim();
     public string CompanyName => CurrentUser?.CompanyName ?? "Unknown Company";
+    public string Message { get; set; } = string.Empty;
+    public bool IsError { get; set; } = false;
 }
 
 public class AdminDashboardViewModel : DashboardViewModel
