@@ -1,0 +1,222 @@
+{
+  "backup_metadata": {
+    "backup_date": "2025-01-15",
+    "project_version": "v2.0.0",
+    "last_commit": "c18129c",
+    "status": "PRODUCTION_READY",
+    "backup_type": "COMPLETE_MCP_MEMORY"
+  },
+  "entities": [
+    {
+      "name": "Hybrid.CleverDocs2 Project",
+      "type": "Software Project",
+      "status": "PRODUCTION_READY",
+      "observations": [
+        "Enterprise-grade multi-tenant WebUI for SciPhi AI R2R API integration",
+        "Two main components: WebServices (Backend .NET 9.0 API) and WebUI (Frontend .NET 9.0)",
+        "Current status: v2.0.0 PRODUCTION READY with Advanced Dashboard System",
+        "Architecture: Clean Architecture with JWT authentication, PostgreSQL, Redis, RabbitMQ",
+        "Multi-tenant support with company-based data isolation"
+      ]
+    },
+    {
+      "name": "Backend WebServices",
+      "type": "API Service",
+      "status": "RUNNING",
+      "url": "localhost:5252",
+      "observations": [
+        "17 controllers implemented including AuthController with complete authentication endpoints",
+        "ApplicationDbContext with 10 entities including new widget tables",
+        "JWT authentication system fully implemented with BCrypt password hashing",
+        "All R2R client services registered with Polly resilience policies",
+        "Health checks configured for PostgreSQL, Redis, RabbitMQ, R2R API"
+      ]
+    },
+    {
+      "name": "Frontend WebUI",
+      "type": "Web Application",
+      "status": "RUNNING",
+      "url": "localhost:5168",
+      "observations": [
+        "ASP.NET Core MVC architecture (NO Blazor)",
+        "8 controllers including Dashboard, Chart, Widget controllers",
+        "Material Design 3 UI with custom CSS and JavaScript",
+        "Cookie-based authentication integrated with backend JWT system",
+        "Role-based dashboard templates with drag-and-drop widgets"
+      ]
+    },
+    {
+      "name": "Database Schema",
+      "type": "Database",
+      "status": "MIGRATED",
+      "connection": "192.168.1.4:5433",
+      "observations": [
+        "PostgreSQL database with 10 tables including widget tables",
+        "Migration 20250615073932_AddDashboardWidgets successfully applied",
+        "UserDashboardWidgets and WidgetTemplates for customizable dashboards",
+        "Multi-tenant isolation with company-based data separation",
+        "Optimized indexes for performance and unique constraints"
+      ]
+    },
+    {
+      "name": "External Services Configuration",
+      "type": "Infrastructure",
+      "status": "OPERATIONAL",
+      "observations": [
+        "PostgreSQL: 192.168.1.4:5433, database: cleverdocs, admin/MiaPassword123",
+        "Redis: 192.168.1.4:6380, password: your_redis_password",
+        "RabbitMQ: 192.168.1.4:5674, Management UI: 15674",
+        "R2R API: 192.168.1.4:7272, Swagger UI at /docs",
+        "All services tested and operational with firewall ports opened"
+      ]
+    },
+    {
+      "name": "Authentication System",
+      "type": "Security Component",
+      "status": "FUNCTIONAL",
+      "observations": [
+        "JWT-based authentication with access and refresh tokens",
+        "BCrypt password hashing with 12 rounds salt",
+        "Redis-based token blacklisting for logout functionality",
+        "Multi-tenant token validation with company ID claims",
+        "Test credentials: info@hybrid.it/Florealia2025! (Admin)"
+      ]
+    },
+    {
+      "name": "Advanced Dashboard System",
+      "type": "UI Component",
+      "status": "PRODUCTION_READY",
+      "version": "v2.0.0",
+      "observations": [
+        "Modern StatCards with animated counters and trend indicators",
+        "Chart.js integration with line, bar, pie, doughnut charts",
+        "Drag-and-drop widget system using SortableJS",
+        "Widget framework with extensible template system",
+        "Database persistence for user preferences and widget configuration"
+      ]
+    },
+    {
+      "name": "UI Template",
+      "type": "Design System",
+      "status": "LOCKED",
+      "version": "v2.0.0",
+      "observations": [
+        "White/light gray background (#ffffff → #f8f9fa)",
+        "Dark text (#344767) for optimal readability",
+        "Top-positioned menu without scrolling",
+        "Header limited to 80px, search container 60px max",
+        "Material Dashboard integration with custom extensions"
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "from": "Hybrid.CleverDocs2 Project",
+      "to": "Backend WebServices",
+      "type": "contains"
+    },
+    {
+      "from": "Hybrid.CleverDocs2 Project",
+      "to": "Frontend WebUI",
+      "type": "contains"
+    },
+    {
+      "from": "Backend WebServices",
+      "to": "Database Schema",
+      "type": "uses"
+    },
+    {
+      "from": "Frontend WebUI",
+      "to": "Backend WebServices",
+      "type": "communicates_with"
+    },
+    {
+      "from": "Authentication System",
+      "to": "Backend WebServices",
+      "type": "implemented_in"
+    },
+    {
+      "from": "Advanced Dashboard System",
+      "to": "Frontend WebUI",
+      "type": "part_of"
+    },
+    {
+      "from": "UI Template",
+      "to": "Frontend WebUI",
+      "type": "defines_design_for"
+    }
+  ],
+  "test_credentials": [
+    {
+      "role": "Admin",
+      "email": "info@hybrid.it",
+      "password": "Florealia2025!",
+      "role_id": 1,
+      "company": "Hybrid IT"
+    },
+    {
+      "role": "Company",
+      "email": "info@microsis.it",
+      "password": "Maremmabona1!",
+      "role_id": 2,
+      "company": "Microsis srl"
+    },
+    {
+      "role": "User",
+      "email": "r.antoniucci@microsis.it",
+      "password": "Maremmabona1!",
+      "role_id": 3,
+      "company": "Microsis srl"
+    }
+  ],
+  "critical_configurations": {
+    "database": {
+      "host": "192.168.1.4",
+      "port": 5433,
+      "database": "cleverdocs",
+      "username": "admin",
+      "password": "MiaPassword123"
+    },
+    "redis": {
+      "host": "192.168.1.4",
+      "port": 6380,
+      "password": "your_redis_password"
+    },
+    "services": {
+      "backend": "localhost:5252",
+      "frontend": "localhost:5168",
+      "r2r_api": "192.168.1.4:7272"
+    }
+  },
+  "production_status": {
+    "version": "v2.0.0",
+    "status": "PRODUCTION_READY",
+    "features_complete": [
+      "JWT Authentication System",
+      "Multi-tenant Database Schema",
+      "Role-based Dashboard Templates",
+      "Advanced Dashboard Components",
+      "Drag-and-drop Widget System",
+      "Chart.js Integration",
+      "Material Design UI Template",
+      "External Services Integration",
+      "Performance Optimization"
+    ],
+    "performance_targets": {
+      "dashboard_load_time": "< 2 seconds",
+      "api_response_time": "< 200ms",
+      "chart_rendering": "< 500ms"
+    }
+  },
+  "restoration_checklist": [
+    "Verify external services accessibility on 192.168.1.4",
+    "Confirm database connection and migration status",
+    "Test authentication flow with provided credentials",
+    "Validate dashboard functionality (Overview and Customizable)",
+    "Check UI template integrity (white/gray background, dark text)",
+    "Verify widget system and drag-and-drop functionality",
+    "Test chart rendering and export capabilities",
+    "Confirm multi-tenant data isolation",
+    "Validate performance targets (< 2 second load times)"
+  ]
+}
