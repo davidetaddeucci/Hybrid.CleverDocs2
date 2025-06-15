@@ -1,0 +1,839 @@
+@page "/collections/{CollectionId}/documents"
+@using Hybrid.CleverDocs2.WebUI.Models.Documents
+@using Hybrid.CleverDocs2.WebUI.Models.Collections
+@using Hybrid.CleverDocs2.WebUI.Services.Documents
+@using Hybrid.CleverDocs2.WebUI.Services.Collections
+@using Hybrid.CleverDocs2.WebUI.Components.Documents
+@using Hybrid.CleverDocs2.WebUI.Components.Shared
+@inject IUserDocumentService DocumentService
+@inject IUserCollectionService CollectionService
+@inject IJSRuntime JSRuntime
+@inject ILogger<CollectionDocumentsPage> Logger
+@inject NavigationManager Navigation
+
+<div class="collection-documents-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="header-info">
+            <nav class="breadcrumb" aria-label="breadcrumb">
+                <ol class="breadcrumb-list">
+                    <li class="breadcrumb-item">
+                        <a href="/collections" class="breadcrumb-link">
+                            <i class="icon-folder"></i>
+                            Collections
+                        </a>
+                    </li>
+                    <li class="breadcrumb-separator">/</li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        @(collection?.Name ?? "Loading...")
+                    </li>
+                </ol>
+            </nav>
+            
+            <div class="header-title">
+                <h1 class="page-title">
+                    @if (collection != null)
+                    {
+                        <span class="collection-icon" style="color: @collection.Color">
+                            <i class="icon-@collection.Icon"></i>
+                        </span>
+                        @collection.Name
+                        @if (collection.IsFavorite)
+                        {
+                            <span class="favorite-badge">
+                                <i class="icon-star-filled"></i>
+                            </span>
+                        }
+                    }
+                </h1>
+                
+                @if (!string.IsNullOrEmpty(collection?.Description))
+                {
+                    <p class="collection-description">@collection.Description</p>
+                }
+                
+                <div class="collection-stats">
+                    <span class="stat-item">
+                        <i class="icon-document"></i>
+                        @totalDocuments documents
+                    </span>
+                    @if (collection?.Tags?.Any() == true)
+                    {
+                        <div class="collection-tags">
+                            @foreach (var tag in collection.Tags.Take(3))
+                            {
+                                <span class="tag">@tag</span>
+                            }
+                            @if (collection.Tags.Count > 3)
+                            {
+                                <span class="tag-more">+@(collection.Tags.Count - 3)</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        
+        <div class="header-actions">
+            <button @onclick="ShowUploadModal" 
+                    class="btn btn-primary btn-upload"
+                    title="Upload Documents (Ctrl+U)"
+                    accesskey="u">
+                <i class="icon-upload"></i>
+                <span class="btn-text">Upload Documents</span>
+            </button>
+            
+            <div class="view-controls">
+                <button @onclick="ToggleViewMode" 
+                        class="btn btn-outline btn-view-toggle"
+                        title="Toggle View Mode (Ctrl+V)"
+                        accesskey="v">
+                    <i class="@(viewMode == ViewMode.Grid ? "icon-list" : "icon-grid")"></i>
+                    <span class="btn-text">@(viewMode == ViewMode.Grid ? "List" : "Grid")</span>
+                </button>
+                
+                <div class="dropdown">
+                    <button class="btn btn-outline dropdown-toggle" 
+                            @onclick="ToggleActionsMenu"
+                            aria-expanded="@showActionsMenu">
+                        <i class="icon-more-vertical"></i>
+                    </button>
+                    @if (showActionsMenu)
+                    {
+                        <div class="dropdown-menu show">
+                            <button class="dropdown-item" @onclick="ExportDocumentList">
+                                <i class="icon-download"></i>
+                                Export List
+                            </button>
+                            <button class="dropdown-item" @onclick="ShowCollectionSettings">
+                                <i class="icon-settings"></i>
+                                Collection Settings
+                            </button>
+                            <div class="dropdown-divider"></div>
+                            <button class="dropdown-item" @onclick="RefreshDocuments">
+                                <i class="icon-refresh"></i>
+                                Refresh
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents Toolbar -->
+    <div class="documents-toolbar">
+        <div class="search-section">
+            <div class="search-input-container">
+                <div class="search-input">
+                    <i class="icon-search search-icon"></i>
+                    <input @bind="searchTerm" 
+                           @bind:event="oninput"
+                           @onkeyup="HandleSearchKeyUp"
+                           @onfocus="HandleSearchFocus"
+                           @onblur="HandleSearchBlur"
+                           placeholder="Search documents... (Ctrl+F)"
+                           class="form-control search-field"
+                           accesskey="f"
+                           autocomplete="off" />
+                    
+                    @if (!string.IsNullOrEmpty(searchTerm))
+                    {
+                        <button @onclick="ClearSearch" 
+                                class="btn-clear"
+                                title="Clear search">
+                            <i class="icon-x"></i>
+                        </button>
+                    }
+                    
+                    @if (isSearching)
+                    {
+                        <div class="search-loading">
+                            <div class="spinner-sm"></div>
+                        </div>
+                    }
+                </div>
+                
+                @if (searchSuggestions.Any() && showSearchSuggestions)
+                {
+                    <div class="search-suggestions">
+                        @foreach (var suggestion in searchSuggestions.Take(5))
+                        {
+                            <button class="suggestion-item" 
+                                    @onclick="() => ApplySearchSuggestion(suggestion)">
+                                <i class="icon-search"></i>
+                                @suggestion
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            
+            <div class="filters-container">
+                <div class="filter-group">
+                    <label class="filter-label">Type:</label>
+                    <select @bind="selectedFileType" 
+                            @onchange="HandleFilterChange" 
+                            class="form-select filter-select">
+                        <option value="">All Types</option>
+                        <option value="application/pdf">PDF</option>
+                        <option value="application/msword">Word</option>
+                        <option value="text/plain">Text</option>
+                        <option value="image/jpeg">Images</option>
+                        <option value="application/vnd.ms-excel">Excel</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Sort:</label>
+                    <select @bind="selectedSortBy" 
+                            @onchange="HandleSortChange" 
+                            class="form-select filter-select">
+                        <option value="updated_at">Date Modified</option>
+                        <option value="created_at">Date Created</option>
+                        <option value="name">Name</option>
+                        <option value="size">File Size</option>
+                        <option value="type">File Type</option>
+                    </select>
+                </div>
+                
+                <button @onclick="ToggleSortDirection" 
+                        class="btn btn-outline btn-sort"
+                        title="Toggle sort direction">
+                    <i class="@(sortDirection == SortDirection.Desc ? "icon-arrow-down" : "icon-arrow-up")"></i>
+                </button>
+                
+                <button @onclick="ShowAdvancedFilters" 
+                        class="btn btn-outline btn-filters @(hasActiveFilters ? "active" : "")"
+                        title="Advanced Filters">
+                    <i class="icon-filter"></i>
+                    @if (hasActiveFilters)
+                    {
+                        <span class="filter-count">@activeFiltersCount</span>
+                    }
+                </button>
+            </div>
+        </div>
+
+        <!-- Batch Actions Toolbar -->
+        @if (selectedDocuments.Any())
+        {
+            <div class="batch-actions-toolbar">
+                <div class="selection-info">
+                    <span class="selection-count">
+                        @selectedDocuments.Count selected
+                    </span>
+                    <button @onclick="SelectAllVisible" class="btn-link">
+                        Select all visible
+                    </button>
+                    <button @onclick="ClearSelection" class="btn-link">
+                        Clear selection
+                    </button>
+                </div>
+                
+                <div class="batch-actions">
+                    <button @onclick="() => ShowBatchActionModal(BatchActionType.Move)" 
+                            class="btn btn-outline btn-sm">
+                        <i class="icon-folder-move"></i>
+                        Move
+                    </button>
+                    <button @onclick="() => ShowBatchActionModal(BatchActionType.Tag)" 
+                            class="btn btn-outline btn-sm">
+                        <i class="icon-tag"></i>
+                        Tag
+                    </button>
+                    <button @onclick="() => ShowBatchActionModal(BatchActionType.Download)" 
+                            class="btn btn-outline btn-sm">
+                        <i class="icon-download"></i>
+                        Download
+                    </button>
+                    <button @onclick="() => ShowBatchActionModal(BatchActionType.Delete)" 
+                            class="btn btn-outline btn-sm btn-danger">
+                        <i class="icon-trash"></i>
+                        Delete
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Active Filters Display -->
+    @if (hasActiveFilters)
+    {
+        <div class="active-filters">
+            <span class="filters-label">Active filters:</span>
+            <div class="filter-chips">
+                @if (!string.IsNullOrEmpty(selectedFileType))
+                {
+                    <div class="filter-chip">
+                        <span>Type: @GetFileTypeDisplayName(selectedFileType)</span>
+                        <button @onclick="() => ClearFilter(nameof(selectedFileType))">
+                            <i class="icon-x"></i>
+                        </button>
+                    </div>
+                }
+                @if (dateRangeFilter.HasValue)
+                {
+                    <div class="filter-chip">
+                        <span>Date: @dateRangeFilter.Value.ToString("MMM yyyy")</span>
+                        <button @onclick="() => ClearFilter(nameof(dateRangeFilter))">
+                            <i class="icon-x"></i>
+                        </button>
+                    </div>
+                }
+                @if (sizeRangeFilter.HasValue)
+                {
+                    <div class="filter-chip">
+                        <span>Size: @GetSizeRangeDisplayName(sizeRangeFilter.Value)</span>
+                        <button @onclick="() => ClearFilter(nameof(sizeRangeFilter))">
+                            <i class="icon-x"></i>
+                        </button>
+                    </div>
+                }
+                <button @onclick="ClearAllFilters" class="btn-clear-all">
+                    Clear all
+                </button>
+            </div>
+        </div>
+    }
+
+    <!-- Documents Content -->
+    <div class="documents-content">
+        @if (isLoading)
+        {
+            <div class="loading-container">
+                <div class="loading-content">
+                    <LoadingSpinner Size="large" />
+                    <h3>Loading documents...</h3>
+                    <p>Please wait while we fetch your documents</p>
+                </div>
+            </div>
+        }
+        else if (!documents.Any())
+        {
+            <EmptyStateComponent SearchTerm="@searchTerm" 
+                               OnUploadClick="ShowUploadModal"
+                               OnClearSearch="ClearSearch" />
+        }
+        else
+        {
+            <!-- Document Views -->
+            <div class="documents-container @(viewMode.ToString().ToLower())-view">
+                @if (viewMode == ViewMode.Grid)
+                {
+                    <DocumentGridComponent Documents="documents"
+                                         OnDocumentSelected="HandleDocumentSelected"
+                                         OnDocumentAction="HandleDocumentAction"
+                                         SelectedDocuments="selectedDocuments"
+                                         OnSelectionChanged="HandleSelectionChanged"
+                                         OnContextMenu="HandleContextMenu"
+                                         EnableVirtualization="@(documents.Count > 50)" />
+                }
+                else
+                {
+                    <DocumentListComponent Documents="documents"
+                                         OnDocumentSelected="HandleDocumentSelected"
+                                         OnDocumentAction="HandleDocumentAction"
+                                         SelectedDocuments="selectedDocuments"
+                                         OnSelectionChanged="HandleSelectionChanged"
+                                         OnContextMenu="HandleContextMenu"
+                                         SortBy="selectedSortBy"
+                                         SortDirection="sortDirection"
+                                         EnableVirtualization="@(documents.Count > 50)" />
+                }
+            </div>
+
+            <!-- Pagination -->
+            @if (totalPages > 1)
+            {
+                <div class="pagination-container">
+                    <PaginationComponent CurrentPage="currentPage"
+                                       TotalPages="totalPages"
+                                       TotalItems="totalDocuments"
+                                       PageSize="pageSize"
+                                       OnPageChanged="HandlePageChanged"
+                                       OnPageSizeChanged="HandlePageSizeChanged"
+                                       ShowPageSizeSelector="true" />
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<!-- Modals and Overlays -->
+@if (showUploadModal)
+{
+    <DocumentUploadModal @bind-IsVisible="showUploadModal"
+                       CollectionId="@CollectionId"
+                       OnUploadsCompleted="HandleUploadsCompleted"
+                       OnUploadProgress="HandleUploadProgress" />
+}
+
+@if (selectedDocument != null && showViewerModal)
+{
+    <DocumentViewerModal Document="selectedDocument"
+                       @bind-IsVisible="showViewerModal"
+                       OnDocumentUpdated="HandleDocumentUpdated"
+                       OnDocumentDeleted="HandleDocumentDeleted"
+                       OnDocumentDownload="HandleDocumentDownload" />
+}
+
+@if (showBatchActionModal)
+{
+    <BatchActionModal @bind-IsVisible="showBatchActionModal"
+                    ActionType="currentBatchAction"
+                    SelectedDocuments="selectedDocuments"
+                    OnActionConfirmed="HandleBatchActionConfirmed"
+                    AvailableCollections="availableCollections" />
+}
+
+@if (showAdvancedFiltersModal)
+{
+    <AdvancedFiltersModal @bind-IsVisible="showAdvancedFiltersModal"
+                        CurrentFilters="advancedFilters"
+                        OnFiltersApplied="HandleAdvancedFiltersApplied" />
+}
+
+<!-- Context Menu -->
+@if (showContextMenu && contextMenuDocument != null)
+{
+    <ContextMenuComponent @bind-IsVisible="showContextMenu"
+                        Position="contextMenuPosition"
+                        Items="contextMenuItems"
+                        OnItemSelected="HandleContextMenuAction" />
+}
+
+<!-- Keyboard Shortcuts Help -->
+@if (showKeyboardHelp)
+{
+    <KeyboardShortcutsModal @bind-IsVisible="showKeyboardHelp" />
+}
+
+@code {
+    [Parameter] public string CollectionId { get; set; } = string.Empty;
+
+    // State
+    private UserCollectionDto? collection;
+    private List<UserDocumentDto> documents = new();
+    private List<UserDocumentDto> selectedDocuments = new();
+    private List<UserCollectionDto> availableCollections = new();
+    private UserDocumentDto? selectedDocument;
+    private UserDocumentDto? contextMenuDocument;
+
+    // UI State
+    private bool isLoading = true;
+    private bool isSearching = false;
+    private bool showUploadModal = false;
+    private bool showViewerModal = false;
+    private bool showBatchActionModal = false;
+    private bool showAdvancedFiltersModal = false;
+    private bool showActionsMenu = false;
+    private bool showContextMenu = false;
+    private bool showKeyboardHelp = false;
+    private bool showSearchSuggestions = false;
+
+    // View Settings
+    private ViewMode viewMode = ViewMode.Grid;
+    private string searchTerm = "";
+    private List<string> searchSuggestions = new();
+
+    // Filtering and Sorting
+    private string selectedFileType = "";
+    private string selectedSortBy = "updated_at";
+    private SortDirection sortDirection = SortDirection.Desc;
+    private DateTime? dateRangeFilter;
+    private SizeRange? sizeRangeFilter;
+    private Dictionary<string, object> advancedFilters = new();
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 20;
+    private int totalPages = 1;
+    private int totalDocuments = 0;
+
+    // Batch Actions
+    private BatchActionType currentBatchAction;
+
+    // Context Menu
+    private (double X, double Y) contextMenuPosition;
+    private List<ContextMenuItem> contextMenuItems = new();
+
+    // Timers and Cancellation
+    private Timer? searchTimer;
+    private CancellationTokenSource? searchCancellationTokenSource;
+
+    // Computed Properties
+    private bool hasActiveFilters => !string.IsNullOrEmpty(selectedFileType) ||
+                                   dateRangeFilter.HasValue ||
+                                   sizeRangeFilter.HasValue ||
+                                   advancedFilters.Any();
+
+    private int activeFiltersCount =>
+        (!string.IsNullOrEmpty(selectedFileType) ? 1 : 0) +
+        (dateRangeFilter.HasValue ? 1 : 0) +
+        (sizeRangeFilter.HasValue ? 1 : 0) +
+        advancedFilters.Count;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCollection();
+        await LoadAvailableCollections();
+        await LoadDocuments();
+        await SetupKeyboardShortcuts();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("documentManagement.initialize", DotNetObjectReference.Create(this));
+        }
+    }
+
+    private async Task LoadCollection()
+    {
+        try
+        {
+            if (!Guid.TryParse(CollectionId, out var collectionGuid))
+            {
+                Navigation.NavigateTo("/collections");
+                return;
+            }
+
+            collection = await CollectionService.GetCollectionByIdAsync(collectionGuid);
+
+            if (collection == null)
+            {
+                Navigation.NavigateTo("/collections");
+                return;
+            }
+
+            // Update page title
+            await JSRuntime.InvokeVoidAsync("document.title", $"{collection.Name} - Documents");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load collection {CollectionId}", CollectionId);
+            await ShowNotification("Failed to load collection", NotificationType.Error);
+            Navigation.NavigateTo("/collections");
+        }
+    }
+
+    private async Task LoadAvailableCollections()
+    {
+        try
+        {
+            availableCollections = await CollectionService.GetUserCollectionsAsync();
+            availableCollections = availableCollections.Where(c => c.Id.ToString() != CollectionId).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load available collections");
+        }
+    }
+
+    private async Task LoadDocuments()
+    {
+        isLoading = true;
+        searchCancellationTokenSource?.Cancel();
+        searchCancellationTokenSource = new CancellationTokenSource();
+
+        try
+        {
+            var query = new DocumentQueryDto
+            {
+                Page = currentPage,
+                PageSize = pageSize,
+                SearchTerm = searchTerm,
+                SortBy = selectedSortBy,
+                SortDirection = sortDirection,
+                CollectionId = Guid.Parse(CollectionId),
+                Filters = BuildFilters()
+            };
+
+            var result = await DocumentService.SearchDocumentsAsync(query, searchCancellationTokenSource.Token);
+
+            documents = result.Items;
+            totalPages = result.TotalPages;
+            totalDocuments = result.TotalCount;
+
+            // Clear selection if documents changed
+            selectedDocuments.Clear();
+        }
+        catch (OperationCanceledException)
+        {
+            // Search was cancelled, ignore
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load documents for collection {CollectionId}", CollectionId);
+            await ShowNotification("Failed to load documents", NotificationType.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    private Dictionary<string, object> BuildFilters()
+    {
+        var filters = new Dictionary<string, object>(advancedFilters);
+
+        if (!string.IsNullOrEmpty(selectedFileType))
+        {
+            filters["content_type"] = selectedFileType;
+        }
+
+        if (dateRangeFilter.HasValue)
+        {
+            filters["created_after"] = dateRangeFilter.Value;
+            filters["created_before"] = dateRangeFilter.Value.AddMonths(1);
+        }
+
+        if (sizeRangeFilter.HasValue)
+        {
+            var (min, max) = GetSizeRangeValues(sizeRangeFilter.Value);
+            filters["min_size"] = min;
+            filters["max_size"] = max;
+        }
+
+        return filters;
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await ClearSearch();
+            return;
+        }
+
+        if (e.Key == "Enter")
+        {
+            searchTimer?.Dispose();
+            await PerformSearch();
+            return;
+        }
+
+        // Debounced search
+        searchTimer?.Dispose();
+        isSearching = true;
+        StateHasChanged();
+
+        searchTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await PerformSearch();
+            });
+        }, null, 300, Timeout.Infinite);
+
+        // Load search suggestions
+        if (!string.IsNullOrEmpty(searchTerm) && searchTerm.Length >= 2)
+        {
+            await LoadSearchSuggestions();
+        }
+        else
+        {
+            searchSuggestions.Clear();
+            showSearchSuggestions = false;
+        }
+    }
+
+    private async Task PerformSearch()
+    {
+        currentPage = 1;
+        await LoadDocuments();
+    }
+
+    private async Task LoadSearchSuggestions()
+    {
+        try
+        {
+            searchSuggestions = await DocumentService.GetSearchSuggestionsAsync(searchTerm);
+            showSearchSuggestions = searchSuggestions.Any();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load search suggestions");
+        }
+    }
+
+    private async Task HandleSearchFocus()
+    {
+        if (searchSuggestions.Any())
+        {
+            showSearchSuggestions = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleSearchBlur()
+    {
+        // Delay hiding suggestions to allow clicking
+        await Task.Delay(200);
+        showSearchSuggestions = false;
+        StateHasChanged();
+    }
+
+    private async Task ApplySearchSuggestion(string suggestion)
+    {
+        searchTerm = suggestion;
+        showSearchSuggestions = false;
+        await PerformSearch();
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = "";
+        searchSuggestions.Clear();
+        showSearchSuggestions = false;
+        await PerformSearch();
+    }
+
+    private async Task HandleFilterChange()
+    {
+        currentPage = 1;
+        await LoadDocuments();
+    }
+
+    private async Task HandleSortChange()
+    {
+        currentPage = 1;
+        await LoadDocuments();
+    }
+
+    private async Task ToggleSortDirection()
+    {
+        sortDirection = sortDirection == SortDirection.Asc ? SortDirection.Desc : SortDirection.Asc;
+        await LoadDocuments();
+    }
+
+    private void ToggleViewMode()
+    {
+        viewMode = viewMode == ViewMode.Grid ? ViewMode.List : ViewMode.Grid;
+
+        // Save preference
+        _ = Task.Run(async () =>
+        {
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "documentViewMode", viewMode.ToString());
+        });
+    }
+
+    private async Task HandlePageChanged(int newPage)
+    {
+        currentPage = newPage;
+        await LoadDocuments();
+
+        // Scroll to top
+        await JSRuntime.InvokeVoidAsync("window.scrollTo", 0, 0);
+    }
+
+    private async Task HandlePageSizeChanged(int newPageSize)
+    {
+        pageSize = newPageSize;
+        currentPage = 1;
+        await LoadDocuments();
+    }
+
+    private async Task HandleDocumentSelected(UserDocumentDto document)
+    {
+        selectedDocument = document;
+        showViewerModal = true;
+
+        // Track analytics
+        await DocumentService.TrackDocumentViewAsync(document.Id);
+    }
+
+    private async Task HandleDocumentAction(DocumentActionEventArgs args)
+    {
+        switch (args.Action)
+        {
+            case DocumentAction.Download:
+                await HandleDocumentDownload(args.Document);
+                break;
+            case DocumentAction.Edit:
+                await HandleDocumentEdit(args.Document);
+                break;
+            case DocumentAction.Delete:
+                await HandleDocumentDelete(args.Document);
+                break;
+            case DocumentAction.Share:
+                await HandleDocumentShare(args.Document);
+                break;
+            case DocumentAction.Move:
+                await HandleDocumentMove(args.Document);
+                break;
+        }
+    }
+
+    private void HandleSelectionChanged(List<UserDocumentDto> newSelection)
+    {
+        selectedDocuments = newSelection;
+        StateHasChanged();
+    }
+
+    private async Task HandleContextMenu(ContextMenuEventArgs args)
+    {
+        contextMenuDocument = args.Document;
+        contextMenuPosition = (args.X, args.Y);
+        contextMenuItems = BuildContextMenuItems(args.Document);
+        showContextMenu = true;
+        StateHasChanged();
+    }
+
+    private List<ContextMenuItem> BuildContextMenuItems(UserDocumentDto document)
+    {
+        return new List<ContextMenuItem>
+        {
+            new() { Icon = "icon-eye", Text = "View", Action = "view" },
+            new() { Icon = "icon-download", Text = "Download", Action = "download" },
+            new() { Icon = "icon-edit", Text = "Edit", Action = "edit" },
+            new() { IsSeparator = true },
+            new() { Icon = "icon-folder-move", Text = "Move to...", Action = "move" },
+            new() { Icon = "icon-copy", Text = "Copy link", Action = "copy" },
+            new() { Icon = "icon-share", Text = "Share", Action = "share" },
+            new() { IsSeparator = true },
+            new() { Icon = "icon-trash", Text = "Delete", Action = "delete", IsDestructive = true }
+        };
+    }
+
+    private async Task HandleContextMenuAction(string action)
+    {
+        showContextMenu = false;
+
+        if (contextMenuDocument == null) return;
+
+        switch (action)
+        {
+            case "view":
+                await HandleDocumentSelected(contextMenuDocument);
+                break;
+            case "download":
+                await HandleDocumentDownload(contextMenuDocument);
+                break;
+            case "edit":
+                await HandleDocumentEdit(contextMenuDocument);
+                break;
+            case "move":
+                await HandleDocumentMove(contextMenuDocument);
+                break;
+            case "copy":
+                await HandleCopyDocumentLink(contextMenuDocument);
+                break;
+            case "share":
+                await HandleDocumentShare(contextMenuDocument);
+                break;
+            case "delete":
+                await HandleDocumentDelete(contextMenuDocument);
+                break;
+        }
+
+        contextMenuDocument = null;
+    }
+
+    // Additional methods continue in next part...
+}

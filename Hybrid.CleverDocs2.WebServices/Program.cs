@@ -12,6 +12,12 @@ using Hybrid.CleverDocs2.WebServices.Consumers;
 using Hybrid.CleverDocs2.WebServices.Workers;
 using Hybrid.CleverDocs2.WebServices.Services.Clients;
 using Hybrid.CleverDocs2.WebServices.Services.Auth;
+using Hybrid.CleverDocs2.WebServices.Services.Logging;
+using Hybrid.CleverDocs2.WebServices.Services.Queue;
+using Hybrid.CleverDocs2.WebServices.Services.Cache;
+using Hybrid.CleverDocs2.WebServices.Services.Collections;
+using Hybrid.CleverDocs2.WebServices.Services.Documents;
+using Hybrid.CleverDocs2.WebServices.Hubs;
 using Hybrid.CleverDocs2.WebServices.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -197,6 +203,67 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// Correlation and Logging Services
+builder.Services.AddCorrelationServices();
+
+// Rate Limiting Services
+builder.Services.Configure<RateLimitingOptions>(builder.Configuration.GetSection("RateLimiting"));
+builder.Services.AddSingleton<IRateLimitingService, RateLimitingService>();
+
+// RabbitMQ Services (placeholder implementation)
+builder.Services.Configure<RabbitMQOptions>(builder.Configuration.GetSection("RabbitMQ"));
+// builder.Services.AddScoped<IRabbitMQService, RabbitMQService>(); // Commented out until implementation is complete
+
+// Multi-Level Cache Services
+builder.Services.Configure<MultiLevelCacheOptions>(builder.Configuration.GetSection("MultiLevelCache"));
+builder.Services.Configure<L1CacheOptions>(builder.Configuration.GetSection("L1Cache"));
+builder.Services.Configure<L2CacheOptions>(builder.Configuration.GetSection("L2Cache"));
+builder.Services.Configure<L3CacheOptions>(builder.Configuration.GetSection("L3Cache"));
+builder.Services.Configure<CacheInvalidationOptions>(builder.Configuration.GetSection("CacheInvalidation"));
+builder.Services.Configure<CacheWarmingOptions>(builder.Configuration.GetSection("CacheWarming"));
+
+// Cache Service Implementations
+builder.Services.AddSingleton<ICacheKeyGenerator, CacheKeyGenerator>();
+builder.Services.AddSingleton<IL1MemoryCache, L1MemoryCache>();
+builder.Services.AddSingleton<IL2RedisCache, L2RedisCache>();
+builder.Services.AddSingleton<IL3PersistentCache, L3PersistentCache>();
+builder.Services.AddSingleton<IMultiLevelCacheService, MultiLevelCacheService>();
+builder.Services.AddScoped<ICacheInvalidationService, CacheInvalidationService>();
+builder.Services.AddSingleton<ICacheWarmingService, CacheWarmingService>();
+
+// R2R-Specific Cache Service
+builder.Services.Configure<R2RCacheOptions>(builder.Configuration.GetSection("R2RCache"));
+builder.Services.AddScoped<IR2RCacheService, R2RCacheService>();
+
+// Collection Services
+builder.Services.Configure<UserCollectionOptions>(builder.Configuration.GetSection("UserCollections"));
+builder.Services.Configure<CollectionSyncOptions>(builder.Configuration.GetSection("CollectionSync"));
+builder.Services.Configure<CollectionSuggestionOptions>(builder.Configuration.GetSection("CollectionSuggestions"));
+builder.Services.Configure<CollectionAnalyticsOptions>(builder.Configuration.GetSection("CollectionAnalytics"));
+
+builder.Services.AddScoped<IUserCollectionService, UserCollectionService>();
+builder.Services.AddScoped<ICollectionSyncService, CollectionSyncService>();
+builder.Services.AddScoped<ICollectionSuggestionService, CollectionSuggestionService>();
+builder.Services.AddScoped<ICollectionAnalyticsService, CollectionAnalyticsService>();
+
+// Document Upload Services
+builder.Services.Configure<DocumentUploadOptions>(builder.Configuration.GetSection("DocumentUpload"));
+builder.Services.Configure<ChunkedUploadOptions>(builder.Configuration.GetSection("ChunkedUpload"));
+builder.Services.Configure<DocumentProcessingOptions>(builder.Configuration.GetSection("DocumentProcessing"));
+
+builder.Services.AddScoped<IDocumentUploadService, DocumentUploadService>();
+builder.Services.AddScoped<IChunkedUploadService, ChunkedUploadService>();
+builder.Services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
+
+// Upload support services (placeholder implementations)
+builder.Services.AddScoped<IUploadProgressService, UploadProgressService>();
+builder.Services.AddScoped<IUploadValidationService, UploadValidationService>();
+builder.Services.AddScoped<IUploadStorageService, UploadStorageService>();
+builder.Services.AddScoped<IUploadMetricsService, UploadMetricsService>();
+
+// Document Management Services
+builder.Services.AddScoped<IUserDocumentService, UserDocumentService>();
+
 // Background Workers - Temporarily disabled for testing
 // builder.Services.AddHostedService<IngestionWorker>();
 
@@ -249,6 +316,14 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
+// SignalR for real-time updates
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
@@ -260,9 +335,11 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors();
 
-// Add custom middleware
-app.UseMiddleware<JwtMiddleware>();
-app.UseMiddleware<TenantResolutionMiddleware>();
+// Add custom middleware (order is important)
+app.UseCorrelation(); // First: Set up correlation context
+app.UseGlobalExceptionHandling(); // Second: Handle exceptions globally
+app.UseMiddleware<JwtMiddleware>(); // Third: JWT authentication
+app.UseMiddleware<TenantResolutionMiddleware>(); // Fourth: Tenant resolution
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -272,5 +349,9 @@ app.MapHealthChecks("/health");
 
 // Controllers
 app.MapControllers();
+
+// SignalR Hubs
+app.MapHub<CollectionHub>("/hubs/collection");
+app.MapHub<DocumentUploadHub>("/hubs/upload");
 
 app.Run();

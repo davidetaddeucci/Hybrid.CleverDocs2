@@ -79,6 +79,25 @@ Hybrid.CleverDocs2/
   - **Performance**: Optimized loading with caching and parallel API calls
   - **Multi-tenant**: Role-based widget visibility and company isolation
   - **Status**: ✅ PRODUCTION READY - Full dashboard customization available
+- **📁 COLLECTIONS MANAGEMENT SYSTEM**: Complete user collection system implemented
+  - **CRUD Operations**: Full create, read, update, delete operations for collections
+  - **Real-time Updates**: SignalR CollectionHub for instant UI updates
+  - **Smart Suggestions**: AI-powered collection name, color, and icon suggestions
+  - **Analytics & Insights**: Usage statistics and collection performance metrics
+  - **R2R Integration**: Seamless synchronization with R2R API collections
+  - **Multi-level Caching**: L1 memory, L2 Redis, L3 persistent caching strategy
+  - **Status**: ✅ PRODUCTION READY - Complete collection management available
+- **🚀 ENTERPRISE DOCUMENT UPLOAD SYSTEM**: Bulletproof upload system implemented
+  - **Chunked Upload**: Large file support (>10MB) with resumable capability
+  - **Rate Limiting**: Intelligent R2R API rate limiting (10 docs/sec) with queue management
+  - **Real-time Progress**: SignalR DocumentUploadHub for live upload tracking
+  - **Circuit Breaker**: Fault tolerance with exponential backoff and retry logic
+  - **Parallel Processing**: Optimized concurrent uploads with user-based throttling
+  - **Validation Engine**: Comprehensive file type, size, and content validation
+  - **Background Processing**: Queue-based R2R integration with priority handling
+  - **Storage Management**: Temporary and permanent file storage with cleanup
+  - **Metrics & Analytics**: Upload statistics and performance monitoring
+  - **Status**: ✅ PRODUCTION READY - Enterprise-grade upload system operational
 
 ## 🚀 Quick Start
 
@@ -133,7 +152,31 @@ The system uses PostgreSQL with the following key tables:
 Dashboard
 ├── Overview (Enhanced dashboard with StatCards and Charts)
 └── Customizable (Drag-and-drop widget system)
+
+Collections
+├── My Collections (User collection management)
+├── Favorites (Favorited collections)
+├── Recent (Recently accessed collections)
+└── Analytics (Collection usage insights)
+
+Documents
+├── Upload (Enterprise upload system)
+├── My Documents (Document management)
+└── Processing Queue (R2R processing status)
 ```
+
+## 🔄 Real-time Features
+
+### SignalR Hubs
+- **CollectionHub** (`/hubs/collection`): Real-time collection updates, analytics, and suggestions
+- **DocumentUploadHub** (`/hubs/upload`): Live upload progress, session status, and R2R processing updates
+
+### Real-time Capabilities
+- **Live Progress Tracking**: File upload progress with speed and ETA calculations
+- **Collection Updates**: Instant UI updates when collections are modified
+- **R2R Processing Status**: Real-time R2R API rate limiting and queue status
+- **Analytics Updates**: Live collection and document usage statistics
+- **Error Notifications**: Immediate feedback on upload failures and retries
 
 ## 🎯 Production Ready
 
@@ -143,10 +186,26 @@ Dashboard
 - ✅ **Authentication System**: Complete JWT-based multi-tenant authentication
 - ✅ **Modern UI Components**: StatCards with animations and Chart.js integration
 - ✅ **Drag-and-Drop Dashboard**: Customizable widget system with SortableJS
-- ✅ **Database Integration**: PostgreSQL with widget persistence
-- ✅ **Performance Optimization**: < 2 second load times with caching
+- ✅ **Collections Management**: Full CRUD operations with real-time updates and analytics
+- ✅ **Enterprise Document Upload**: Chunked uploads, rate limiting, and R2R integration
+- ✅ **Real-time Communication**: SignalR hubs for live progress tracking and updates
+- ✅ **Database Integration**: PostgreSQL with widget and collection persistence
+- ✅ **Performance Optimization**: < 2 second load times with multi-level caching
 - ✅ **Multi-tenant Architecture**: Company isolation and role-based access
 - ✅ **Material Design**: Seamless integration with locked UI template
+- ✅ **Fault Tolerance**: Circuit breaker patterns and intelligent retry mechanisms
+
+### 🚀 Enterprise Upload System Features:
+- **Chunked Upload**: Files >10MB automatically split into 5MB chunks with resumable capability
+- **Rate Limiting**: Intelligent R2R API throttling (10 docs/sec) with queue-based processing
+- **Circuit Breaker**: Fault tolerance with exponential backoff and automatic recovery
+- **Real-time Progress**: Live upload tracking with speed, ETA, and completion status
+- **Parallel Processing**: Concurrent uploads with user-based throttling (5 uploads/user)
+- **Validation Engine**: File type, size, content, and malware scanning
+- **Storage Management**: Temporary chunked storage with automatic cleanup
+- **Retry Logic**: Smart retry with exponential backoff for failed uploads
+- **Metrics & Analytics**: Comprehensive upload statistics and performance monitoring
+- **Background Processing**: Queue-based R2R integration with priority handling
 
 ### Testing Workflow:
 1. **Backend API**: http://localhost:5252 ✅ Running
@@ -177,7 +236,7 @@ Dashboard
 
 ### WebServices API Endpoints
 
-- Auth:
+- **Auth**:
   - POST /api/auth/login
   - POST /api/auth/refresh
   - POST /api/auth/logout
@@ -186,6 +245,51 @@ Dashboard
   - GET  /api/auth/users/{id}
   - PUT  /api/auth/users/{id}
   - DELETE /api/auth/users/{id}
+
+- **Collections** (NEW):
+  - GET    /api/usercollections              # Get user collections
+  - GET    /api/usercollections/{id}         # Get specific collection
+  - POST   /api/usercollections/search       # Search collections
+  - POST   /api/usercollections              # Create collection
+  - PUT    /api/usercollections/{id}         # Update collection
+  - DELETE /api/usercollections/{id}         # Delete collection
+  - POST   /api/usercollections/{id}/toggle-favorite # Toggle favorite
+  - GET    /api/usercollections/favorites    # Get favorites
+  - GET    /api/usercollections/recent       # Get recent collections
+  - POST   /api/usercollections/reorder      # Reorder collections
+  - POST   /api/usercollections/bulk         # Bulk operations
+  - GET    /api/usercollections/suggestions  # Get suggestions
+  - GET    /api/usercollections/{id}/analytics # Get analytics
+
+- **Document Management** (NEW):
+  - POST   /api/userdocuments/search         # Advanced document search
+  - GET    /api/userdocuments/collections/{id} # Get collection documents
+  - GET    /api/userdocuments/{id}           # Get specific document
+  - POST   /api/userdocuments/batch          # Get multiple documents
+  - PUT    /api/userdocuments/{id}/metadata  # Update document metadata
+  - PUT    /api/userdocuments/{id}/move      # Move document to collection
+  - DELETE /api/userdocuments/{id}           # Delete document
+  - POST   /api/userdocuments/{id}/toggle-favorite # Toggle favorite
+  - GET    /api/userdocuments/favorites      # Get favorite documents
+  - GET    /api/userdocuments/recent         # Get recent documents
+  - POST   /api/userdocuments/batch-operation # Execute batch operations
+  - GET    /api/userdocuments/search-suggestions # Get search suggestions
+  - POST   /api/userdocuments/{id}/track-view # Track document view
+
+- **Document Upload** (NEW):
+  - POST   /api/documentupload/initialize    # Initialize upload session
+  - POST   /api/documentupload/file          # Upload single file
+  - POST   /api/documentupload/batch         # Upload multiple files
+  - POST   /api/documentupload/chunk         # Upload file chunk
+  - POST   /api/documentupload/chunk/complete # Complete chunked upload
+  - GET    /api/documentupload/session/{id}  # Get upload session
+  - GET    /api/documentupload/sessions      # Get user sessions
+  - POST   /api/documentupload/session/{id}/cancel # Cancel session
+  - POST   /api/documentupload/session/{id}/retry  # Retry failed uploads
+  - POST   /api/documentupload/validate      # Validate files
+  - GET    /api/documentupload/session/{id}/progress # Get progress
+  - GET    /api/documentupload/supported-types # Get supported types
+  - GET    /api/documentupload/r2r-status    # Get R2R rate limit status
 
 - Documents:
   - POST   /api/documents
@@ -277,6 +381,65 @@ Dashboard
   - GET    /api/webdev/{id}
   - PUT    /api/webdev/{id}
   - DELETE /api/webdev/{id}
+
+## 🔧 Configuration
+
+### New Configuration Sections
+The system includes comprehensive configuration for the new features:
+
+```json
+{
+  "UserCollections": {
+    "MaxCollectionsPerUser": 100,
+    "MaxNameLength": 100,
+    "MaxDescriptionLength": 500,
+    "EnableRealTimeUpdates": true,
+    "EnableAnalytics": true,
+    "CacheExpiration": "00:15:00"
+  },
+  "DocumentUpload": {
+    "MaxConcurrentUploadsPerUser": 5,
+    "MaxTotalUploadSize": 1073741824,
+    "MaxFileSize": 104857600,
+    "DefaultChunkSize": 5242880,
+    "SessionTimeout": "1.00:00:00",
+    "EnableProgressTracking": true,
+    "EnableChunkedUpload": true,
+    "MaxRetries": 3,
+    "RetryDelay": "00:00:05"
+  },
+  "ChunkedUpload": {
+    "DefaultChunkSize": 5242880,
+    "MaxChunkSize": 10485760,
+    "MinChunkSize": 1048576,
+    "ChunkTimeout": "00:30:00",
+    "MaxConcurrentChunks": 5,
+    "EnableChecksumVerification": true
+  },
+  "DocumentProcessing": {
+    "MaxConcurrentProcessing": 5,
+    "RateLimitDelaySeconds": 10,
+    "BaseRetryDelaySeconds": 5,
+    "CircuitBreakerThreshold": 5,
+    "CircuitBreakerDelayMinutes": 10,
+    "CircuitBreakerResetMinutes": 30,
+    "ProcessingTimeout": "00:10:00",
+    "EnableOptimization": true
+  }
+}
+```
+
+### SignalR Configuration
+```json
+{
+  "SignalR": {
+    "EnableDetailedErrors": true,
+    "KeepAliveInterval": "00:00:15",
+    "ClientTimeoutInterval": "00:00:30"
+  }
+}
+```
+
 ## External Services Configuration
 
 The following endpoints correspond to the Docker Compose setup:
@@ -348,6 +511,46 @@ The WebServices project will implement a resilient .NET client wrapper against t
 9. MCP introspection & tuning: runtime tuning via API, pipeline metrics, introspection endpoints.
 10. Web-Dev integration & Evals: CORS/iframe support, SSE/WebSocket streaming, embedded Swagger UI, health metrics, evaluation endpoints.
 
+
+## 📋 Changelog
+
+### v2.2.0 - Document Management System (Latest)
+- ✅ **NEW**: Complete document management system for collections
+- ✅ **NEW**: Advanced document search with filtering and pagination
+- ✅ **NEW**: Document metadata management and versioning
+- ✅ **NEW**: Batch operations for multiple documents
+- ✅ **NEW**: Document analytics and view tracking
+- ✅ **NEW**: Favorite documents and recent access
+- ✅ **NEW**: UserDocumentsController with 15+ endpoints
+- ✅ **NEW**: Enhanced Document entity with management features
+- ✅ **NEW**: Multi-level caching for document operations
+
+### v2.1.0 - Enterprise Document Upload System
+- ✅ **NEW**: Complete enterprise-grade document upload system
+- ✅ **NEW**: Chunked upload support for large files (>10MB)
+- ✅ **NEW**: Real-time upload progress tracking with SignalR
+- ✅ **NEW**: R2R API rate limiting with intelligent queue management
+- ✅ **NEW**: Circuit breaker pattern for fault tolerance
+- ✅ **NEW**: Background document processing with retry logic
+- ✅ **NEW**: Comprehensive upload validation and metrics
+- ✅ **NEW**: DocumentUploadController with 15+ endpoints
+- ✅ **NEW**: DocumentUploadHub for real-time communication
+
+### v2.0.0 - Collections Management System
+- ✅ **NEW**: Complete user collections management system
+- ✅ **NEW**: Real-time collection updates with SignalR
+- ✅ **NEW**: Smart collection suggestions and analytics
+- ✅ **NEW**: Multi-level caching strategy (L1/L2/L3)
+- ✅ **NEW**: R2R collections synchronization
+- ✅ **NEW**: UserCollectionsController with 12+ endpoints
+- ✅ **NEW**: CollectionHub for real-time communication
+
+### v1.0.0 - Dashboard System
+- ✅ **CORE**: Advanced dashboard with StatCards and Chart.js
+- ✅ **CORE**: Drag-and-drop widget system with SortableJS
+- ✅ **CORE**: JWT authentication with multi-tenant support
+- ✅ **CORE**: PostgreSQL database with Entity Framework
+- ✅ **CORE**: Material Design UI with locked template
 
 ## Quick Start
 1. Prepare a `docker-compose.yml` for PostgreSQL, Redis, and RabbitMQ and note their endpoints.

@@ -10,6 +10,10 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
 
         [Required]
         [MaxLength(255)]
+        public string Name { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(255)]
         public string FileName { get; set; } = string.Empty;
 
         [Required]
@@ -19,6 +23,9 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         [Required]
         [MaxLength(100)]
         public string ContentType { get; set; } = string.Empty;
+
+        [Required]
+        public long Size { get; set; }
 
         [Required]
         public long SizeBytes { get; set; }
@@ -34,15 +41,39 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         public string? Description { get; set; }
 
         [Required]
-        public DocumentStatus Status { get; set; } = DocumentStatus.Uploaded;
+        public int Status { get; set; } = (int)DocumentStatus.Uploaded;
 
         [MaxLength(500)]
         public string? StatusMessage { get; set; }
+
+        // Document Management Features
+        public bool IsFavorite { get; set; } = false;
+        public int ViewCount { get; set; } = 0;
+        public DateTime? LastViewedAt { get; set; }
+        public string Version { get; set; } = "1.0";
+        public bool HasVersions { get; set; } = false;
+        public bool HasThumbnail { get; set; } = false;
+        public bool IsProcessing { get; set; } = false;
+        public double? ProcessingProgress { get; set; }
+        public string? ProcessingError { get; set; }
+
+        // Tags and Metadata
+        [Column(TypeName = "jsonb")]
+        public List<string> Tags { get; set; } = new();
+
+        [Column(TypeName = "jsonb")]
+        public Dictionary<string, object> Metadata { get; set; } = new();
 
         // R2R Integration
         public string? R2RDocumentId { get; set; }
         public string? R2RIngestionJobId { get; set; }
         public DateTime? R2RProcessedAt { get; set; }
+
+        // Collection Association
+        public Guid? CollectionId { get; set; }
+
+        [ForeignKey(nameof(CollectionId))]
+        public Collection? Collection { get; set; }
 
         // Tenant isolation
         [Required]
@@ -52,7 +83,7 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         public Company Company { get; set; } = null!;
 
         [Required]
-        public Guid UserId { get; set; }
+        public string UserId { get; set; } = string.Empty;
 
         [ForeignKey(nameof(UserId))]
         public User User { get; set; } = null!;
