@@ -1,0 +1,119 @@
+@model Hybrid.CleverDocs.WebUI.ViewComponents.ChartModel
+
+@{
+    var chartId = Model.ChartId ?? $"chart-{Guid.NewGuid().ToString("N")[..8]}";
+    var cardColorClass = Model.Color switch
+    {
+        "primary" => "border-primary",
+        "success" => "border-success",
+        "warning" => "border-warning",
+        "danger" => "border-danger",
+        "info" => "border-info",
+        "dark" => "border-dark",
+        _ => "border-primary"
+    };
+
+    var sizeClass = Model.Size switch
+    {
+        "sm" => "chart-sm",
+        "lg" => "chart-lg",
+        "xl" => "chart-xl",
+        _ => "chart-md"
+    };
+
+    var heightStyle = $"height: {Model.Height}px;";
+}
+
+<div class="card chart-card @sizeClass @Model.CssClass" data-chart-id="@chartId">
+    <div class="card-header pb-0">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="mb-0">@Model.Title</h6>
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    <p class="text-sm text-secondary mb-0">@Model.Description</p>
+                }
+            </div>
+            
+            @if (Model.ShowToolbar)
+            {
+                <div class="chart-toolbar">
+                    @if (Model.ShowExport)
+                    {
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                    onclick="exportChart('@chartId', 'png')" 
+                                    title="Export as PNG">
+                                <i class="material-symbols-rounded text-xs">download</i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                    onclick="exportChart('@chartId', 'pdf')" 
+                                    title="Export as PDF">
+                                <i class="material-symbols-rounded text-xs">picture_as_pdf</i>
+                            </button>
+                        </div>
+                    }
+                    
+                    @if (Model.RefreshInterval > 0)
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" 
+                                onclick="refreshChart('@chartId')" 
+                                title="Refresh Chart">
+                            <i class="material-symbols-rounded text-xs">refresh</i>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+    
+    <div class="card-body">
+        <div class="chart-container" style="@heightStyle position: relative;">
+            @if (Model.ShowLoading)
+            {
+                <div class="chart-loading" id="@chartId-loading">
+                    <div class="d-flex justify-content-center align-items-center h-100">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading chart...</span>
+                        </div>
+                    </div>
+                </div>
+            }
+            
+            <div class="chart-error d-none" id="@chartId-error">
+                <div class="d-flex justify-content-center align-items-center h-100 flex-column">
+                    <i class="material-symbols-rounded text-danger mb-2" style="font-size: 2rem;">error</i>
+                    <p class="text-danger mb-0">@(Model.ErrorMessage ?? "Failed to load chart")</p>
+                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="refreshChart('@chartId')">
+                        Try Again
+                    </button>
+                </div>
+            </div>
+            
+            <canvas id="@chartId" 
+                    class="chart-canvas" 
+                    style="display: none;"
+                    aria-label="@(Model.Description ?? Model.Title)"
+                    role="img">
+            </canvas>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeChart('@chartId', {
+                dataUrl: '@Model.DataUrl',
+                type: '@Model.Type',
+                showLegend: @Model.ShowLegend.ToString().ToLower(),
+                enableClick: @Model.EnableClick.ToString().ToLower(),
+                clickHandler: '@Model.ClickHandler',
+                animationDuration: @Model.AnimationDuration,
+                refreshInterval: @Model.RefreshInterval,
+                customOptions: @Html.Raw(Model.CustomOptions ?? "null"),
+                theme: '@Model.Theme'
+            });
+        });
+    </script>
+}

@@ -1,0 +1,232 @@
+@{
+    ViewData["Title"] = "Customizable Dashboard";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid py-4">
+    <!-- Dashboard Controls -->
+    <div class="dashboard-controls">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-0">Dashboard</h4>
+                <p class="text-sm text-secondary mb-0">Customize your dashboard layout</p>
+            </div>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary" id="dashboard-edit-btn">
+                    <i class="material-symbols-rounded me-1">edit</i>
+                    Edit Layout
+                </button>
+                <button type="button" class="btn btn-success d-none" id="dashboard-save-btn">
+                    <i class="material-symbols-rounded me-1">save</i>
+                    Save Changes
+                </button>
+                <button type="button" class="btn btn-outline-secondary d-none" id="dashboard-cancel-btn">
+                    <i class="material-symbols-rounded me-1">close</i>
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-outline-info" id="dashboard-add-widget-btn" data-bs-toggle="modal" data-bs-target="#addWidgetModal">
+                    <i class="material-symbols-rounded me-1">add</i>
+                    Add Widget
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Loading -->
+    <div class="dashboard-loading" id="dashboard-loading">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading dashboard...</span>
+            </div>
+            <p class="mt-2 text-secondary">Loading your dashboard...</p>
+        </div>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="row dashboard-grid" id="dashboard-grid">
+        <!-- Widgets will be dynamically loaded here -->
+    </div>
+
+    <!-- Empty State -->
+    <div class="row d-none" id="dashboard-empty">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="material-symbols-rounded text-secondary mb-3" style="font-size: 4rem;">dashboard</i>
+                    <h5 class="text-secondary">No widgets configured</h5>
+                    <p class="text-secondary mb-4">Start building your dashboard by adding widgets</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addWidgetModal">
+                        <i class="material-symbols-rounded me-1">add</i>
+                        Add Your First Widget
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Widget Modal -->
+<div class="modal fade" id="addWidgetModal" tabindex="-1" aria-labelledby="addWidgetModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addWidgetModalLabel">Add Widget</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row" id="widget-templates">
+                    <!-- Widget templates will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/dashboard-widgets.js"></script>
+    <script>
+        // Dashboard-specific initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load widget templates when modal is opened
+            const addWidgetModal = document.getElementById('addWidgetModal');
+            if (addWidgetModal) {
+                addWidgetModal.addEventListener('show.bs.modal', loadWidgetTemplates);
+            }
+            
+            console.log('Customizable Dashboard initialized');
+        });
+
+        /**
+         * Load available widget templates
+         */
+        async function loadWidgetTemplates() {
+            try {
+                const response = await fetch('/api/widgets/templates', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const templates = await response.json();
+                renderWidgetTemplates(templates);
+                
+            } catch (error) {
+                console.error('Error loading widget templates:', error);
+                document.getElementById('widget-templates').innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-danger">
+                            <i class="material-symbols-rounded me-2">error</i>
+                            Failed to load widget templates
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        /**
+         * Render widget templates in modal
+         */
+        function renderWidgetTemplates(templates) {
+            const container = document.getElementById('widget-templates');
+            if (!container) return;
+
+            const templatesByCategory = templates.reduce((acc, template) => {
+                if (!acc[template.category]) {
+                    acc[template.category] = [];
+                }
+                acc[template.category].push(template);
+                return acc;
+            }, {});
+
+            let html = '';
+            
+            Object.keys(templatesByCategory).forEach(category => {
+                html += `
+                    <div class="col-12 mb-3">
+                        <h6 class="text-uppercase text-xs font-weight-bolder opacity-6">${category}</h6>
+                    </div>
+                `;
+                
+                templatesByCategory[category].forEach(template => {
+                    html += `
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card widget-template-card h-100" style="cursor: pointer;" onclick="addWidget('${template.id}')">
+                                <div class="card-body text-center">
+                                    <div class="icon icon-lg icon-shape bg-gradient-primary shadow text-center border-radius-md mb-3">
+                                        <i class="material-symbols-rounded opacity-10">${template.icon}</i>
+                                    </div>
+                                    <h6 class="mb-1">${template.name}</h6>
+                                    <p class="text-sm text-secondary mb-0">${template.description}</p>
+                                    <small class="text-xs text-secondary">Size: ${template.defaultWidth}x${template.defaultHeight}</small>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+
+            container.innerHTML = html;
+        }
+
+        /**
+         * Add widget to dashboard
+         */
+        function addWidget(templateId) {
+            console.log('Adding widget:', templateId);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addWidgetModal'));
+            if (modal) {
+                modal.hide();
+            }
+            
+            // TODO: Implement widget addition logic
+            // This would create a new widget instance and add it to the dashboard
+            
+            // For now, just show a message
+            alert(`Widget ${templateId} will be added to your dashboard`);
+        }
+
+        /**
+         * Widget template card hover effects
+         */
+        document.addEventListener('mouseover', function(e) {
+            if (e.target.closest('.widget-template-card')) {
+                e.target.closest('.widget-template-card').style.transform = 'translateY(-2px)';
+                e.target.closest('.widget-template-card').style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+            }
+        });
+
+        document.addEventListener('mouseout', function(e) {
+            if (e.target.closest('.widget-template-card')) {
+                e.target.closest('.widget-template-card').style.transform = 'translateY(0)';
+                e.target.closest('.widget-template-card').style.boxShadow = '';
+            }
+        });
+    </script>
+    
+    <style>
+        .widget-template-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .widget-template-card:hover {
+            border-color: #e91e63;
+        }
+        
+        .widget-template-card .icon {
+            margin: 0 auto;
+        }
+    </style>
+}

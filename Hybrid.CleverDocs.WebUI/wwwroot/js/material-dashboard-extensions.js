@@ -351,4 +351,136 @@ window.MaterialDashboardExt = (function() {
 // Auto-initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     MaterialDashboardExt.init();
+    initializeAllStatCards();
 });
+
+// ===== STATCARD COMPONENT FUNCTIONS =====
+
+/**
+ * Initialize a specific StatCard with animations
+ * @param {string} cardId - The ID of the stat card element
+ */
+window.initializeStatCard = function(cardId) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+
+    const counterElement = card.querySelector('.stat-counter');
+    if (!counterElement) return;
+
+    const targetValue = counterElement.closest('[data-stat-value]')?.getAttribute('data-stat-value');
+    const shouldAnimate = counterElement.closest('[data-animate]')?.getAttribute('data-animate') === 'true';
+    const duration = parseInt(counterElement.closest('[data-duration]')?.getAttribute('data-duration')) || 2000;
+
+    if (shouldAnimate && targetValue) {
+        animateCounter(counterElement, targetValue, duration);
+    }
+};
+
+/**
+ * Initialize all StatCards on the page
+ */
+function initializeAllStatCards() {
+    const statCards = document.querySelectorAll('.stat-card');
+    statCards.forEach(card => {
+        if (card.id) {
+            initializeStatCard(card.id);
+        }
+    });
+}
+
+/**
+ * Animate counter from 0 to target value
+ * @param {HTMLElement} element - Counter element
+ * @param {string} targetValue - Target value to animate to
+ * @param {number} duration - Animation duration in milliseconds
+ */
+function animateCounter(element, targetValue, duration) {
+    // Parse target value (handle numbers with commas, decimals, etc.)
+    const cleanTarget = targetValue.replace(/[^\d.-]/g, '');
+    const target = parseFloat(cleanTarget) || 0;
+
+    // Extract non-numeric parts (like currency symbols, units)
+    const prefix = targetValue.match(/^[^\d.-]*/)?.[0] || '';
+    const suffix = targetValue.match(/[^\d.-]*$/)?.[0] || '';
+
+    const startTime = performance.now();
+    const startValue = 0;
+
+    function updateCounter(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Easing function (ease-out)
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        const currentValue = startValue + (target - startValue) * easeOut;
+
+        // Format the number
+        let formattedValue;
+        if (target % 1 === 0) {
+            // Integer
+            formattedValue = Math.round(currentValue).toLocaleString();
+        } else {
+            // Decimal
+            const decimals = (cleanTarget.split('.')[1] || '').length;
+            formattedValue = currentValue.toFixed(decimals);
+        }
+
+        element.textContent = prefix + formattedValue + suffix;
+
+        if (progress < 1) {
+            requestAnimationFrame(updateCounter);
+        }
+    }
+
+    requestAnimationFrame(updateCounter);
+}
+
+/**
+ * Update StatCard value with animation
+ * @param {string} cardId - Card ID
+ * @param {string} newValue - New value to display
+ * @param {boolean} animate - Whether to animate the change
+ */
+window.updateStatCard = function(cardId, newValue, animate = true) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+
+    const counterElement = card.querySelector('.stat-counter');
+    const valueElement = card.querySelector('[data-stat-value]');
+
+    if (valueElement) {
+        valueElement.setAttribute('data-stat-value', newValue);
+    }
+
+    if (counterElement && animate) {
+        const duration = parseInt(valueElement?.getAttribute('data-duration')) || 1000;
+        animateCounter(counterElement, newValue, duration);
+    } else if (counterElement) {
+        counterElement.textContent = newValue;
+    }
+};
+
+/**
+ * Set StatCard loading state
+ * @param {string} cardId - Card ID
+ * @param {boolean} isLoading - Loading state
+ */
+window.setStatCardLoading = function(cardId, isLoading) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+
+    const loadingElement = card.querySelector('.stat-card-loading');
+    const contentElements = card.querySelectorAll('.card-header > div:first-child > *:not(.stat-card-loading)');
+
+    if (isLoading) {
+        if (loadingElement) {
+            loadingElement.style.display = 'flex';
+        }
+        contentElements.forEach(el => el.style.display = 'none');
+    } else {
+        if (loadingElement) {
+            loadingElement.style.display = 'none';
+        }
+        contentElements.forEach(el => el.style.display = '');
+    }
+};

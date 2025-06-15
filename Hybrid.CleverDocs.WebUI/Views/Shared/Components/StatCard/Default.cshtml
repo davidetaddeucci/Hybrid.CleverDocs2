@@ -1,0 +1,124 @@
+@model Hybrid.CleverDocs.WebUI.ViewComponents.StatCardModel
+
+@{
+    var cardColorClass = Model.Color switch
+    {
+        "primary" => "bg-gradient-primary",
+        "success" => "bg-gradient-success", 
+        "warning" => "bg-gradient-warning",
+        "danger" => "bg-gradient-danger",
+        "info" => "bg-gradient-info",
+        "dark" => "bg-gradient-dark",
+        _ => "bg-gradient-primary"
+    };
+
+    var sizeClass = Model.Size switch
+    {
+        "sm" => "stat-card-sm",
+        "lg" => "stat-card-lg", 
+        _ => "stat-card-md"
+    };
+
+    var trendColorClass = Model.TrendDirection switch
+    {
+        "up" => "text-success",
+        "down" => "text-danger",
+        _ => "text-secondary"
+    };
+
+    var trendIcon = Model.TrendDirection switch
+    {
+        "up" => "trending_up",
+        "down" => "trending_down",
+        _ => "trending_flat"
+    };
+
+    var cardId = $"stat-card-{Guid.NewGuid().ToString("N")[..8]}";
+}
+
+<div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+    <div class="card stat-card @sizeClass @Model.CssClass" id="@cardId">
+        <div class="card-header p-2 ps-3">
+            <div class="d-flex justify-content-between">
+                <div>
+                    @if (Model.IsLoading)
+                    {
+                        <div class="stat-card-loading">
+                            <div class="spinner-border spinner-border-sm text-white" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                    {
+                        <p class="text-sm mb-0 text-capitalize text-white opacity-7">Error</p>
+                        <h4 class="font-weight-bolder mb-0 text-white">
+                            <i class="material-symbols-rounded">error</i>
+                        </h4>
+                    }
+                    else
+                    {
+                        <p class="text-sm mb-0 text-capitalize text-white opacity-7">@Model.Title</p>
+                        <h4 class="font-weight-bolder mb-0 text-white" 
+                            data-stat-value="@Model.Value" 
+                            data-animate="@Model.AnimateCounter.ToString().ToLower()"
+                            data-duration="@Model.AnimationDuration">
+                            @if (Model.AnimateCounter)
+                            {
+                                <span class="stat-counter">0</span>
+                            }
+                            else
+                            {
+                                @Model.Value
+                            }
+                        </h4>
+                    }
+                </div>
+                <div class="icon icon-md icon-shape @cardColorClass shadow-primary text-center border-radius-md">
+                    <i class="material-symbols-rounded opacity-10">@Model.Icon</i>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-2 ps-3">
+            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <p class="mb-0 text-sm text-danger">
+                    @Model.ErrorMessage
+                </p>
+            }
+            else if (!string.IsNullOrEmpty(Model.TrendPercentage))
+            {
+                <p class="mb-0 text-sm">
+                    <span class="@trendColorClass font-weight-bolder">
+                        <i class="material-symbols-rounded text-xs">@trendIcon</i>
+                        @Model.TrendPercentage%
+                    </span>
+                    @if (!string.IsNullOrEmpty(Model.TrendDescription))
+                    {
+                        <span class="text-secondary">@Model.TrendDescription</span>
+                    }
+                </p>
+            }
+            else
+            {
+                <p class="mb-0 text-sm text-secondary">
+                    Updated just now
+                </p>
+            }
+        </div>
+        
+        @if (!string.IsNullOrEmpty(Model.ActionUrl))
+        {
+            <a href="@Model.ActionUrl" class="stat-card-overlay"></a>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Initialize stat card animations when document is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeStatCard('@cardId');
+        });
+    </script>
+}

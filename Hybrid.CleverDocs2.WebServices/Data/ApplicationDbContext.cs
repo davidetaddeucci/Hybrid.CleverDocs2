@@ -17,6 +17,10 @@ namespace Hybrid.CleverDocs2.WebServices.Data
         public DbSet<IngestionJob> IngestionJobs { get; set; } = null!;
         public DbSet<AuditLog> AuditLogs { get; set; } = null!;
 
+        // Dashboard widgets
+        public DbSet<UserDashboardWidget> UserDashboardWidgets { get; set; } = null!;
+        public DbSet<WidgetTemplate> WidgetTemplates { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

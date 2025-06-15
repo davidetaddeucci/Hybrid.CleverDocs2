@@ -64,6 +64,30 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
             }
         }
 
+        /// <summary>
+        /// Customizable dashboard with drag-and-drop widgets
+        /// </summary>
+        public async Task<IActionResult> Customizable()
+        {
+            try
+            {
+                var user = GetCurrentUserFromClaims();
+                if (user == null)
+                {
+                    return RedirectToAction("Login", "Auth");
+                }
+
+                // The customizable dashboard loads widgets dynamically via JavaScript
+                // No server-side model needed as widgets are loaded via API calls
+                return View();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading customizable dashboard");
+                return View();
+            }
+        }
+
         private UserInfo? GetCurrentUserFromClaims()
         {
             if (!User.Identity?.IsAuthenticated ?? false)

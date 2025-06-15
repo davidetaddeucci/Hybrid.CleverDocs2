@@ -24,61 +24,125 @@
     </div>
 </div>
 
-<!-- Stats Cards -->
+<!-- Modern Stats Cards -->
 <div class="row mb-4">
-    <div class="col-lg-3 col-md-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #e91e63, #ad1457);">
-            <div class="stats-icon">
-                <i class="fas fa-building"></i>
-            </div>
-            <div class="stats-number">@Model.TotalCompanies</div>
-            <p class="stats-label">Total Companies</p>
-        </div>
+    @await Component.InvokeAsync("StatCard", new Hybrid.CleverDocs.WebUI.ViewComponents.StatCardModel
+    {
+        Title = "Total Companies",
+        Value = Model.TotalCompanies.ToString(),
+        Icon = "business",
+        Color = "primary",
+        TrendPercentage = "+12.5",
+        TrendDescription = "vs last month",
+        TrendDirection = "up",
+        AnimateCounter = true,
+        ActionUrl = Url.Action("Index", "Companies")
+    })
+
+    @await Component.InvokeAsync("StatCard", new Hybrid.CleverDocs.WebUI.ViewComponents.StatCardModel
+    {
+        Title = "Total Users",
+        Value = Model.TotalUsers.ToString(),
+        Icon = "people",
+        Color = "info",
+        TrendPercentage = "+8.2",
+        TrendDescription = "vs last month",
+        TrendDirection = "up",
+        AnimateCounter = true,
+        ActionUrl = Url.Action("Index", "Users")
+    })
+
+    @await Component.InvokeAsync("StatCard", new Hybrid.CleverDocs.WebUI.ViewComponents.StatCardModel
+    {
+        Title = "Total Documents",
+        Value = Model.TotalDocuments.ToString(),
+        Icon = "description",
+        Color = "success",
+        TrendPercentage = "+15.3",
+        TrendDescription = "vs last month",
+        TrendDirection = "up",
+        AnimateCounter = true,
+        ActionUrl = Url.Action("Index", "AdminDocuments")
+    })
+
+    @await Component.InvokeAsync("StatCard", new Hybrid.CleverDocs.WebUI.ViewComponents.StatCardModel
+    {
+        Title = "System Health",
+        Value = Model.SystemHealth?.IsHealthy == true ? "Healthy" : "Issues",
+        Icon = "health_and_safety",
+        Color = Model.SystemHealth?.IsHealthy == true ? "success" : "danger",
+        TrendDescription = "Last checked: " + (Model.SystemHealth?.LastChecked.ToString("HH:mm") ?? "Unknown"),
+        AnimateCounter = false,
+        ActionUrl = Url.Action("SystemHealth", "Admin")
+    })
+</div>
+
+<!-- Charts Section -->
+<div class="row mb-4">
+    <div class="col-lg-8">
+        @await Component.InvokeAsync("Chart", new Hybrid.CleverDocs.WebUI.ViewComponents.ChartModel
+        {
+            Title = "User Growth Trend",
+            Type = "line",
+            DataUrl = Url.Action("GetUserGrowthChart", "Chart"),
+            Height = 350,
+            Color = "primary",
+            ShowExport = true,
+            ShowToolbar = true,
+            Description = "Monthly user registration trends",
+            RefreshInterval = 300, // 5 minutes
+            Size = "lg"
+        })
     </div>
-    
-    <div class="col-lg-3 col-md-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #7b1fa2, #4a148c);">
-            <div class="stats-icon">
-                <i class="fas fa-users"></i>
-            </div>
-            <div class="stats-number">@Model.TotalUsers</div>
-            <p class="stats-label">Total Users</p>
-        </div>
-    </div>
-    
-    <div class="col-lg-3 col-md-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #1976d2, #0d47a1);">
-            <div class="stats-icon">
-                <i class="fas fa-file-alt"></i>
-            </div>
-            <div class="stats-number">@Model.TotalDocuments</div>
-            <p class="stats-label">Total Documents</p>
-        </div>
-    </div>
-    
-    <div class="col-lg-3 col-md-6 mb-3">
-        <div class="stats-card" style="background: linear-gradient(135deg, #388e3c, #1b5e20);">
-            <div class="stats-icon">
-                <i class="fas fa-heartbeat"></i>
-            </div>
-            <div class="stats-number">
-                @if (Model.SystemHealth?.IsHealthy == true)
-                {
-                    <span class="text-success">✓</span>
-                }
-                else
-                {
-                    <span class="text-danger">✗</span>
-                }
-            </div>
-            <p class="stats-label">System Health</p>
-        </div>
+
+    <div class="col-lg-4">
+        @await Component.InvokeAsync("Chart", new Hybrid.CleverDocs.WebUI.ViewComponents.ChartModel
+        {
+            Title = "Document Types",
+            Type = "doughnut",
+            DataUrl = Url.Action("GetDocumentTypesChart", "Chart"),
+            Height = 350,
+            Color = "info",
+            ShowExport = true,
+            Description = "Distribution of document types in the system",
+            Size = "md"
+        })
     </div>
 </div>
 
-<!-- Company Stats -->
+<!-- Additional Charts Row -->
 <div class="row mb-4">
-    <div class="col-lg-8">
+    <div class="col-lg-6">
+        @await Component.InvokeAsync("Chart", new Hybrid.CleverDocs.WebUI.ViewComponents.ChartModel
+        {
+            Title = "Company Activity",
+            Type = "bar",
+            DataUrl = Url.Action("GetCompanyActivityChart", "Chart"),
+            Height = 300,
+            Color = "success",
+            ShowToolbar = true,
+            Description = "Daily activity by companies",
+            Size = "md"
+        })
+    </div>
+
+    <div class="col-lg-6">
+        @await Component.InvokeAsync("Chart", new Hybrid.CleverDocs.WebUI.ViewComponents.ChartModel
+        {
+            Title = "Storage Usage",
+            Type = "pie",
+            DataUrl = Url.Action("GetStorageUsageChart", "Chart"),
+            Height = 300,
+            Color = "warning",
+            Description = "System storage utilization",
+            Size = "md"
+        })
+    </div>
+</div>
+
+<!-- Company Stats Table -->
+<div class="row mb-4">
+    <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">Company Statistics</h5>
@@ -203,40 +267,18 @@
     </div>
 </div>
 
-<style>
-.stats-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 15px;
-    padding: 25px;
-    color: white;
-    text-align: center;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-    transition: transform 0.3s ease;
-    height: 140px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
+@section Scripts {
+    <script>
+        // Dashboard-specific JavaScript
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize any dashboard-specific functionality
+            console.log('Admin Dashboard loaded with modern StatCards');
 
-.stats-card:hover {
-    transform: translateY(-5px);
+            // Example: Refresh stats every 30 seconds
+            setInterval(function() {
+                // You can implement auto-refresh logic here
+                console.log('Stats refresh interval triggered');
+            }, 30000);
+        });
+    </script>
 }
-
-.stats-icon {
-    font-size: 2rem;
-    margin-bottom: 10px;
-    opacity: 0.8;
-}
-
-.stats-number {
-    font-size: 2.5rem;
-    font-weight: bold;
-    margin-bottom: 5px;
-}
-
-.stats-label {
-    font-size: 0.9rem;
-    opacity: 0.9;
-    margin: 0;
-}
-</style>

@@ -472,3 +472,388 @@ body:has(.sidenav.md-ext-collapsed) .md-ext-toggle-btn {
     transition: none;
   }
 }
+
+/* ===== MODERN DASHBOARD COMPONENTS ===== */
+
+/* StatCard Component Styles */
+.stat-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  border: none;
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.14), 0 7px 10px -5px rgba(0, 0, 0, 0.4);
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px 0 rgba(0, 0, 0, 0.18), 0 10px 15px -5px rgba(0, 0, 0, 0.5);
+}
+
+.stat-card .card-header {
+  background: linear-gradient(195deg, #42424a 0%, #191919 100%);
+  border-radius: 0.75rem;
+  margin: 1rem;
+  margin-bottom: 0;
+  position: relative;
+}
+
+.stat-card.stat-card-sm .card-header {
+  margin: 0.5rem;
+  margin-bottom: 0;
+}
+
+.stat-card.stat-card-lg .card-header {
+  margin: 1.5rem;
+  margin-bottom: 0;
+}
+
+/* StatCard Loading Animation */
+.stat-card-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+}
+
+/* StatCard Counter Animation */
+.stat-counter {
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+/* StatCard Overlay for Click Actions */
+.stat-card-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  text-decoration: none;
+}
+
+.stat-card-overlay:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* StatCard Icon Enhancements */
+.stat-card .icon {
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover .icon {
+  transform: scale(1.1);
+}
+
+/* StatCard Responsive Sizes */
+@media (max-width: 576px) {
+  .stat-card {
+    margin-bottom: 1rem;
+  }
+
+  .stat-card .card-header {
+    margin: 0.75rem;
+    margin-bottom: 0;
+  }
+}
+
+/* StatCard Color Variants */
+.stat-card .bg-gradient-primary {
+  background: linear-gradient(195deg, #e91e63 0%, #ad1457 100%);
+}
+
+.stat-card .bg-gradient-success {
+  background: linear-gradient(195deg, #4caf50 0%, #2e7d32 100%);
+}
+
+.stat-card .bg-gradient-warning {
+  background: linear-gradient(195deg, #ff9800 0%, #f57c00 100%);
+}
+
+.stat-card .bg-gradient-danger {
+  background: linear-gradient(195deg, #f44336 0%, #c62828 100%);
+}
+
+.stat-card .bg-gradient-info {
+  background: linear-gradient(195deg, #2196f3 0%, #1565c0 100%);
+}
+
+.stat-card .bg-gradient-dark {
+  background: linear-gradient(195deg, #424242 0%, #212121 100%);
+}
+
+/* ===== CHART COMPONENTS ===== */
+
+/* Chart Card Styles */
+.chart-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.14), 0 7px 10px -5px rgba(0, 0, 0, 0.4);
+}
+
+.chart-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px 0 rgba(0, 0, 0, 0.18), 0 10px 15px -5px rgba(0, 0, 0, 0.5);
+}
+
+/* Chart Container */
+.chart-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-canvas {
+  transition: opacity 0.3s ease;
+}
+
+/* Chart Loading State */
+.chart-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Chart Error State */
+.chart-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 10;
+}
+
+/* Chart Toolbar */
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chart-toolbar .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* Chart Size Variants */
+.chart-sm .chart-container {
+  min-height: 200px;
+}
+
+.chart-md .chart-container {
+  min-height: 300px;
+}
+
+.chart-lg .chart-container {
+  min-height: 400px;
+}
+
+.chart-xl .chart-container {
+  min-height: 500px;
+}
+
+/* Chart Responsive Behavior */
+@media (max-width: 768px) {
+  .chart-card {
+    margin-bottom: 1rem;
+  }
+
+  .chart-toolbar {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+  }
+
+  .chart-sm .chart-container,
+  .chart-md .chart-container {
+    min-height: 250px;
+  }
+
+  .chart-lg .chart-container,
+  .chart-xl .chart-container {
+    min-height: 300px;
+  }
+}
+
+/* ===== DASHBOARD WIDGETS DRAG-AND-DROP ===== */
+
+/* Dashboard Grid */
+.dashboard-grid {
+  min-height: 400px;
+  transition: all 0.3s ease;
+}
+
+.dashboard-grid.edit-mode {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    rgba(0, 0, 0, 0.02) 10px,
+    rgba(0, 0, 0, 0.02) 20px
+  );
+  border: 2px dashed rgba(0, 0, 0, 0.1);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+/* Widget Containers */
+.dashboard-widget {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 1rem;
+}
+
+.dashboard-widget.widget-editable {
+  position: relative;
+  border: 2px dashed transparent;
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+}
+
+.dashboard-widget.widget-editable:hover {
+  border-color: rgba(233, 30, 99, 0.3);
+  background: rgba(233, 30, 99, 0.02);
+}
+
+/* Widget Controls */
+.widget-controls {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  z-index: 1000;
+  display: none;
+  gap: 0.25rem;
+}
+
+.dashboard-widget.widget-editable:hover .widget-controls {
+  display: flex;
+}
+
+.widget-controls .btn {
+  padding: 0.25rem;
+  font-size: 0.75rem;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.widget-drag-handle {
+  cursor: grab;
+}
+
+.widget-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Sortable States */
+.widget-ghost {
+  opacity: 0.5;
+  background: rgba(233, 30, 99, 0.1);
+  border: 2px dashed #e91e63;
+}
+
+.widget-chosen {
+  transform: scale(1.02);
+  box-shadow: 0 8px 25px rgba(233, 30, 99, 0.3);
+  z-index: 999;
+}
+
+.widget-drag {
+  transform: rotate(5deg);
+  opacity: 0.8;
+}
+
+/* Dashboard Controls */
+.dashboard-controls {
+  position: sticky;
+  top: 20px;
+  z-index: 1001;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-controls .btn-group .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+/* Dashboard Loading */
+.dashboard-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-loading .spinner-border {
+  width: 3rem;
+  height: 3rem;
+}
+
+/* Widget Content Adjustments */
+.widget-editable .widget-content {
+  pointer-events: none;
+}
+
+.widget-editable .widget-content .card {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .dashboard-widget.widget-editable {
+    padding: 0.25rem;
+  }
+
+  .widget-controls {
+    top: -5px;
+    right: -5px;
+  }
+
+  .widget-controls .btn {
+    width: 28px;
+    height: 28px;
+    font-size: 0.7rem;
+  }
+
+  .dashboard-controls {
+    position: relative;
+    top: auto;
+  }
+}
+
+/* Animation for widget reordering */
+@keyframes widgetSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dashboard-widget {
+  animation: widgetSlideIn 0.3s ease-out;
+}
