@@ -1,3 +1,4 @@
+@using Hybrid.CleverDocs.WebUI.Helpers
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,12 +17,21 @@
     
     <!-- Custom CSS (Material Dashboard 3 compatible) -->
     <link href="~/css/material-dashboard.css" rel="stylesheet" />
-    
+
+    <!-- Material Dashboard Extensions -->
+    <link href="~/css/material-dashboard-extensions.css" rel="stylesheet" />
+
     @await RenderSectionAsync("Styles", required: false)
 </head>
-<body class="g-sidenav-show bg-gray-100">
+<body class="g-sidenav-show bg-gray-100 role-@Html.GetUserRoleClass()">
     <!-- Sidebar -->
-    <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 bg-white my-2" id="sidenav-main">
+    <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg bg-white md-ext-collapsible" id="sidenav-main">
+
+        <!-- Toggle Button -->
+        <button class="md-ext-toggle-btn" id="sidenavToggle" aria-label="Toggle navigation" aria-expanded="true">
+            <i class="fas fa-chevron-left"></i>
+            <span class="md-ext-sr-only">Toggle sidebar</span>
+        </button>
         <div class="sidenav-header">
             <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-none d-xl-none" aria-hidden="true" id="iconSidenav"></i>
             <a class="navbar-brand px-4 py-3 m-0" href="#">
@@ -37,7 +47,13 @@
             </a>
         </div>
         <hr class="horizontal dark mt-0 mb-2">
-        <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
+
+        <!-- Search -->
+        <div class="md-ext-search-container">
+            <input type="text" class="md-ext-search-input" placeholder="Search menu..." aria-label="Search navigation">
+        </div>
+
+        <div class="navbar-collapse w-auto" id="sidenav-collapse-main">
             @{
                 var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
                 var navigationPartial = userRole switch
@@ -51,6 +67,9 @@
             @await Html.PartialAsync(navigationPartial)
         </div>
     </aside>
+
+    <!-- Overlay for mobile -->
+    <div class="md-ext-overlay" id="sidenavOverlay"></div>
 
     <!-- Main Content -->
     <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg">
@@ -118,7 +137,10 @@
     <!-- Perfect Scrollbar -->
     <script src="https://cdn.jsdelivr.net/npm/perfect-scrollbar@1.5.5/dist/perfect-scrollbar.min.js"></script>
     <script src="~/js/material-dashboard.js"></script>
-    
+
+    <!-- Material Dashboard Extensions -->
+    <script src="~/js/material-dashboard-extensions.js"></script>
+
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

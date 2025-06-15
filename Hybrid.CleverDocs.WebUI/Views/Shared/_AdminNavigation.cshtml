@@ -1,3 +1,4 @@
+@using Hybrid.CleverDocs.WebUI.Helpers
 @{
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
     var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
@@ -14,67 +15,53 @@
     </li>
 
     <!-- System Management -->
-    <li class="nav-item mt-3">
-        <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">System Management</h6>
-    </li>
-
-    <!-- Companies Management -->
-    <li class="nav-item">
-        <a class="nav-link @(currentController == "Companies" ? "active bg-gradient-primary" : "text-dark")" 
-           href="@Url.Action("Index", "Companies")">
-            <i class="material-symbols-rounded opacity-5">business</i>
-            <span class="nav-link-text ms-1">Companies</span>
+    <li class="nav-item md-ext-submenu md-ext-role-admin">
+        <a class="nav-link text-dark" href="#" data-bs-toggle="collapse" data-bs-target="#systemSubmenu" aria-expanded="false" aria-controls="systemSubmenu">
+            <i class="material-symbols-rounded opacity-5">admin_panel_settings</i>
+            <span class="nav-link-text ms-1">System Management</span>
         </a>
-    </li>
-
-    <!-- Users Management -->
-    <li class="nav-item">
-        <a class="nav-link @(currentController == "Users" ? "active bg-gradient-primary" : "text-dark")" 
-           href="@Url.Action("Index", "Users")">
-            <i class="material-symbols-rounded opacity-5">group</i>
-            <span class="nav-link-text ms-1">Users</span>
-        </a>
-    </li>
-
-    <!-- System Settings -->
-    <li class="nav-item">
-        <a class="nav-link @(currentController == "SystemSettings" ? "active bg-gradient-primary" : "text-dark")" 
-           href="@Url.Action("Index", "SystemSettings")">
-            <i class="material-symbols-rounded opacity-5">settings</i>
-            <span class="nav-link-text ms-1">System Settings</span>
-        </a>
-    </li>
-
-    <!-- Audit Logs -->
-    <li class="nav-item">
-        <a class="nav-link @(currentController == "AuditLogs" ? "active bg-gradient-primary" : "text-dark")" 
-           href="@Url.Action("Index", "AuditLogs")">
-            <i class="material-symbols-rounded opacity-5">history</i>
-            <span class="nav-link-text ms-1">Audit Logs</span>
-        </a>
+        <ul class="md-ext-submenu-list collapse" id="systemSubmenu" role="menu">
+            <li class="nav-item">
+                <a class="nav-link text-dark @Html.IsActive("Index", "Companies", "md-ext-active")" href="@Url.Action("Index", "Companies")">
+                    <span class="nav-link-text ms-1">Companies</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark @Html.IsActive("Index", "Users", "md-ext-active")" href="@Url.Action("Index", "Users")">
+                    <span class="nav-link-text ms-1">Users</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark @Html.IsActive("Index", "SystemSettings", "md-ext-active")" href="@Url.Action("Index", "SystemSettings")">
+                    <span class="nav-link-text ms-1">System Settings</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark @Html.IsActive("Index", "AuditLogs", "md-ext-active")" href="@Url.Action("Index", "AuditLogs")">
+                    <span class="nav-link-text ms-1">Audit Logs</span>
+                </a>
+            </li>
+        </ul>
     </li>
 
     <!-- Content Management -->
-    <li class="nav-item mt-3">
-        <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">Content Overview</h6>
-    </li>
-
-    <!-- All Documents -->
-    <li class="nav-item">
-        <a class="nav-link @(currentController == "AdminDocuments" ? "active bg-gradient-primary" : "text-dark")" 
-           href="@Url.Action("Index", "AdminDocuments")">
+    <li class="nav-item md-ext-submenu md-ext-role-company">
+        <a class="nav-link text-dark" href="#" data-bs-toggle="collapse" data-bs-target="#contentSubmenu" aria-expanded="false" aria-controls="contentSubmenu">
             <i class="material-symbols-rounded opacity-5">description</i>
-            <span class="nav-link-text ms-1">All Documents</span>
+            <span class="nav-link-text ms-1">Content Management</span>
         </a>
-    </li>
-
-    <!-- All Collections -->
-    <li class="nav-item">
-        <a class="nav-link @(currentController == "AdminCollections" ? "active bg-gradient-primary" : "text-dark")" 
-           href="@Url.Action("Index", "AdminCollections")">
-            <i class="material-symbols-rounded opacity-5">folder</i>
-            <span class="nav-link-text ms-1">All Collections</span>
-        </a>
+        <ul class="md-ext-submenu-list collapse" id="contentSubmenu" role="menu">
+            <li class="nav-item">
+                <a class="nav-link text-dark @Html.IsActive("Index", "AdminDocuments", "md-ext-active")" href="@Url.Action("Index", "AdminDocuments")">
+                    <span class="nav-link-text ms-1">All Documents</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark @Html.IsActive("Index", "AdminCollections", "md-ext-active")" href="@Url.Action("Index", "AdminCollections")">
+                    <span class="nav-link-text ms-1">All Collections</span>
+                </a>
+            </li>
+        </ul>
     </li>
 
     <!-- Account -->

@@ -1,0 +1,474 @@
+/**
+ * Material Dashboard Extensions for Hybrid.CleverDocs2
+ * Extends Creative Tim Material Dashboard without conflicts
+ * Version: 1.0.0
+ */
+
+/* ===== NAMESPACE: md-ext- ===== */
+
+/* Body and HTML base fixes */
+body.g-sidenav-show {
+  overflow-x: hidden !important;
+}
+
+html, body {
+  height: 100% !important;
+}
+
+/* DEFINITIVE SIDEBAR FIX - Override Creative Tim completely */
+.sidenav.navbar.navbar-vertical,
+.sidenav.navbar.navbar-vertical.navbar-expand-xs,
+aside.sidenav.navbar.navbar-vertical.navbar-expand-xs {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  height: 100vh !important;
+  z-index: 1040 !important;
+  width: 250px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: linear-gradient(195deg, #ffffff 0%, #f8f9fa 100%) !important;
+  box-shadow: 0 0 2rem 0 rgba(136, 152, 170, 0.15) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important; /* CRITICAL: Start from top */
+  align-items: stretch !important;
+  overflow-y: auto !important;
+}
+
+/* CRITICAL: Header must not take excessive space */
+.sidenav .sidenav-header {
+  padding: 0.75rem 1rem 0.5rem 1rem !important;
+  margin: 0 !important;
+  min-height: auto !important;
+  max-height: 80px !important; /* Limit header height */
+  flex: 0 0 auto !important; /* Don't grow */
+  order: -1 !important; /* First in flex order */
+}
+
+.sidenav .sidenav-header .navbar-brand {
+  padding: 0.25rem 0 !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+  color: #344767 !important; /* Testo brand scuro */
+}
+
+.sidenav .sidenav-header .navbar-brand span {
+  color: #344767 !important; /* Nome azienda scuro */
+}
+
+/* CRITICAL: Horizontal line must not add excessive space */
+.sidenav hr.horizontal {
+  margin: 0.25rem 0 !important;
+  flex: 0 0 auto !important; /* Don't grow */
+}
+
+/* DEFINITIVE FIX: Force navbar-collapse to top position */
+.sidenav .navbar-collapse,
+.sidenav #sidenav-collapse-main {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  flex: 0 0 auto !important; /* Don't grow, don't shrink, auto basis */
+  order: 1 !important; /* Ensure it comes after header */
+  position: relative !important;
+  top: 0 !important;
+}
+
+/* DEFINITIVE FIX: Force navbar-nav to start immediately */
+.sidenav .navbar-nav {
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  list-style: none !important;
+  flex: 0 0 auto !important; /* Don't grow or shrink */
+  justify-content: flex-start !important; /* Start at top */
+  align-items: stretch !important;
+  position: relative !important;
+  top: 0 !important;
+}
+
+/* Main Content Adjustment - Override Creative Tim */
+.main-content.position-relative,
+main.main-content.position-relative {
+  margin-left: 250px !important;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidenav.md-ext-collapsed ~ .main-content,
+.sidenav.md-ext-collapsed ~ main.main-content {
+  margin-left: 60px !important;
+}
+
+/* Collapsible Sidebar Extension */
+.sidenav.md-ext-collapsible {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.sidenav.md-ext-collapsible.md-ext-collapsed {
+  width: 60px !important; /* Override Creative Tim width */
+}
+
+.sidenav.md-ext-collapsible.md-ext-collapsed .navbar-nav .nav-link-text {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.sidenav.md-ext-collapsible.md-ext-collapsed .sidenav-header .navbar-brand-img + span {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Multi-level Menu Extension */
+.navbar-nav .nav-item.md-ext-submenu {
+  position: relative;
+}
+
+.navbar-nav .nav-item.md-ext-submenu > .nav-link::after {
+  content: '\f107'; /* FontAwesome chevron-down */
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  position: absolute;
+  right: 1rem;
+  transition: transform 0.2s ease;
+}
+
+.navbar-nav .nav-item.md-ext-submenu.md-ext-expanded > .nav-link::after {
+  transform: rotate(180deg);
+}
+
+.navbar-nav .md-ext-submenu-list {
+  max-height: 0 !important;
+  overflow: hidden !important;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.navbar-nav .md-ext-submenu-list.show,
+.navbar-nav .md-ext-submenu-list.collapse.show {
+  max-height: 300px !important;
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+.navbar-nav .md-ext-submenu.md-ext-expanded .md-ext-submenu-list {
+  max-height: 300px !important;
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+.md-ext-submenu-list .nav-item {
+  padding-left: 2rem;
+}
+
+.md-ext-submenu-list .nav-link {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+.md-ext-submenu-list .nav-link:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Role-based Visibility - Enhanced */
+.md-ext-role-admin { display: none !important; }
+.md-ext-role-company { display: none !important; }
+.md-ext-role-user { display: none !important; }
+
+/* Show based on body class (set by server-side) */
+body.role-admin .md-ext-role-admin,
+body.role-admin .md-ext-role-company,
+body.role-admin .md-ext-role-user { display: block !important; }
+
+body.role-company .md-ext-role-company,
+body.role-company .md-ext-role-user { display: block !important; }
+
+body.role-user .md-ext-role-user { display: block !important; }
+
+/* Fallback - Show all for admin role 1 */
+body.role-1 .md-ext-role-admin,
+body.role-1 .md-ext-role-company,
+body.role-1 .md-ext-role-user { display: block !important; }
+
+/* Role-based visibility - Clean implementation */
+.md-ext-role-admin,
+.md-ext-role-company,
+.md-ext-role-user {
+  display: block !important;
+}
+
+/* Clean Menu Items Layout */
+.sidenav .navbar-nav .nav-item {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.sidenav .navbar-nav .nav-item .nav-link {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin: 0;
+  color: #344767 !important; /* Testo scuro per sfondo chiaro */
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.sidenav .navbar-nav .nav-item .nav-link:hover {
+  background-color: rgba(52, 71, 103, 0.1) !important; /* Hover grigio chiaro */
+  color: #344767 !important; /* Mantieni testo scuro */
+}
+
+/* Menu Icons and Text Styling - Dark for Light Background */
+.sidenav .navbar-nav .nav-item .nav-link i {
+  margin-right: 0.5rem;
+  font-size: 1rem;
+  opacity: 0.7 !important;
+  color: #344767 !important; /* Icone scure */
+}
+
+.sidenav .navbar-nav .nav-item .nav-link span {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: #344767 !important; /* Testo scuro */
+}
+
+/* Active Menu Item - Dark on Light */
+.sidenav .navbar-nav .nav-item.active .nav-link {
+  background-color: rgba(52, 71, 103, 0.15) !important; /* Sfondo grigio chiaro */
+  color: #344767 !important; /* Testo scuro */
+  font-weight: 600;
+}
+
+/* Submenu Styling */
+.sidenav .navbar-nav .nav-item .collapse .nav-item .nav-link {
+  padding-left: 2.5rem;
+  font-size: 0.8125rem;
+}
+
+/* CRITICAL OVERRIDE: Prevent Creative Tim from pushing menu down */
+.sidenav .navbar-nav,
+.sidenav .navbar-collapse .navbar-nav,
+.sidenav #sidenav-collapse-main .navbar-nav {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  position: static !important;
+  transform: none !important;
+  top: 0 !important;
+  bottom: auto !important;
+  justify-content: flex-start !important;
+  align-content: flex-start !important;
+  align-items: flex-start !important;
+}
+
+/* CRITICAL: Override any Creative Tim flexbox that pushes content down */
+.sidenav .navbar-collapse,
+.sidenav #sidenav-collapse-main {
+  justify-content: flex-start !important;
+  align-content: flex-start !important;
+  align-items: flex-start !important;
+  flex-grow: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* Toggle Button Enhancement - Fixed Position */
+.md-ext-toggle-btn {
+  position: fixed !important;
+  top: 20px !important;
+  left: 260px !important;
+  width: 40px;
+  height: 40px;
+  background: #e91e63;
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  z-index: 1051 !important;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(233, 30, 99, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.md-ext-toggle-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(233, 30, 99, 0.4);
+  background: #d81b60;
+}
+
+.sidenav.md-ext-collapsed ~ * .md-ext-toggle-btn,
+body:has(.sidenav.md-ext-collapsed) .md-ext-toggle-btn {
+  left: 80px !important;
+}
+
+.md-ext-toggle-btn i {
+  transition: transform 0.3s ease;
+}
+
+.sidenav.md-ext-collapsed .md-ext-toggle-btn i {
+  transform: rotate(180deg);
+}
+
+/* CRITICAL: Search container must not push menu down */
+.md-ext-search-container {
+  padding: 0.5rem 1rem !important;
+  border-bottom: 1px solid rgba(52, 71, 103, 0.1) !important; /* Bordo scuro per sfondo chiaro */
+  flex: 0 0 auto !important; /* Don't grow */
+  order: 0 !important; /* Before navbar-collapse */
+  margin: 0 !important;
+  min-height: auto !important;
+  max-height: 60px !important; /* Limit height */
+}
+
+.md-ext-search-input {
+  width: 100%;
+  background: rgba(52, 71, 103, 0.05) !important; /* Sfondo grigio molto chiaro */
+  border: 1px solid rgba(52, 71, 103, 0.2) !important;
+  border-radius: 0.375rem;
+  color: #344767 !important; /* Testo scuro */
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.md-ext-search-input::placeholder {
+  color: rgba(52, 71, 103, 0.6) !important; /* Placeholder scuro */
+}
+
+.md-ext-search-input:focus {
+  outline: none;
+  border-color: var(--bs-primary, #e91e63);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.sidenav.md-ext-collapsed .md-ext-search-container {
+  padding: 0.5rem;
+}
+
+.sidenav.md-ext-collapsed .md-ext-search-input {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  padding: 0;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* Active State Enhancement */
+.navbar-nav .nav-item .nav-link.md-ext-active {
+  background: linear-gradient(135deg, 
+    var(--bs-primary, #e91e63) 0%, 
+    rgba(233, 30, 99, 0.8) 100%);
+  box-shadow: 0 4px 20px 0 rgba(233, 30, 99, 0.3);
+  position: relative;
+}
+
+.navbar-nav .nav-item .nav-link.md-ext-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: white;
+  border-radius: 0 4px 4px 0;
+}
+
+/* Mobile Responsive Enhancements */
+@media (max-width: 1199.98px) {
+  .sidenav.md-ext-collapsible {
+    transform: translateX(-100%);
+    position: fixed;
+    z-index: 1050;
+  }
+  
+  .sidenav.md-ext-collapsible.md-ext-show {
+    transform: translateX(0);
+  }
+  
+  .md-ext-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .md-ext-overlay.md-ext-show {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* Performance Optimizations */
+.sidenav.md-ext-collapsible * {
+  will-change: auto;
+}
+
+.sidenav.md-ext-collapsible.md-ext-animating * {
+  will-change: transform, opacity;
+}
+
+/* Accessibility Enhancements */
+.md-ext-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Focus States */
+.navbar-nav .nav-link:focus,
+.md-ext-toggle-btn:focus,
+.md-ext-search-input:focus {
+  outline: 2px solid var(--bs-primary, #e91e63);
+  outline-offset: 2px;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .navbar-nav .nav-link.md-ext-active {
+    border: 2px solid white;
+  }
+  
+  .md-ext-submenu-list .nav-link {
+    border-left: 2px solid rgba(255, 255, 255, 0.5);
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .sidenav.md-ext-collapsible,
+  .md-ext-submenu-list,
+  .md-ext-toggle-btn,
+  .navbar-nav .nav-item.md-ext-submenu > .nav-link::after {
+    transition: none;
+  }
+}
