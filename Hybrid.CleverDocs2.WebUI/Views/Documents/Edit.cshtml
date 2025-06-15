@@ -1,0 +1,329 @@
+@model DocumentEditViewModel
+@{
+    ViewData["Title"] = $"Edit {Model.Name}";
+    ViewData["PageTitle"] = $"Edit Document";
+    ViewData["Breadcrumb"] = new List<(string Text, string? Url)>
+    {
+        ("Dashboard", Url.Action("Index", "Home")),
+        ("Documents", Url.Action("Index", "Documents")),
+        (Model.Name, Url.Action("Details", new { documentId = Model.Id })),
+        ("Edit", null)
+    };
+}
+
+<div class="document-edit-page">
+    <div class="page-header">
+        <div class="header-content">
+            <h1 class="page-title">
+                <i class="icon-edit"></i>
+                Edit Document
+            </h1>
+            <p class="page-description">Update document information and metadata</p>
+        </div>
+        
+        <div class="header-actions">
+            <a href="@Url.Action("Details", new { documentId = Model.Id })" class="btn btn-outline">
+                <i class="icon-arrow-left"></i>
+                Back to Document
+            </a>
+        </div>
+    </div>
+
+    <div class="edit-content">
+        <form method="post" class="document-edit-form" novalidate>
+            @Html.AntiForgeryToken()
+            @Html.HiddenFor(m => m.Id)
+
+            <div class="form-sections">
+                <!-- Basic Information Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="icon-info"></i>
+                        Basic Information
+                    </h3>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label asp-for="Name" class="form-label required">Document Name</label>
+                            <input asp-for="Name" class="form-control" placeholder="Enter document name" />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                            <div class="form-help">The display name for this document</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label asp-for="CollectionId" class="form-label">Collection</label>
+                            <select asp-for="CollectionId" class="form-select" asp-items="Model.AvailableCollections">
+                                <option value="">Select a collection</option>
+                            </select>
+                            <span asp-validation-for="CollectionId" class="text-danger"></span>
+                            <div class="form-help">Organize this document in a collection</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="Description" class="form-label">Description</label>
+                        <textarea asp-for="Description" class="form-control" rows="3" 
+                                  placeholder="Enter a description for this document (optional)"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                        <div class="form-help">Optional description to help identify and categorize this document</div>
+                    </div>
+                </div>
+
+                <!-- Tags Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="icon-tag"></i>
+                        Tags
+                    </h3>
+                    
+                    <div class="form-group">
+                        <label asp-for="TagsInput" class="form-label">Tags</label>
+                        <input asp-for="TagsInput" class="form-control" 
+                               placeholder="Enter tags separated by commas (e.g., important, work, project)" 
+                               data-suggestions='@Html.Raw(Json.Serialize(Model.SuggestedTags))' />
+                        <span asp-validation-for="TagsInput" class="text-danger"></span>
+                        <div class="form-help">Add tags to help categorize and find this document. Separate multiple tags with commas.</div>
+                        
+                        @if (Model.SuggestedTags.Any())
+                        {
+                            <div class="suggested-tags">
+                                <label class="suggestions-label">Suggested tags:</label>
+                                <div class="tag-suggestions">
+                                    @foreach (var tag in Model.SuggestedTags)
+                                    {
+                                        <button type="button" class="tag-suggestion" onclick="addTag('@tag')">
+                                            @tag
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        
+                        <div class="current-tags" id="currentTags" style="display: none;">
+                            <label class="tags-label">Current tags:</label>
+                            <div class="tags-display" id="tagsDisplay"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preferences Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="icon-settings"></i>
+                        Preferences
+                    </h3>
+                    
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input asp-for="IsFavorite" class="form-check-input" type="checkbox" />
+                            <label asp-for="IsFavorite" class="form-check-label">
+                                <i class="icon-star"></i>
+                                Mark as favorite
+                            </label>
+                            <div class="form-help">Favorite documents appear in your favorites list for quick access</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    <i class="icon-save"></i>
+                    Save Changes
+                </button>
+                
+                <a href="@Url.Action("Details", new { documentId = Model.Id })" class="btn btn-outline">
+                    <i class="icon-x"></i>
+                    Cancel
+                </a>
+                
+                <button type="button" class="btn btn-outline" onclick="resetForm()">
+                    <i class="icon-refresh-cw"></i>
+                    Reset
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeTagsInput();
+            initializeFormValidation();
+        });
+
+        function initializeTagsInput() {
+            const tagsInput = document.querySelector('input[name="TagsInput"]');
+            const currentTagsDiv = document.getElementById('currentTags');
+            const tagsDisplay = document.getElementById('tagsDisplay');
+
+            function updateTagsDisplay() {
+                const tags = tagsInput.value.split(',')
+                    .map(tag => tag.trim())
+                    .filter(tag => tag.length > 0);
+
+                if (tags.length > 0) {
+                    currentTagsDiv.style.display = 'block';
+                    tagsDisplay.innerHTML = tags.map(tag => 
+                        `<span class="tag">
+                            ${tag}
+                            <button type="button" class="tag-remove" onclick="removeTag('${tag}')">
+                                <i class="icon-x"></i>
+                            </button>
+                        </span>`
+                    ).join('');
+                } else {
+                    currentTagsDiv.style.display = 'none';
+                }
+            }
+
+            tagsInput.addEventListener('input', updateTagsDisplay);
+            updateTagsDisplay(); // Initial display
+
+            // Add autocomplete functionality
+            const suggestedTags = JSON.parse(tagsInput.dataset.suggestions || '[]');
+            if (suggestedTags.length > 0) {
+                // Simple autocomplete implementation
+                tagsInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Tab' && this.value.length > 0) {
+                        const currentValue = this.value.split(',').pop().trim();
+                        const match = suggestedTags.find(tag => 
+                            tag.toLowerCase().startsWith(currentValue.toLowerCase())
+                        );
+                        
+                        if (match && currentValue.length > 0) {
+                            e.preventDefault();
+                            const values = this.value.split(',');
+                            values[values.length - 1] = ' ' + match;
+                            this.value = values.join(',') + ', ';
+                            updateTagsDisplay();
+                        }
+                    }
+                });
+            }
+        }
+
+        function addTag(tag) {
+            const tagsInput = document.querySelector('input[name="TagsInput"]');
+            const currentTags = tagsInput.value.split(',')
+                .map(t => t.trim())
+                .filter(t => t.length > 0);
+
+            if (!currentTags.includes(tag)) {
+                currentTags.push(tag);
+                tagsInput.value = currentTags.join(', ');
+                tagsInput.dispatchEvent(new Event('input'));
+            }
+        }
+
+        function removeTag(tagToRemove) {
+            const tagsInput = document.querySelector('input[name="TagsInput"]');
+            const currentTags = tagsInput.value.split(',')
+                .map(t => t.trim())
+                .filter(t => t.length > 0 && t !== tagToRemove);
+
+            tagsInput.value = currentTags.join(', ');
+            tagsInput.dispatchEvent(new Event('input'));
+        }
+
+        function resetForm() {
+            if (confirm('Are you sure you want to reset all changes?')) {
+                document.querySelector('.document-edit-form').reset();
+                document.getElementById('currentTags').style.display = 'none';
+            }
+        }
+
+        function initializeFormValidation() {
+            const form = document.querySelector('.document-edit-form');
+            const nameInput = document.querySelector('input[name="Name"]');
+
+            form.addEventListener('submit', function(e) {
+                let isValid = true;
+
+                // Validate name
+                if (!nameInput.value.trim()) {
+                    showFieldError(nameInput, 'Document name is required');
+                    isValid = false;
+                } else {
+                    clearFieldError(nameInput);
+                }
+
+                if (!isValid) {
+                    e.preventDefault();
+                    showNotification('Please fix the errors below', 'error');
+                }
+            });
+
+            // Real-time validation
+            nameInput.addEventListener('blur', function() {
+                if (!this.value.trim()) {
+                    showFieldError(this, 'Document name is required');
+                } else {
+                    clearFieldError(this);
+                }
+            });
+        }
+
+        function showFieldError(field, message) {
+            clearFieldError(field);
+            field.classList.add('is-invalid');
+            
+            const errorSpan = field.parentNode.querySelector('.text-danger');
+            if (errorSpan) {
+                errorSpan.textContent = message;
+            }
+        }
+
+        function clearFieldError(field) {
+            field.classList.remove('is-invalid');
+            
+            const errorSpan = field.parentNode.querySelector('.text-danger');
+            if (errorSpan) {
+                errorSpan.textContent = '';
+            }
+        }
+
+        function showNotification(message, type) {
+            // Simple notification implementation
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <i class="icon-${type === 'error' ? 'alert-circle' : 'check-circle'}"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+            
+            // Allow manual close
+            notification.addEventListener('click', () => {
+                notification.remove();
+            });
+        }
+
+        // Auto-save functionality (optional)
+        let autoSaveTimeout;
+        function scheduleAutoSave() {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(() => {
+                // Implement auto-save logic here
+                console.log('Auto-save would happen here');
+            }, 30000); // Auto-save after 30 seconds of inactivity
+        }
+
+        // Listen for form changes to trigger auto-save
+        document.querySelector('.document-edit-form').addEventListener('input', scheduleAutoSave);
+    </script>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/document-edit.css" />
+}

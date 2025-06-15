@@ -1,4 +1,5 @@
 using Hybrid.CleverDocs.WebUI.Services;
+using Hybrid.CleverDocs.WebUI.Services.Documents;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +66,24 @@ builder.Services.AddHttpClient<IAuthService, AuthService>(client =>
         handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
     }
     // Optimize connection pooling
+    handler.MaxConnectionsPerServer = 10;
+    return handler;
+});
+
+// Add Document API Client
+builder.Services.AddHttpClient<IDocumentApiClient, DocumentApiClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7219");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "Hybrid.CleverDocs.WebUI/1.0");
+    client.Timeout = TimeSpan.FromSeconds(60);
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new HttpClientHandler();
+    if (builder.Environment.IsDevelopment())
+    {
+        handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
+    }
     handler.MaxConnectionsPerServer = 10;
     return handler;
 });
