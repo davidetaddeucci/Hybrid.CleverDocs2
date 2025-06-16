@@ -1,8 +1,14 @@
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.SignalR;
 using Hybrid.CleverDocs2.WebServices.Models.Documents;
 using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Services.Queue;
+using Hybrid.CleverDocs2.WebServices.Data;
+using Hybrid.CleverDocs2.WebServices.Data.Entities;
+using Hybrid.CleverDocs2.WebServices.Hubs;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Documents;
@@ -17,6 +23,8 @@ public class DocumentProcessingService : IDocumentProcessingService
     private readonly ILogger<DocumentProcessingService> _logger;
     private readonly ICorrelationService _correlationService;
     private readonly DocumentProcessingOptions _options;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly IHubContext<DocumentUploadHub> _hubContext;
 
     // Thread-safe queue management
     private readonly ConcurrentQueue<R2RProcessingQueueItemDto> _processingQueue = new();
@@ -37,13 +45,17 @@ public class DocumentProcessingService : IDocumentProcessingService
         IMultiLevelCacheService cacheService,
         ILogger<DocumentProcessingService> logger,
         ICorrelationService correlationService,
-        IOptions<DocumentProcessingOptions> options)
+        IOptions<DocumentProcessingOptions> options,
+        IServiceScopeFactory serviceScopeFactory,
+        IHubContext<DocumentUploadHub> hubContext)
     {
         _rateLimitingService = rateLimitingService;
         _cacheService = cacheService;
         _logger = logger;
         _correlationService = correlationService;
         _options = options.Value;
+        _serviceScopeFactory = serviceScopeFactory;
+        _hubContext = hubContext;
 
         _processingLimiter = new SemaphoreSlim(_options.MaxConcurrentProcessing, _options.MaxConcurrentProcessing);
     }
@@ -65,12 +77,15 @@ public class DocumentProcessingService : IDocumentProcessingService
             _processingQueue.Enqueue(queueItem);
 
             // Cache for persistence
-            await _cacheService.SetAsync($"r2r:queue:{queueItem.Id}", queueItem, 
-                new CacheOptions 
-                { 
+            await _cacheService.SetAsync($"r2r:queue:{queueItem.Id}", queueItem,
+                new CacheOptions
+                {
                     L2TTL = TimeSpan.FromHours(24),
-                    UseL3Cache = true 
+                    UseL3Cache = true
                 });
+
+            // Broadcast queued status via SignalR
+            await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
 
             _logger.LogInformation("Document queued successfully: {DocumentId}, Queue position: {QueueSize}, CorrelationId: {CorrelationId}", 
                 queueItem.DocumentId, _processingQueue.Count, correlationId);
@@ -123,6 +138,9 @@ public class DocumentProcessingService : IDocumentProcessingService
             queueItem.StartedAt = DateTime.UtcNow;
             _activeProcessing[queueItem.Id] = queueItem;
 
+            // Broadcast processing status via SignalR
+            await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+
             // Process with R2R API
             var success = await ProcessWithR2RAsync(queueItem);
 
@@ -132,7 +150,13 @@ public class DocumentProcessingService : IDocumentProcessingService
                 queueItem.CompletedAt = DateTime.UtcNow;
                 _consecutiveFailures = 0;
 
-                _logger.LogInformation("R2R processing completed successfully for document: {DocumentId}, R2RDocumentId: {R2RDocumentId}, CorrelationId: {CorrelationId}", 
+                // Save document to database
+                await SaveDocumentToDatabaseAsync(queueItem);
+
+                // Broadcast completion status via SignalR
+                await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+
+                _logger.LogInformation("R2R processing completed successfully for document: {DocumentId}, R2RDocumentId: {R2RDocumentId}, CorrelationId: {CorrelationId}",
                     queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
             }
             else
@@ -422,6 +446,9 @@ public class DocumentProcessingService : IDocumentProcessingService
         _consecutiveFailures++;
         _lastR2RFailure = DateTime.UtcNow;
 
+        // Broadcast failure status via SignalR
+        await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+
         // Check if we should open circuit breaker
         if (_consecutiveFailures >= _options.CircuitBreakerThreshold)
         {
@@ -436,7 +463,10 @@ public class DocumentProcessingService : IDocumentProcessingService
             queueItem.NextRetryAt = DateTime.UtcNow.Add(delay);
             queueItem.Status = R2RProcessingStatusDto.Retrying;
 
-            _logger.LogInformation("Scheduling retry {RetryCount}/{MaxRetries} for document {DocumentId} in {Delay}", 
+            // Broadcast retry status via SignalR
+            await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+
+            _logger.LogInformation("Scheduling retry {RetryCount}/{MaxRetries} for document {DocumentId} in {Delay}",
                 queueItem.RetryCount, queueItem.MaxRetries, queueItem.DocumentId, delay);
 
             // Re-queue for retry
@@ -446,8 +476,11 @@ public class DocumentProcessingService : IDocumentProcessingService
         {
             // Max retries reached, move to failed items
             _failedItems[queueItem.Id] = queueItem;
-            
-            _logger.LogError("Document processing failed permanently after {MaxRetries} retries: {DocumentId}, Error: {ErrorMessage}", 
+
+            // Broadcast final failure status via SignalR
+            await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+
+            _logger.LogError("Document processing failed permanently after {MaxRetries} retries: {DocumentId}, Error: {ErrorMessage}",
                 queueItem.MaxRetries, queueItem.DocumentId, errorMessage);
         }
     }
@@ -475,8 +508,112 @@ public class DocumentProcessingService : IDocumentProcessingService
         var baseDelay = TimeSpan.FromSeconds(_options.BaseRetryDelaySeconds);
         var exponentialDelay = TimeSpan.FromMilliseconds(baseDelay.TotalMilliseconds * Math.Pow(2, retryCount - 1));
         var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000));
-        
+
         return exponentialDelay.Add(jitter);
+    }
+
+    private async Task SaveDocumentToDatabaseAsync(R2RProcessingQueueItemDto queueItem)
+    {
+        using var scope = _serviceScopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        try
+        {
+            var correlationId = _correlationService.GetCorrelationId();
+
+            _logger.LogInformation("Saving document to database: {DocumentId}, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, correlationId);
+
+            // Check if document already exists
+            var existingDocument = await context.Documents
+                .FirstOrDefaultAsync(d => d.Id == queueItem.DocumentId);
+
+            if (existingDocument != null)
+            {
+                // Update existing document with R2R information
+                existingDocument.R2RDocumentId = queueItem.R2RDocumentId;
+                existingDocument.R2RProcessedAt = DateTime.UtcNow;
+                existingDocument.Status = (int)Data.Entities.DocumentStatus.Processed;
+                existingDocument.UpdatedAt = DateTime.UtcNow;
+
+                _logger.LogInformation("Updated existing document {DocumentId} with R2R data, CorrelationId: {CorrelationId}",
+                    queueItem.DocumentId, correlationId);
+            }
+            else
+            {
+                // Create new document record
+                // Try to parse UserId as Guid, if it fails, log the value and use a default
+                Guid userGuid;
+                if (!Guid.TryParse(queueItem.UserId, out userGuid))
+                {
+                    _logger.LogError("Invalid UserId format: '{UserId}', using empty Guid, CorrelationId: {CorrelationId}",
+                        queueItem.UserId, correlationId);
+                    userGuid = Guid.Empty;
+                }
+
+                // Get user's company ID from database using scoped context
+                User? user;
+                using (var userScope = _serviceScopeFactory.CreateScope())
+                {
+                    var userContext = userScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    user = await userContext.Users.FirstOrDefaultAsync(u => u.Id == userGuid);
+                }
+
+                if (user == null)
+                {
+                    _logger.LogError("User {UserId} not found in database, CorrelationId: {CorrelationId}",
+                        queueItem.UserId, correlationId);
+                    return;
+                }
+
+                var document = new Document
+                {
+                    Id = queueItem.DocumentId,
+                    Name = queueItem.FileName,
+                    FileName = queueItem.FileName,
+                    OriginalFileName = queueItem.FileName,
+                    SizeBytes = queueItem.FileSize,
+                    Size = queueItem.FileSize,
+                    ContentType = queueItem.ContentType,
+                    Status = (int)Data.Entities.DocumentStatus.Processed,
+                    R2RDocumentId = queueItem.R2RDocumentId,
+                    R2RProcessedAt = DateTime.UtcNow,
+                    UserId = userGuid,
+                    CompanyId = user.CompanyId, // Use user's actual company ID
+                    CollectionId = queueItem.CollectionId,
+                    FilePath = string.Empty,
+                    Tags = new List<string>(), // Empty list instead of dictionary
+                    Metadata = new Dictionary<string, object>(), // This will be handled by EF Core
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                context.Documents.Add(document);
+
+                _logger.LogInformation("Created new document record {DocumentId}, CorrelationId: {CorrelationId}",
+                    queueItem.DocumentId, correlationId);
+            }
+
+            // Save changes to database
+            await context.SaveChangesAsync();
+
+            // Invalidate document cache patterns to ensure fresh data is loaded
+            await _cacheService.InvalidateAsync($"cleverdocs2:*:documents:search:*");
+            await _cacheService.InvalidateAsync($"cleverdocs2:*:user:documents:{queueItem.UserId}");
+            if (queueItem.CollectionId.HasValue)
+            {
+                await _cacheService.InvalidateAsync($"cleverdocs2:*:collection:documents:{queueItem.CollectionId}");
+            }
+
+            _logger.LogInformation("Document {DocumentId} saved to database successfully and cache invalidated, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, correlationId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving document {DocumentId} to database, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, _correlationService.GetCorrelationId());
+            throw;
+        }
     }
 }
 

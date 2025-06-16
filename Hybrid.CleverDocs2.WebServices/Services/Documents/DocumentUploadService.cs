@@ -80,6 +80,7 @@ public class DocumentUploadService : IDocumentUploadService
             {
                 SessionId = Guid.NewGuid(),
                 UserId = request.UserId,
+                CompanyId = request.CompanyId,
                 CollectionId = request.CollectionId,
                 Options = request.Options,
                 Status = UploadSessionStatusDto.Ready
@@ -669,6 +670,8 @@ public class DocumentUploadService : IDocumentUploadService
             DocumentId = Guid.NewGuid(),
             FileId = fileInfo.FileId,
             UserId = session.UserId,
+            CompanyId = session.CompanyId,
+            CollectionId = session.CollectionId,
             FileName = fileInfo.OriginalFileName,
             FilePath = fileInfo.TempFilePath!,
             FileSize = fileInfo.TotalSize,

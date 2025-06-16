@@ -47,10 +47,11 @@ public class DocumentUploadController : ControllerBase
 
         try
         {
-            _logger.LogInformation("Initializing upload session for user {UserId}, {FileCount} files, CorrelationId: {CorrelationId}", 
+            _logger.LogInformation("Initializing upload session for user {UserId}, {FileCount} files, CorrelationId: {CorrelationId}",
                 userId, request.Files.Count, correlationId);
 
             request.UserId = userId;
+            request.CompanyId = this.GetCurrentCompanyId();
             var session = await _uploadService.InitializeUploadSessionAsync(request);
 
             return this.Success(session, "Upload session initialized successfully");
@@ -482,7 +483,10 @@ public class DocumentUploadController : ControllerBase
     // Helper methods
     private string GetCurrentUserId()
     {
-        return User.Identity?.Name ?? User.FindFirst("sub")?.Value ?? "anonymous";
+        // Get the user ID from the NameIdentifier claim (which contains the GUID)
+        return User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
+               User.FindFirst("sub")?.Value ??
+               "anonymous";
     }
 }
 

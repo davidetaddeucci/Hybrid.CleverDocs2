@@ -1,7 +1,7 @@
 @model Hybrid.CleverDocs.WebUI.Models.Documents.DocumentUploadViewModel
 @{
-    ViewData["Title"] = "Upload Document";
-    ViewData["PageTitle"] = "Upload Document";
+    ViewData["Title"] = "Upload Documents";
+    ViewData["PageTitle"] = "Upload Documents";
 }
 
 <div class="container-fluid">
@@ -10,7 +10,7 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h1 class="h3 mb-1">Upload Document</h1>
+                    <h1 class="h3 mb-1">Upload Documents</h1>
                     <p class="text-muted mb-0">
                         @if (Model.CollectionId.HasValue)
                         {
@@ -67,9 +67,9 @@
                                  ondragleave="handleDragLeave(event)">
                                 <div class="upload-content">
                                     <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
-                                    <h5 class="mb-2">Drag and drop your file here</h5>
-                                    <p class="text-muted mb-3">or</p>
-                                    <input type="file" asp-for="File" class="d-none" id="fileInput" accept="@string.Join(",", Model.AllowedFileTypes)" />
+                                    <h5 class="mb-2">Drag and drop your files here</h5>
+                                    <p class="text-muted mb-3">Support for multiple files • or</p>
+                                    <input type="file" asp-for="File" class="d-none" id="fileInput" accept="@string.Join(",", Model.AllowedFileTypes)" multiple />
                                     <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
                                         <i class="fas fa-folder-open me-2"></i>Browse Files
                                     </button>
@@ -146,7 +146,7 @@
                                 <a href="@Url.Action("Index", "Documents")" class="btn btn-outline-secondary">Cancel</a>
                             }
                             <button type="submit" class="btn btn-primary" id="uploadBtn">
-                                <i class="fas fa-upload me-2"></i>Upload Document
+                                <i class="fas fa-upload me-2"></i>Upload Documents
                             </button>
                         </div>
                     </form>
@@ -170,20 +170,20 @@
         fileInput.addEventListener('change', handleFileSelect);
 
         function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (file) {
-                displayFileInfo(file);
+            const files = event.target.files;
+            if (files.length > 0) {
+                displayFilesInfo(files);
             }
         }
 
         function handleDrop(event) {
             event.preventDefault();
             uploadArea.classList.remove('border-primary', 'bg-light');
-            
+
             const files = event.dataTransfer.files;
             if (files.length > 0) {
                 fileInput.files = files;
-                displayFileInfo(files[0]);
+                displayFilesInfo(files);
             }
         }
 
@@ -197,10 +197,16 @@
             uploadArea.classList.remove('border-primary', 'bg-light');
         }
 
-        function displayFileInfo(file) {
-            fileName.textContent = file.name;
-            fileSize.textContent = formatFileSize(file.size);
-            
+        function displayFilesInfo(files) {
+            if (files.length === 1) {
+                fileName.textContent = files[0].name;
+                fileSize.textContent = formatFileSize(files[0].size);
+            } else {
+                fileName.textContent = `${files.length} files selected`;
+                const totalSize = Array.from(files).reduce((total, file) => total + file.size, 0);
+                fileSize.textContent = formatFileSize(totalSize);
+            }
+
             uploadContent.classList.add('d-none');
             fileInfo.classList.remove('d-none');
             uploadArea.classList.add('border-success');
@@ -220,16 +226,53 @@
             return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
         }
 
-        // Form validation
+        // Form validation and submission
         document.getElementById('uploadForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Always prevent default form submission
+
             if (!fileInput.files.length) {
-                event.preventDefault();
-                alert('Please select a file to upload.');
+                alert('Please select one or more files to upload.');
                 return false;
             }
-            
+
             uploadBtn.disabled = true;
             uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
+
+            // Submit form data using FormData
+            const formData = new FormData(this);
+
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                }
+            })
+            .then(response => {
+                if (response.redirected) {
+                    // If the server redirected, follow the redirect
+                    window.location.href = response.url;
+                } else if (response.ok) {
+                    return response.text();
+                } else {
+                    throw new Error('Upload failed');
+                }
+            })
+            .then(html => {
+                if (html) {
+                    // If we got HTML back, it means there were validation errors
+                    // Replace the current page content with the response
+                    document.open();
+                    document.write(html);
+                    document.close();
+                }
+            })
+            .catch(error => {
+                console.error('Upload error:', error);
+                alert('Upload failed. Please try again.');
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Upload Documents';
+            });
         });
     </script>
 

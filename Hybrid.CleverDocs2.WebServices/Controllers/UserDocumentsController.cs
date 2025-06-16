@@ -475,7 +475,10 @@ public class UserDocumentsController : ControllerBase
     // Helper methods
     private Guid GetCurrentUserId()
     {
-        var userIdClaim = User.Identity?.Name ?? User.FindFirst("sub")?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        // Get the user ID from the NameIdentifier claim (which contains the GUID)
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                         User.FindFirst("sub")?.Value ??
+                         User.Identity?.Name;
 
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
         {

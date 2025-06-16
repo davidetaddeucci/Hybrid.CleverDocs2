@@ -1,120 +1,505 @@
 @model Hybrid.CleverDocs.WebUI.Models.Documents.DocumentListViewModel
+@using Hybrid.CleverDocs.WebUI.Models.Documents
 @{
     ViewData["Title"] = "Documents";
     ViewData["PageTitle"] = "Document Management";
 }
 
-<div class="documents-page">
+@section Styles {
+    <link href="~/css/documents-grid.css" rel="stylesheet" />
+    <link href="~/css/advanced-search.css" rel="stylesheet" />
+    <link href="~/css/multi-column-sort.css" rel="stylesheet" />
+    <link href="~/css/r2r-processing.css" rel="stylesheet" />
+}
+
+<!-- Material Design 3 Documents Data Grid -->
+<div class="documents-page" data-page="documents">
     <!-- Page Header -->
-    <div class="page-header">
-        <div class="header-content">
-            <div class="header-info">
-                <h1 class="page-title">
-                    <i class="material-symbols-rounded">description</i>
+    <div class="page-header mb-4">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h1 class="page-title mb-1">
+                    <i class="material-symbols-rounded me-2">description</i>
                     Documents
                 </h1>
-                <p class="page-description">Manage and organize your documents</p>
+                <p class="text-muted mb-0">Manage and organize your documents</p>
             </div>
-            
-            <div class="header-actions">
-                <a href="@Url.Action("Index", "Upload")" class="btn btn-primary">
-                    <i class="material-symbols-rounded">upload</i>
-                    Upload Documents
-                </a>
+            <div class="col-md-6 text-end">
+                <div class="text-muted">
+                    <i class="material-symbols-rounded me-1">info</i>
+                    To upload documents, select a Collection first
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Documents Content -->
-    <div class="documents-content">
-        @if (!Model.Documents.Any())
-        {
-            <div class="empty-state text-center py-5">
-                <div class="empty-icon mb-3">
-                    <i class="material-symbols-rounded" style="font-size: 4rem; color: #6c757d;">folder_open</i>
-                </div>
-                <h3>No documents yet</h3>
-                <p class="text-muted">Upload your first document to get started.</p>
-                <a href="@Url.Action("Index", "Upload")" class="btn btn-primary">
-                    <i class="material-symbols-rounded">upload</i>
-                    Upload Documents
-                </a>
+    @if (!Model.Documents.Any())
+    {
+        <!-- Empty State -->
+        <div class="empty-state text-center py-5">
+            <div class="empty-icon mb-3">
+                <i class="material-symbols-rounded" style="font-size: 4rem; color: var(--bs-secondary);">folder_open</i>
             </div>
-        }
-        else
-        {
-            <!-- Document Grid View -->
-            <div class="row">
-                @foreach (var document in Model.Documents)
-                {
-                    <div class="col-md-4 col-lg-3 mb-4">
-                        <div class="card document-card h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center mb-3">
-                                    <i class="material-symbols-rounded me-2" style="font-size: 2rem; color: #007bff;">description</i>
-                                    <div class="flex-grow-1">
-                                        <h6 class="card-title mb-1">
-                                            <a href="@Url.Action("Details", new { documentId = document.Id })" class="text-decoration-none">
-                                                @document.Name
-                                            </a>
-                                        </h6>
-                                        <small class="text-muted">@document.FormattedSize</small>
-                                    </div>
-                                </div>
-                                
-                                @if (!string.IsNullOrEmpty(document.Description))
+            <h3 class="mb-2">No documents yet</h3>
+            <p class="text-muted mb-4">To upload documents, first select a Collection from the Collections page.</p>
+            <a href="@Url.Action("Index", "Collections")" class="btn btn-primary">
+                <i class="material-symbols-rounded me-1">folder</i>
+                Browse Collections
+            </a>
+        </div>
+    }
+    else
+    {
+        <!-- Multi-Column Sort Help -->
+        <div class="alert alert-info d-none" id="sortHelpAlert">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6 class="alert-heading mb-2">
+                        <i class="material-symbols-rounded me-2">info</i>
+                        Multi-Column Sorting Guide
+                    </h6>
+                    <div class="sort-help">
+                        <div class="help-item">
+                            <span class="help-key">Click</span>
+                            <span>Single column sort (replaces current)</span>
+                        </div>
+                        <div class="help-item">
+                            <span class="help-key">Ctrl+Click</span>
+                            <span>Add to multi-column sort</span>
+                        </div>
+                        <div class="help-item">
+                            <span class="help-key">Shift+Click</span>
+                            <span>Remove from sort</span>
+                        </div>
+                        <div class="help-item">
+                            <span class="help-key">Sort Button</span>
+                            <span>Open advanced sort panel</span>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" onclick="document.getElementById('sortHelpAlert').classList.add('d-none')"></button>
+            </div>
+        </div>
+
+        <!-- Search and Filters Bar -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="get" id="documentsSearchForm" class="row g-3 align-items-end">
+                    <!-- Advanced Search Input -->
+                    <div class="col-md-4">
+                        <label for="searchTerm" class="form-label">
+                            Search Documents
+                            <small class="text-muted">(Ctrl+K)</small>
+                        </label>
+                        <div class="search-input-container position-relative">
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="material-symbols-rounded">search</i>
+                                </span>
+                                <input type="text" class="form-control" id="searchTerm" name="SearchTerm"
+                                       value="@Model.Search.SearchTerm" placeholder="Search by name or content..."
+                                       autocomplete="off" spellcheck="false">
+                                @if (!string.IsNullOrEmpty(Model.Search.SearchTerm))
                                 {
-                                    <p class="card-text small text-muted">@document.Description</p>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                                            onclick="document.getElementById('searchTerm').value=''; this.closest('form').submit();"
+                                            title="Clear search">
+                                        <i class="material-symbols-rounded">close</i>
+                                    </button>
                                 }
-                                
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted">@document.RelativeUpdatedTime</small>
+                            </div>
+                            <!-- Autocomplete dropdown will be inserted here by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Sort By -->
+                    <div class="col-md-2">
+                        <label for="sortBy" class="form-label">Sort By</label>
+                        <select class="form-select" id="sortBy" name="SortBy">
+                            <option value="updated_at" selected="@(Model.Search.SortBy == "updated_at")">Date Modified</option>
+                            <option value="created_at" selected="@(Model.Search.SortBy == "created_at")">Date Created</option>
+                            <option value="name" selected="@(Model.Search.SortBy == "name")">Name</option>
+                            <option value="size" selected="@(Model.Search.SortBy == "size")">Size</option>
+                        </select>
+                    </div>
+
+                    <!-- Sort Direction -->
+                    <div class="col-md-2">
+                        <label for="sortDirection" class="form-label">Order</label>
+                        <select class="form-select" id="sortDirection" name="SortDirection">
+                            <option value="1" selected="@(Model.Search.SortDirection == SortDirection.Desc)">Descending</option>
+                            <option value="0" selected="@(Model.Search.SortDirection == SortDirection.Asc)">Ascending</option>
+                        </select>
+                    </div>
+
+                    <!-- Page Size -->
+                    <div class="col-md-2">
+                        <label for="pageSize" class="form-label">Per Page</label>
+                        <select class="form-select" id="pageSize" name="PageSize">
+                            <option value="10" selected="@(Model.Search.PageSize == 10)">10</option>
+                            <option value="25" selected="@(Model.Search.PageSize == 25)">25</option>
+                            <option value="50" selected="@(Model.Search.PageSize == 50)">50</option>
+                            <option value="100" selected="@(Model.Search.PageSize == 100)">100</option>
+                        </select>
+                    </div>
+
+                    <!-- Search Button -->
+                    <div class="col-md-2">
+                        <div class="d-flex gap-1">
+                            <button type="submit" class="btn btn-primary flex-grow-1">
+                                <i class="material-symbols-rounded me-1">search</i>
+                                Search
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm"
+                                    onclick="document.getElementById('sortHelpAlert').classList.toggle('d-none')"
+                                    title="Show sorting help">
+                                <i class="material-symbols-rounded">help</i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Results Summary -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="text-muted">
+                Showing @Model.Pagination.StartItem - @Model.Pagination.EndItem of @Model.Pagination.TotalItems documents
+            </div>
+            <div class="text-muted">
+                Page @Model.Pagination.CurrentPage of @Model.Pagination.TotalPages
+            </div>
+        </div>
+
+        <!-- Documents Data Grid -->
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 documents-table" id="documentsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col" class="border-bottom-0">
+                                <div class="d-flex align-items-center">
+                                    <i class="material-symbols-rounded me-2 text-muted">description</i>
+                                    Document
+                                </div>
+                            </th>
+                            <th scope="col" class="border-bottom-0">
+                                <div class="d-flex align-items-center">
+                                    <i class="material-symbols-rounded me-2 text-muted">folder</i>
+                                    Collection
+                                </div>
+                            </th>
+                            <th scope="col" class="border-bottom-0">
+                                <div class="d-flex align-items-center">
+                                    <i class="material-symbols-rounded me-2 text-muted">data_usage</i>
+                                    Size
+                                </div>
+                            </th>
+                            <th scope="col" class="border-bottom-0">
+                                <div class="d-flex align-items-center">
+                                    <i class="material-symbols-rounded me-2 text-muted">psychology</i>
+                                    R2R Status
+                                </div>
+                            </th>
+                            <th scope="col" class="border-bottom-0">
+                                <div class="d-flex align-items-center">
+                                    <i class="material-symbols-rounded me-2 text-muted">schedule</i>
+                                    Modified
+                                </div>
+                            </th>
+                            <th scope="col" class="border-bottom-0 text-center">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <i class="material-symbols-rounded me-2 text-muted">more_vert</i>
+                                    Actions
+                                </div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var document in Model.Documents)
+                        {
+                            <tr class="document-row" data-document-id="@document.Id">
+                                <!-- Document Info -->
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="document-icon me-3">
+                                            @{
+                                                var iconClass = document.ContentType?.ToLower() switch
+                                                {
+                                                    var ct when ct.Contains("pdf") => "picture_as_pdf",
+                                                    var ct when ct.Contains("word") || ct.Contains("msword") => "description",
+                                                    var ct when ct.Contains("excel") || ct.Contains("spreadsheet") => "table_chart",
+                                                    var ct when ct.Contains("powerpoint") || ct.Contains("presentation") => "slideshow",
+                                                    var ct when ct.Contains("text") => "article",
+                                                    var ct when ct.Contains("image") => "image",
+                                                    _ => "description"
+                                                };
+                                                var iconColor = document.ContentType?.ToLower() switch
+                                                {
+                                                    var ct when ct.Contains("pdf") => "text-danger",
+                                                    var ct when ct.Contains("word") || ct.Contains("msword") => "text-primary",
+                                                    var ct when ct.Contains("excel") || ct.Contains("spreadsheet") => "text-success",
+                                                    var ct when ct.Contains("powerpoint") || ct.Contains("presentation") => "text-warning",
+                                                    var ct when ct.Contains("text") => "text-info",
+                                                    var ct when ct.Contains("image") => "text-secondary",
+                                                    _ => "text-muted"
+                                                };
+                                            }
+                                            <i class="material-symbols-rounded @iconColor" style="font-size: 2rem;">@iconClass</i>
+                                        </div>
+                                        <div class="document-info">
+                                            <h6 class="mb-1">
+                                                <a href="@Url.Action("Details", new { documentId = document.Id })"
+                                                   class="text-decoration-none fw-semibold">
+                                                    @document.Name
+                                                </a>
+                                            </h6>
+                                            @if (!string.IsNullOrEmpty(document.Description))
+                                            {
+                                                <p class="text-muted mb-0 small">@document.Description</p>
+                                            }
+                                            <small class="text-muted">@document.ContentType</small>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <!-- Collection -->
+                                <td>
+                                    @if (!string.IsNullOrEmpty(document.CollectionName))
+                                    {
+                                        <div class="d-flex align-items-center">
+                                            <i class="material-symbols-rounded me-2 text-muted">folder</i>
+                                            <a href="@Url.Action("Details", "Collections", new { collectionId = document.CollectionId })"
+                                               class="text-decoration-none">
+                                                @document.CollectionName
+                                            </a>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No collection</span>
+                                    }
+                                </td>
+
+                                <!-- Size -->
+                                <td>
+                                    <span class="fw-medium">@document.FormattedSize</span>
+                                </td>
+
+                                <!-- R2R Status -->
+                                <td>
+                                    @{
+                                        var statusBadge = document.StatusDisplayName?.ToLower() switch
+                                        {
+                                            "completed" => "bg-success",
+                                            "processing" => "bg-warning",
+                                            "failed" => "bg-danger",
+                                            "pending" => "bg-secondary",
+                                            _ => "bg-light text-dark"
+                                        };
+                                        var statusIcon = document.StatusDisplayName?.ToLower() switch
+                                        {
+                                            "completed" => "check_circle",
+                                            "processing" => "sync",
+                                            "failed" => "error",
+                                            "pending" => "schedule",
+                                            _ => "help"
+                                        };
+                                    }
+                                    <span class="badge @statusBadge d-flex align-items-center">
+                                        <i class="material-symbols-rounded me-1" style="font-size: 1rem;">@statusIcon</i>
+                                        @document.StatusDisplayName
+                                    </span>
+                                </td>
+
+                                <!-- Modified Date -->
+                                <td>
+                                    <div class="text-muted">
+                                        <div>@document.UpdatedAt.ToString("MMM dd, yyyy")</div>
+                                        <small>@document.UpdatedAt.ToString("HH:mm")</small>
+                                    </div>
+                                </td>
+
+                                <!-- Actions -->
+                                <td class="text-center">
                                     <div class="btn-group" role="group">
-                                        <a href="@Url.Action("Details", new { documentId = document.Id })" class="btn btn-sm btn-outline-primary">
+                                        <a href="@Url.Action("Details", new { documentId = document.Id })"
+                                           class="btn btn-sm btn-outline-primary" title="View Details">
                                             <i class="material-symbols-rounded">visibility</i>
                                         </a>
                                         @if (document.Permissions.CanEdit)
                                         {
-                                            <a href="@Url.Action("Edit", new { documentId = document.Id })" class="btn btn-sm btn-outline-secondary">
+                                            <a href="@Url.Action("Edit", new { documentId = document.Id })"
+                                               class="btn btn-sm btn-outline-secondary" title="Edit">
                                                 <i class="material-symbols-rounded">edit</i>
                                             </a>
                                         }
+                                        @if (document.Permissions.CanDelete)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                                    onclick="confirmDelete('@document.Id', '@document.Name')" title="Delete">
+                                                <i class="material-symbols-rounded">delete</i>
+                                            </button>
+                                        }
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
+        </div>
 
-            <!-- Pagination -->
-            @if (Model.Pagination.TotalPages > 1)
-            {
-                <nav aria-label="Documents pagination">
-                    <ul class="pagination justify-content-center">
+        <!-- Pagination -->
+        @if (Model.Pagination.TotalPages > 1)
+        {
+            <nav aria-label="Documents pagination" class="mt-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-muted">
+                        Showing @Model.Pagination.StartItem - @Model.Pagination.EndItem of @Model.Pagination.TotalItems results
+                    </div>
+                    <ul class="pagination mb-0">
                         @if (Model.Pagination.HasPreviousPage)
                         {
                             <li class="page-item">
-                                <a class="page-link" href="@Url.Action("Index", new { page = Model.Pagination.CurrentPage - 1 })">Previous</a>
+                                <a class="page-link" href="@Url.Action("Index", new {
+                                    page = Model.Pagination.CurrentPage - 1,
+                                    SearchTerm = Model.Search.SearchTerm,
+                                    SortBy = Model.Search.SortBy,
+                                    SortDirection = (int)Model.Search.SortDirection,
+                                    PageSize = Model.Search.PageSize
+                                })" aria-label="Previous">
+                                    <i class="material-symbols-rounded">chevron_left</i>
+                                </a>
                             </li>
                         }
-                        
-                        @for (int i = Math.Max(1, Model.Pagination.CurrentPage - 2); i <= Math.Min(Model.Pagination.TotalPages, Model.Pagination.CurrentPage + 2); i++)
+
+                        @{
+                            var startPage = Math.Max(1, Model.Pagination.CurrentPage - 2);
+                            var endPage = Math.Min(Model.Pagination.TotalPages, Model.Pagination.CurrentPage + 2);
+                        }
+
+                        @if (startPage > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" href="@Url.Action("Index", new {
+                                    page = 1,
+                                    SearchTerm = Model.Search.SearchTerm,
+                                    SortBy = Model.Search.SortBy,
+                                    SortDirection = (int)Model.Search.SortDirection,
+                                    PageSize = Model.Search.PageSize
+                                })">1</a>
+                            </li>
+                            @if (startPage > 2)
+                            {
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            }
+                        }
+
+                        @for (int i = startPage; i <= endPage; i++)
                         {
                             <li class="page-item @(i == Model.Pagination.CurrentPage ? "active" : "")">
-                                <a class="page-link" href="@Url.Action("Index", new { page = i })">@i</a>
+                                <a class="page-link" href="@Url.Action("Index", new {
+                                    page = i,
+                                    SearchTerm = Model.Search.SearchTerm,
+                                    SortBy = Model.Search.SortBy,
+                                    SortDirection = (int)Model.Search.SortDirection,
+                                    PageSize = Model.Search.PageSize
+                                })">@i</a>
                             </li>
                         }
-                        
+
+                        @if (endPage < Model.Pagination.TotalPages)
+                        {
+                            @if (endPage < Model.Pagination.TotalPages - 1)
+                            {
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            }
+                            <li class="page-item">
+                                <a class="page-link" href="@Url.Action("Index", new {
+                                    page = Model.Pagination.TotalPages,
+                                    SearchTerm = Model.Search.SearchTerm,
+                                    SortBy = Model.Search.SortBy,
+                                    SortDirection = (int)Model.Search.SortDirection,
+                                    PageSize = Model.Search.PageSize
+                                })">@Model.Pagination.TotalPages</a>
+                            </li>
+                        }
+
                         @if (Model.Pagination.HasNextPage)
                         {
                             <li class="page-item">
-                                <a class="page-link" href="@Url.Action("Index", new { page = Model.Pagination.CurrentPage + 1 })">Next</a>
+                                <a class="page-link" href="@Url.Action("Index", new {
+                                    page = Model.Pagination.CurrentPage + 1,
+                                    SearchTerm = Model.Search.SearchTerm,
+                                    SortBy = Model.Search.SortBy,
+                                    SortDirection = (int)Model.Search.SortDirection,
+                                    PageSize = Model.Search.PageSize
+                                })" aria-label="Next">
+                                    <i class="material-symbols-rounded">chevron_right</i>
+                                </a>
                             </li>
                         }
                     </ul>
-                </nav>
+                </div>
+            </nav>
+        }
+    }
+</div>
+
+@section Scripts {
+    <script>
+        // Auto-submit form on select changes
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('documentsSearchForm');
+            const selects = form.querySelectorAll('select');
+
+            selects.forEach(select => {
+                select.addEventListener('change', function() {
+                    form.submit();
+                });
+            });
+
+            // Search on Enter key
+            const searchInput = document.getElementById('searchTerm');
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    form.submit();
+                }
+            });
+        });
+
+        // Delete confirmation
+        function confirmDelete(documentId, documentName) {
+            if (confirm(`Are you sure you want to delete "${documentName}"?`)) {
+                // Create and submit delete form
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '@Url.Action("Delete")';
+
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'documentId';
+                input.value = documentId;
+
+                const token = document.createElement('input');
+                token.type = 'hidden';
+                token.name = '__RequestVerificationToken';
+                token.value = '@Html.AntiForgeryToken()'.match(/value="([^"]+)"/)[1];
+
+                form.appendChild(input);
+                form.appendChild(token);
+                document.body.appendChild(form);
+                form.submit();
             }
         }
-    </div>
-</div>
+    </script>
+    <script src="~/js/advanced-search.js"></script>
+    <script src="~/js/multi-column-sort.js"></script>
+    <script src="~/js/r2r-processing.js"></script>
+    <script src="~/js/multi-column-sort.js"></script>
+}

@@ -40,8 +40,8 @@ Hybrid.CleverDocs2/
 
 ## Current Development Status 🚀
 
-**Fase Attuale**: Sistema Completo e Funzionante ✅
-**Completamento**: ~95%
+**Fase Attuale**: Sistema Upload Documenti NON FUNZIONANTE ❌
+**Completamento**: ~90% (REGRESSIONE CRITICA)
 
 ### ✅ Completed (Phase 3 - PRODUCTION READY)
 - **🔥 CRITICAL FIX**: Authentication redirect loop bug completely resolved
@@ -94,17 +94,17 @@ Hybrid.CleverDocs2/
   - **R2R Integration**: Seamless synchronization with R2R API collections
   - **Multi-level Caching**: L1 memory, L2 Redis, L3 persistent caching strategy
   - **Status**: ✅ PRODUCTION READY - Modern collections interface operational
-- **🚀 ENTERPRISE DOCUMENT UPLOAD SYSTEM**: Bulletproof upload system implemented
-  - **Chunked Upload**: Large file support (>10MB) with resumable capability
-  - **Rate Limiting**: Intelligent R2R API rate limiting (10 docs/sec) with queue management
-  - **Real-time Progress**: SignalR DocumentUploadHub for live upload tracking
-  - **Circuit Breaker**: Fault tolerance with exponential backoff and retry logic
-  - **Parallel Processing**: Optimized concurrent uploads with user-based throttling
-  - **Validation Engine**: Comprehensive file type, size, and content validation
-  - **Background Processing**: Queue-based R2R integration with priority handling
-  - **Storage Management**: Temporary and permanent file storage with cleanup
-  - **Metrics & Analytics**: Upload statistics and performance monitoring
-  - **Status**: ✅ PRODUCTION READY - Enterprise-grade upload system operational
+- **❌ ENTERPRISE DOCUMENT UPLOAD SYSTEM**: SISTEMA COMPLETAMENTE ROTTO
+  - **PROBLEMA CRITICO**: Nessun file (PDF, MD, etc.) viene caricato nel sistema
+  - **Upload Session**: Si inizializza correttamente ma file upload fallisce con BadRequest (400)
+  - **Validazione File**: Fallisce senza logging dettagliato, necessario debug completo
+  - **Cache Documenti**: Restituisce risultati vecchi anche dopo upload apparentemente riusciti
+  - **R2R Integration**: Non testabile finché upload non funziona
+  - **Real-time Progress**: Hub SignalR funziona ma non riceve dati di upload validi
+  - **Logging**: Logging dettagliato aggiunto ma non attivo al livello Debug
+  - **File Types**: Aggiornato per supportare solo tipi R2R ma validazione fallisce comunque
+  - **Content Type**: Implementata gestione browser quirks per .md files ma inefficace
+  - **Status**: ❌ SISTEMA ROTTO - Necessario debug completo prima di continuare sviluppo
 - **📁 COMPLETE DOCUMENT MANAGEMENT SYSTEM**: Full-featured document management implemented
   - **Advanced Search**: Real-time search with filtering, pagination, and suggestions
   - **Grid/List Views**: Responsive document views with virtualization for performance
@@ -213,9 +213,32 @@ Document Management Features
 - **Error Notifications**: Immediate feedback on upload failures and retries
 - **View Tracking**: Live document view count and analytics updates
 
-## 🎯 Production Ready
+## ❌ SISTEMA NON PRODUCTION READY
 
-**The system is now PRODUCTION READY with advanced dashboard capabilities.**
+**REGRESSIONE CRITICA: Sistema upload documenti completamente rotto - NON PRODUCTION READY.**
+
+### 🚨 PROBLEMI CRITICI IDENTIFICATI:
+
+#### **Sistema Upload Documenti ROTTO**
+- **Sintomi**: Nessun file (PDF, MD, TXT, etc.) viene caricato nel sistema
+- **Comportamento**: Upload session si inizializza correttamente ma file upload fallisce con BadRequest (400)
+- **Validazione**: File validation fallisce senza logging dettagliato visibile
+- **Cache**: Sistema cache restituisce risultati vecchi anche dopo upload apparentemente riusciti
+- **Logging**: Logging dettagliato implementato ma non attivo al livello Debug
+- **R2R Integration**: Non testabile finché il sistema di upload non funziona
+
+#### **Analisi Tecnica**
+- **Frontend**: Invia correttamente le richieste di upload al backend
+- **Backend**: Riceve le richieste ma le rifiuta durante la validazione
+- **Content Types**: Aggiornato per supportare solo tipi R2R ufficiali
+- **Browser Quirks**: Implementata gestione per content types inviati dai browser
+- **File Extensions**: Configurazione aggiornata in tutti i file appsettings
+
+#### **Azioni Immediate Richieste**
+1. **Debug Completo**: Attivare logging Debug per vedere dettagli validazione
+2. **Test Validazione**: Verificare ogni step della validazione file
+3. **Cache Investigation**: Analizzare timing cache invalidation vs richieste griglia
+4. **R2R Compatibility**: Verificare compatibilità completa con R2R API
 
 ### Key Features Delivered:
 - ✅ **Authentication System**: Complete JWT-based multi-tenant authentication

@@ -145,15 +145,48 @@ public class DocumentSearchViewModel
     public bool? IsFavorite { get; set; }
     public string SortBy { get; set; } = "updated_at";
     public SortDirection SortDirection { get; set; } = SortDirection.Desc;
+
+    // Multi-Column Sorting
+    public List<SortColumn> SortColumns { get; set; } = new();
+    public bool EnableMultiColumnSort { get; set; } = true;
+
+    // Advanced Filtering
+    public List<ColumnFilter> ColumnFilters { get; set; } = new();
+    public bool EnableAdvancedFilters { get; set; } = true;
+    public string? QuickFilter { get; set; }
+    public List<string> ActiveFilterTags { get; set; } = new();
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
     public ViewMode ViewMode { get; set; } = ViewMode.Grid;
+
+    // Advanced Search Features
+    public string? NameFilter { get; set; }
+    public string? ContentFilter { get; set; }
+    public string? AuthorFilter { get; set; }
+    public List<DocumentStatus> SelectedStatuses { get; set; } = new();
+    public DateTime? UpdatedAfter { get; set; }
+    public DateTime? UpdatedBefore { get; set; }
+    public bool? HasComments { get; set; }
+    public bool? HasVersions { get; set; }
+    public int? MinViewCount { get; set; }
+    public int? MaxViewCount { get; set; }
+
+    // Search Enhancement Features
+    public bool EnableAutoComplete { get; set; } = true;
+    public bool EnableSearchHistory { get; set; } = true;
+    public bool EnableSearchSuggestions { get; set; } = true;
+    public string? SavedSearchName { get; set; }
+    public Guid? LoadedSearchId { get; set; }
 
     // Available options for filters
     public List<SelectListItem> AvailableContentTypes { get; set; } = new();
     public List<SelectListItem> AvailableTags { get; set; } = new();
     public List<SelectListItem> AvailableCollections { get; set; } = new();
     public List<SelectListItem> SortOptions { get; set; } = new();
+    public List<SelectListItem> AvailableStatuses { get; set; } = new();
+    public List<string> SearchSuggestions { get; set; } = new();
+    public List<SearchHistoryItem> SearchHistory { get; set; } = new();
+    public List<SavedSearchItem> SavedSearches { get; set; } = new();
 }
 
 /// <summary>
@@ -358,6 +391,96 @@ public class DocumentViewEvent
     public string UserId { get; set; } = string.Empty;
     public string? UserName { get; set; }
     public TimeSpan? Duration { get; set; }
+}
+
+/// <summary>
+/// Search history item for tracking user searches
+/// </summary>
+public class SearchHistoryItem
+{
+    public Guid Id { get; set; }
+    public string SearchTerm { get; set; } = string.Empty;
+    public string? Filters { get; set; } // JSON serialized filters
+    public DateTime SearchedAt { get; set; }
+    public int ResultCount { get; set; }
+    public string UserId { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Saved search item for bookmarking searches
+/// </summary>
+public class SavedSearchItem
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string SearchTerm { get; set; } = string.Empty;
+    public string Filters { get; set; } = string.Empty; // JSON serialized filters
+    public DateTime CreatedAt { get; set; }
+    public DateTime? LastUsedAt { get; set; }
+    public int UseCount { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public bool IsPublic { get; set; }
+    public bool IsFavorite { get; set; }
+}
+
+/// <summary>
+/// Advanced column filter for DataGrid functionality
+/// </summary>
+public class ColumnFilter
+{
+    public string ColumnName { get; set; } = string.Empty;
+    public FilterType FilterType { get; set; } = FilterType.Contains;
+    public string? Value { get; set; }
+    public string? SecondValue { get; set; } // For range filters
+    public List<string> Values { get; set; } = new(); // For multi-select filters
+    public bool IsActive { get; set; }
+}
+
+/// <summary>
+/// Filter types for advanced column filtering
+/// </summary>
+public enum FilterType
+{
+    Contains = 0,
+    StartsWith = 1,
+    EndsWith = 2,
+    Equals = 3,
+    NotEquals = 4,
+    GreaterThan = 5,
+    LessThan = 6,
+    Between = 7,
+    In = 8,
+    NotIn = 9,
+    IsNull = 10,
+    IsNotNull = 11,
+    DateRange = 12,
+    SizeRange = 13
+}
+
+/// <summary>
+/// Multi-column sort configuration
+/// </summary>
+public class SortColumn
+{
+    public string ColumnName { get; set; } = string.Empty;
+    public SortDirection Direction { get; set; } = SortDirection.Asc;
+    public int Priority { get; set; } = 0;
+    public bool IsActive { get; set; } = true;
+    public string DisplayName { get; set; } = string.Empty;
+    public SortDataType DataType { get; set; } = SortDataType.String;
+}
+
+/// <summary>
+/// Data types for sorting
+/// </summary>
+public enum SortDataType
+{
+    String = 0,
+    Number = 1,
+    Date = 2,
+    Boolean = 3,
+    Size = 4
 }
 
 /// <summary>

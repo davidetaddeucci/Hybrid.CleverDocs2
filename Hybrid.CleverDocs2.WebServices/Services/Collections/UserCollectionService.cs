@@ -76,6 +76,7 @@ public class UserCollectionService : IUserCollectionService
                 foreach (var collection in collections)
                 {
                     collection.Stats = await GetCollectionStatsAsync(collection.Id);
+                    collection.DocumentCount = collection.Stats.TotalDocuments; // Update DocumentCount from real stats
                 }
 
                 return collections;
@@ -107,6 +108,7 @@ public class UserCollectionService : IUserCollectionService
             // Convert to DTO
             var collection = MapEntityToDto(collectionEntity);
             collection.Stats = await GetCollectionStatsAsync(collectionId);
+            collection.DocumentCount = collection.Stats.TotalDocuments; // Update DocumentCount from real stats
             await UpdateLastAccessedAsync(collectionId, userId);
 
             return collection;
@@ -524,8 +526,15 @@ public class UserCollectionService : IUserCollectionService
                 .Take(searchRequest.PageSize)
                 .ToListAsync();
 
-            // Map to DTOs
+            // Map to DTOs and update stats
             var collectionDtos = collections.Select(MapEntityToDto).ToList();
+
+            // Update stats for each collection in search results
+            foreach (var collection in collectionDtos)
+            {
+                collection.Stats = await GetCollectionStatsAsync(collection.Id);
+                collection.DocumentCount = collection.Stats.TotalDocuments; // Update DocumentCount from real stats
+            }
 
             // Use the constructor that automatically calculates TotalPages
             var result = new PagedResult<UserCollectionDto>(
@@ -674,14 +683,53 @@ public class UserCollectionService : IUserCollectionService
     // Helper methods
     private async Task<CollectionStatsDto> GetCollectionStatsAsync(Guid collectionId)
     {
-        await Task.Delay(10);
-        return new CollectionStatsDto
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
         {
-            TotalDocuments = Random.Shared.Next(0, 100),
-            TotalSizeBytes = Random.Shared.Next(1000, 1000000),
-            DocumentsThisWeek = Random.Shared.Next(0, 10),
-            DocumentsThisMonth = Random.Shared.Next(0, 50)
-        };
+            _logger.LogDebug("Getting real collection stats for collection {CollectionId}, CorrelationId: {CorrelationId}",
+                collectionId, correlationId);
+
+            // Get real document count and size from database
+            var documents = await _dbContext.Documents
+                .Where(d => d.CollectionId == collectionId)
+                .ToListAsync();
+
+            var totalDocuments = documents.Count;
+            var totalSizeBytes = documents.Sum(d => d.Size);
+
+            // Calculate documents added this week and month
+            var oneWeekAgo = DateTime.UtcNow.AddDays(-7);
+            var oneMonthAgo = DateTime.UtcNow.AddDays(-30);
+
+            var documentsThisWeek = documents.Count(d => d.CreatedAt >= oneWeekAgo);
+            var documentsThisMonth = documents.Count(d => d.CreatedAt >= oneMonthAgo);
+
+            _logger.LogDebug("Collection {CollectionId} stats: {TotalDocuments} documents, {TotalSizeBytes} bytes, CorrelationId: {CorrelationId}",
+                collectionId, totalDocuments, totalSizeBytes, correlationId);
+
+            return new CollectionStatsDto
+            {
+                TotalDocuments = totalDocuments,
+                TotalSizeBytes = totalSizeBytes,
+                DocumentsThisWeek = documentsThisWeek,
+                DocumentsThisMonth = documentsThisMonth
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting collection stats for collection {CollectionId}, CorrelationId: {CorrelationId}",
+                collectionId, correlationId);
+
+            // Return empty stats on error
+            return new CollectionStatsDto
+            {
+                TotalDocuments = 0,
+                TotalSizeBytes = 0,
+                DocumentsThisWeek = 0,
+                DocumentsThisMonth = 0
+            };
+        }
     }
 
     private async Task ValidateUserCanCreateCollectionAsync(string userId)

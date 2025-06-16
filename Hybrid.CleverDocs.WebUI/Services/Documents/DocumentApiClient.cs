@@ -167,9 +167,65 @@ public class DocumentApiClient : IDocumentApiClient
 
     public async Task<PagedResult<DocumentViewModel>> GetCollectionDocumentsAsync(Guid collectionId, DocumentSearchViewModel search, CancellationToken cancellationToken = default)
     {
-        // Placeholder implementation
-        await Task.CompletedTask;
-        return new PagedResult<DocumentViewModel>();
+        try
+        {
+            await SetAuthorizationHeaderAsync();
+
+            var queryParams = new Dictionary<string, string>
+            {
+                ["page"] = search.Page.ToString(),
+                ["pageSize"] = search.PageSize.ToString(),
+                ["sortBy"] = search.SortBy ?? "updated_at",
+                ["sortDirection"] = search.SortDirection.ToString()
+            };
+
+            if (!string.IsNullOrEmpty(search.SearchTerm))
+                queryParams["searchTerm"] = search.SearchTerm;
+
+            var queryString = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
+            var url = $"api/UserDocuments/collections/{collectionId}?{queryString}";
+
+            _logger.LogInformation("Calling collection documents API: {Url}", url);
+
+            var response = await _httpClient.GetAsync(url, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Collection documents API returned {StatusCode}: {ReasonPhrase}",
+                    response.StatusCode, response.ReasonPhrase);
+                return new PagedResult<DocumentViewModel>();
+            }
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            var apiResponse = JsonSerializer.Deserialize<ApiResponse<PagedDocumentResultDto>>(content, _jsonOptions);
+
+            if (apiResponse?.Data == null)
+            {
+                _logger.LogWarning("Collection documents API returned null data");
+                return new PagedResult<DocumentViewModel>();
+            }
+
+            var result = new PagedResult<DocumentViewModel>
+            {
+                Items = apiResponse.Data.Items.Select(MapToDocumentViewModel).ToList(),
+                TotalCount = apiResponse.Data.TotalCount,
+                Page = apiResponse.Data.Page,
+                PageSize = apiResponse.Data.PageSize,
+                TotalPages = apiResponse.Data.TotalPages,
+                HasNextPage = apiResponse.Data.HasNextPage,
+                HasPreviousPage = apiResponse.Data.HasPreviousPage
+            };
+
+            _logger.LogInformation("Retrieved {Count} documents for collection {CollectionId}",
+                result.Items.Count, collectionId);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting collection documents for collection {CollectionId}", collectionId);
+            return new PagedResult<DocumentViewModel>();
+        }
     }
 
     public async Task<DocumentViewModel?> GetDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
@@ -245,6 +301,94 @@ public class DocumentApiClient : IDocumentApiClient
         return false;
     }
 
+    public async Task<DocumentViewModel?> UploadDocumentAsync(DocumentUploadViewModel model, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await SetAuthorizationHeaderAsync();
+
+            _logger.LogInformation("Starting enterprise upload for file: {FileName}", model.File?.FileName);
+
+            // Step 1: Initialize upload session
+            var initRequest = new InitializeUploadSessionDto
+            {
+                Files = new List<FileInfoDto>
+                {
+                    new FileInfoDto
+                    {
+                        FileName = model.File!.FileName,
+                        Size = model.File.Length,
+                        ContentType = model.File.ContentType,
+                        LastModified = DateTime.UtcNow
+                    }
+                },
+                CollectionId = model.CollectionId,
+                Tags = model.Tags,
+                Options = new UploadOptionsDto
+                {
+                    ExtractMetadata = true,
+                    PerformOCR = true,
+                    AutoDetectLanguage = true,
+                    GenerateThumbnails = true,
+                    EnableVersioning = true
+                }
+            };
+
+            var initResponse = await _httpClient.PostAsJsonAsync("/api/documentupload/initialize", initRequest, cancellationToken);
+
+            if (!initResponse.IsSuccessStatusCode)
+            {
+                _logger.LogError("Failed to initialize upload session. Status: {StatusCode}", initResponse.StatusCode);
+                return null;
+            }
+
+            var initContent = await initResponse.Content.ReadAsStringAsync(cancellationToken);
+            var initResult = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<DocumentUploadSessionDto>>(initContent, _jsonOptions);
+
+            if (initResult?.Success != true || initResult.Data?.SessionId == null)
+            {
+                _logger.LogError("Invalid response from upload session initialization");
+                return null;
+            }
+
+            var sessionId = initResult.Data.SessionId;
+            _logger.LogInformation("Upload session initialized: {SessionId}", sessionId);
+
+            // Step 2: Upload file
+            using var uploadContent = new MultipartFormDataContent();
+
+            using var fileStream = model.File.OpenReadStream();
+            using var streamContent = new StreamContent(fileStream);
+            streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(model.File.ContentType);
+            uploadContent.Add(streamContent, "file", model.File.FileName);
+            uploadContent.Add(new StringContent(sessionId.ToString()), "sessionId");
+
+            var uploadResponse = await _httpClient.PostAsync("/api/documentupload/file", uploadContent, cancellationToken);
+
+            if (uploadResponse.IsSuccessStatusCode)
+            {
+                var uploadResponseContent = await uploadResponse.Content.ReadAsStringAsync(cancellationToken);
+                var uploadResult = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<UploadResponseDto>>(uploadResponseContent, _jsonOptions);
+
+                if (uploadResult?.Success == true && uploadResult.Data != null)
+                {
+                    _logger.LogInformation("File uploaded successfully via enterprise system: {FileName}", model.File.FileName);
+
+                    // Create DocumentViewModel from upload result
+                    return CreateDocumentViewModelFromUpload(uploadResult.Data, model);
+                }
+            }
+
+            _logger.LogWarning("Enterprise upload failed with status: {StatusCode}", uploadResponse.StatusCode);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in enterprise upload for file: {FileName}", model.File?.FileName);
+            return null;
+        }
+    }
+
     public async Task<PagedResult<DocumentViewModel>> GetFavoriteDocumentsAsync(DocumentSearchViewModel search, CancellationToken cancellationToken = default)
     {
         // Placeholder implementation
@@ -278,6 +422,212 @@ public class DocumentApiClient : IDocumentApiClient
         // Placeholder implementation
         await Task.CompletedTask;
         return false;
+    }
+
+    // Advanced Search Methods Implementation
+
+    public async Task<List<string>> GetDocumentNameSuggestionsAsync(string term, int limit = 10, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/documents/suggestions/names?term={Uri.EscapeDataString(term)}&limit={limit}", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                return JsonSerializer.Deserialize<List<string>>(content, _jsonOptions) ?? new List<string>();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting document name suggestions for term: {Term}", term);
+        }
+        return new List<string>();
+    }
+
+    public async Task<List<string>> GetContentSuggestionsAsync(string term, int limit = 10, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/documents/suggestions/content?term={Uri.EscapeDataString(term)}&limit={limit}", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                return JsonSerializer.Deserialize<List<string>>(content, _jsonOptions) ?? new List<string>();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting content suggestions for term: {Term}", term);
+        }
+        return new List<string>();
+    }
+
+    public async Task<List<string>> GetTagSuggestionsAsync(string term, int limit = 10, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/documents/suggestions/tags?term={Uri.EscapeDataString(term)}&limit={limit}", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                return JsonSerializer.Deserialize<List<string>>(content, _jsonOptions) ?? new List<string>();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting tag suggestions for term: {Term}", term);
+        }
+        return new List<string>();
+    }
+
+    public async Task<List<string>> GetAuthorSuggestionsAsync(string term, int limit = 10, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/documents/suggestions/authors?term={Uri.EscapeDataString(term)}&limit={limit}", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                return JsonSerializer.Deserialize<List<string>>(content, _jsonOptions) ?? new List<string>();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting author suggestions for term: {Term}", term);
+        }
+        return new List<string>();
+    }
+
+    // Saved Search Methods Implementation
+
+    public async Task<bool> SaveSearchAsync(SavedSearchItem savedSearch, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(savedSearch, _jsonOptions);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync("api/documents/saved-searches", content, cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving search: {SearchName}", savedSearch.Name);
+            return false;
+        }
+    }
+
+    public async Task<List<SavedSearchItem>> GetSavedSearchesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("api/documents/saved-searches", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                return JsonSerializer.Deserialize<List<SavedSearchItem>>(content, _jsonOptions) ?? new List<SavedSearchItem>();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting saved searches");
+        }
+        return new List<SavedSearchItem>();
+    }
+
+    public async Task<SavedSearchItem?> GetSavedSearchAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/documents/saved-searches/{id}", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                return JsonSerializer.Deserialize<SavedSearchItem>(content, _jsonOptions);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting saved search: {Id}", id);
+        }
+        return null;
+    }
+
+    public async Task<bool> UpdateSavedSearchUsageAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.PutAsync($"api/documents/saved-searches/{id}/usage", null, cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating saved search usage: {Id}", id);
+            return false;
+        }
+    }
+
+    public async Task<bool> DeleteSavedSearchAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.DeleteAsync($"api/documents/saved-searches/{id}", cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting saved search: {Id}", id);
+            return false;
+        }
+    }
+
+    // Search History Methods Implementation
+
+    public async Task<List<SearchHistoryItem>> GetSearchHistoryAsync(int limit = 20, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/documents/search-history?limit={limit}", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                return JsonSerializer.Deserialize<List<SearchHistoryItem>>(content, _jsonOptions) ?? new List<SearchHistoryItem>();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting search history");
+        }
+        return new List<SearchHistoryItem>();
+    }
+
+    public async Task<bool> RecordSearchAsync(SearchHistoryItem historyItem, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(historyItem, _jsonOptions);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync("api/documents/search-history", content, cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error recording search history");
+            return false;
+        }
+    }
+
+    public async Task<bool> ClearSearchHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.DeleteAsync("api/documents/search-history", cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error clearing search history");
+            return false;
+        }
     }
 
     // Helper method to map backend DTO to frontend ViewModel
@@ -348,6 +698,102 @@ public class DocumentApiClient : IDocumentApiClient
             _logger.LogError(ex, "Error setting authorization header");
         }
     }
+
+    // Helper method to map DTO to ViewModel
+    private static DocumentViewModel MapToViewModel(UserDocumentDto dto)
+    {
+        return new DocumentViewModel
+        {
+            Id = dto.Id,
+            Name = dto.Name,
+            Description = dto.Description,
+            ContentType = dto.ContentType,
+            Size = dto.Size,
+            Status = MapDocumentStatus(dto.Status.ToString()),
+            CollectionId = dto.CollectionId,
+            Tags = dto.Tags ?? new List<string>(),
+            IsFavorite = dto.IsFavorite,
+            IsProcessing = dto.Status.ToString().ToLower() == "processing",
+            CreatedAt = dto.CreatedAt,
+            UpdatedAt = dto.UpdatedAt,
+            R2RDocumentId = dto.R2RDocumentId,
+            Permissions = new DocumentPermissions
+            {
+                CanEdit = true, // TODO: Map from actual permissions
+                CanDelete = true,
+                CanShare = true,
+                CanDownload = true
+            }
+        };
+    }
+
+    private static DocumentStatus MapDocumentStatus(string status)
+    {
+        return status?.ToLowerInvariant() switch
+        {
+            "uploaded" => DocumentStatus.Processing,
+            "processing" => DocumentStatus.Processing,
+            "processed" => DocumentStatus.Ready,
+            "failed" => DocumentStatus.Error,
+            "ready" => DocumentStatus.Ready,
+            "error" => DocumentStatus.Error,
+            "draft" => DocumentStatus.Draft,
+            "archived" => DocumentStatus.Archived,
+            "deleted" => DocumentStatus.Deleted,
+            _ => DocumentStatus.Draft
+        };
+    }
+
+    // Helper method to create DocumentViewModel from enterprise upload result
+    private static DocumentViewModel CreateDocumentViewModelFromUpload(UploadResponseDto uploadResult, DocumentUploadViewModel originalModel)
+    {
+        var fileInfo = uploadResult.Files.FirstOrDefault();
+
+        return new DocumentViewModel
+        {
+            Id = fileInfo?.FileId ?? Guid.NewGuid(),
+            Name = originalModel.Title ?? Path.GetFileNameWithoutExtension(originalModel.File!.FileName),
+            Description = originalModel.Description,
+            ContentType = originalModel.File.ContentType,
+            Size = originalModel.File.Length,
+            Status = MapFileUploadStatusToDocumentStatus(fileInfo?.Status ?? FileUploadStatusDto.Completed),
+            CollectionId = originalModel.CollectionId,
+            Tags = originalModel.Tags,
+            IsFavorite = originalModel.IsFavorite,
+            IsProcessing = fileInfo?.Status == FileUploadStatusDto.Processing,
+            CreatedAt = fileInfo?.CreatedAt ?? DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            Permissions = new DocumentPermissions
+            {
+                CanEdit = true,
+                CanDelete = true,
+                CanShare = true,
+                CanDownload = true
+            },
+            // Store session ID for tracking
+            Metadata = new Dictionary<string, object>
+            {
+                ["SessionId"] = uploadResult.SessionId?.ToString() ?? "",
+                ["UploadMethod"] = "Enterprise"
+            }
+        };
+    }
+
+    // Helper method to map FileUploadStatusDto to DocumentStatus
+    private static DocumentStatus MapFileUploadStatusToDocumentStatus(FileUploadStatusDto status)
+    {
+        return status switch
+        {
+            FileUploadStatusDto.Pending => DocumentStatus.Draft,
+            FileUploadStatusDto.Uploading => DocumentStatus.Processing,
+            FileUploadStatusDto.Uploaded => DocumentStatus.Processing,
+            FileUploadStatusDto.Processing => DocumentStatus.Processing,
+            FileUploadStatusDto.Completed => DocumentStatus.Ready,
+            FileUploadStatusDto.Failed => DocumentStatus.Error,
+            FileUploadStatusDto.Cancelled => DocumentStatus.Archived,
+            _ => DocumentStatus.Draft
+        };
+    }
 }
 
 public class BatchOperationResult
@@ -364,6 +810,117 @@ public class BatchOperationItemResult
     public Guid DocumentId { get; set; }
     public bool Success { get; set; }
     public string? Error { get; set; }
+}
+
+// Enterprise Upload DTOs for backend communication
+public class InitializeUploadSessionDto
+{
+    public List<FileInfoDto> Files { get; set; } = new();
+    public Guid? CollectionId { get; set; }
+    public List<string> Tags { get; set; } = new();
+    public UploadOptionsDto Options { get; set; } = new();
+    public string UserId { get; set; } = string.Empty;
+}
+
+public class FileInfoDto
+{
+    public string FileName { get; set; } = string.Empty;
+    public long Size { get; set; }
+    public string ContentType { get; set; } = string.Empty;
+    public string? Checksum { get; set; }
+    public DateTime? LastModified { get; set; }
+}
+
+public class UploadResponseDto
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public Guid? SessionId { get; set; }
+    public List<FileUploadInfoDto> Files { get; set; } = new();
+    public List<string> Errors { get; set; } = new();
+    public UploadStatisticsDto Statistics { get; set; } = new();
+    public Dictionary<string, object> Metadata { get; set; } = new();
+}
+
+public class DocumentUploadSessionDto
+{
+    public Guid SessionId { get; set; } = Guid.NewGuid();
+    public string UserId { get; set; } = string.Empty;
+    public Guid? CollectionId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAt { get; set; }
+    public UploadSessionStatusDto Status { get; set; } = UploadSessionStatusDto.Initializing;
+    public List<FileUploadInfoDto> Files { get; set; } = new();
+    public UploadOptionsDto Options { get; set; } = new();
+    public UploadStatisticsDto Statistics { get; set; } = new();
+    public string? ErrorMessage { get; set; }
+}
+
+public class FileUploadInfoDto
+{
+    public Guid FileId { get; set; } = Guid.NewGuid();
+    public Guid SessionId { get; set; }
+    public string OriginalFileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public long TotalSize { get; set; }
+    public long UploadedSize { get; set; }
+    public FileUploadStatusDto Status { get; set; } = FileUploadStatusDto.Pending;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public string? ErrorMessage { get; set; }
+    public int RetryCount { get; set; }
+}
+
+public class UploadOptionsDto
+{
+    public bool ExtractMetadata { get; set; } = true;
+    public bool PerformOCR { get; set; } = true;
+    public bool AutoDetectLanguage { get; set; } = true;
+    public string? PreferredLanguage { get; set; }
+    public bool GenerateThumbnails { get; set; } = true;
+    public bool EnableVersioning { get; set; } = true;
+    public bool OverwriteExisting { get; set; } = false;
+    public int MaxRetries { get; set; } = 3;
+    public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(5);
+    public bool EnableParallelProcessing { get; set; } = true;
+    public int MaxParallelUploads { get; set; } = 3;
+    public bool EnableChunkedUpload { get; set; } = true;
+}
+
+public class UploadStatisticsDto
+{
+    public long TotalBytes { get; set; }
+    public long UploadedBytes { get; set; }
+    public int TotalFiles { get; set; }
+    public int CompletedFiles { get; set; }
+    public int FailedFiles { get; set; }
+    public double ProgressPercentage => TotalBytes > 0 ? (double)UploadedBytes / TotalBytes * 100 : 0;
+    public TimeSpan ElapsedTime { get; set; }
+    public TimeSpan? EstimatedTimeRemaining { get; set; }
+    public double UploadSpeedBytesPerSecond { get; set; }
+}
+
+public enum UploadSessionStatusDto
+{
+    Initializing = 0,
+    Ready = 1,
+    Uploading = 2,
+    Processing = 3,
+    Completed = 4,
+    Failed = 5,
+    Cancelled = 6
+}
+
+public enum FileUploadStatusDto
+{
+    Pending = 0,
+    Uploading = 1,
+    Uploaded = 2,
+    Processing = 3,
+    Completed = 4,
+    Failed = 5,
+    Cancelled = 6
 }
 
 

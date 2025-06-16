@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Npgsql;
 using MassTransit;
 using Polly;
 using Polly.Extensions.Http;
@@ -23,11 +24,16 @@ using Hybrid.CleverDocs2.WebServices.Middleware;
 var builder = WebApplication.CreateBuilder(args);
 
 // PostgreSQL Database - Optimized Configuration (192.168.1.4:5433)
-builder.Services.AddDbContext<ApplicationDbContext>(opts => {
-    var connectionString = builder.Configuration.GetConnectionString("Postgres")
-        ?? throw new InvalidOperationException("PostgreSQL connection string 'Postgres' not found in configuration");
+// Configure Npgsql data source with dynamic JSON support
+var connectionString = builder.Configuration.GetConnectionString("Postgres")
+    ?? throw new InvalidOperationException("PostgreSQL connection string 'Postgres' not found in configuration");
 
-    opts.UseNpgsql(connectionString, npgsqlOpts => {
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+dataSourceBuilder.EnableDynamicJson(); // Enable dynamic JSON serialization for Dictionary<string, object>
+var dataSource = dataSourceBuilder.Build();
+
+builder.Services.AddDbContext<ApplicationDbContext>(opts => {
+    opts.UseNpgsql(dataSource, npgsqlOpts => {
         npgsqlOpts.EnableRetryOnFailure(
             maxRetryCount: builder.Configuration.GetValue<int>("Database:RetryPolicy:MaxRetryAttempts", 3),
             maxRetryDelay: TimeSpan.FromMilliseconds(builder.Configuration.GetValue<int>("Database:RetryPolicy:MaxDelayMs", 5000)),

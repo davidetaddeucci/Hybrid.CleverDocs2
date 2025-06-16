@@ -43,6 +43,11 @@ public interface IDocumentApiClient
     Task<bool> DeleteDocumentAsync(Guid documentId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Upload a new document
+    /// </summary>
+    Task<DocumentViewModel?> UploadDocumentAsync(DocumentUploadViewModel model, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Toggle document favorite status
     /// </summary>
     Task<bool> ToggleFavoriteAsync(Guid documentId, CancellationToken cancellationToken = default);
@@ -71,6 +76,72 @@ public interface IDocumentApiClient
     /// Track document view
     /// </summary>
     Task<bool> TrackDocumentViewAsync(Guid documentId, CancellationToken cancellationToken = default);
+
+    // Advanced Search Methods
+
+    /// <summary>
+    /// Get document name suggestions for autocomplete
+    /// </summary>
+    Task<List<string>> GetDocumentNameSuggestionsAsync(string term, int limit = 10, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get content suggestions for autocomplete
+    /// </summary>
+    Task<List<string>> GetContentSuggestionsAsync(string term, int limit = 10, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get tag suggestions for autocomplete
+    /// </summary>
+    Task<List<string>> GetTagSuggestionsAsync(string term, int limit = 10, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get author suggestions for autocomplete
+    /// </summary>
+    Task<List<string>> GetAuthorSuggestionsAsync(string term, int limit = 10, CancellationToken cancellationToken = default);
+
+    // Saved Search Methods
+
+    /// <summary>
+    /// Save a search for future use
+    /// </summary>
+    Task<bool> SaveSearchAsync(SavedSearchItem savedSearch, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get user's saved searches
+    /// </summary>
+    Task<List<SavedSearchItem>> GetSavedSearchesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get a specific saved search
+    /// </summary>
+    Task<SavedSearchItem?> GetSavedSearchAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Update saved search usage statistics
+    /// </summary>
+    Task<bool> UpdateSavedSearchUsageAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Delete a saved search
+    /// </summary>
+    Task<bool> DeleteSavedSearchAsync(Guid id, CancellationToken cancellationToken = default);
+
+    // Search History Methods
+
+    /// <summary>
+    /// Get user's search history
+    /// </summary>
+    Task<List<SearchHistoryItem>> GetSearchHistoryAsync(int limit = 20, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Record a search in history
+    /// </summary>
+    Task<bool> RecordSearchAsync(SearchHistoryItem historyItem, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clear user's search history
+    /// </summary>
+    Task<bool> ClearSearchHistoryAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -97,3 +168,5 @@ public class ApiResponse<T>
     public string? Message { get; set; }
     public List<string> Errors { get; set; } = new();
 }
+
+

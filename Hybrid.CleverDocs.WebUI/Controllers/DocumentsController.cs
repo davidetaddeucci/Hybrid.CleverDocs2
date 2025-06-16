@@ -22,6 +22,7 @@ public class DocumentsController : Controller
     {
         _documentApiClient = documentApiClient;
         _logger = logger;
+        _logger.LogInformation("DocumentsController constructor called");
     }
 
     /// <summary>
@@ -35,7 +36,7 @@ public class DocumentsController : Controller
         {
             // Set defaults if not provided
             search.Page = search.Page <= 0 ? 1 : search.Page;
-            search.PageSize = search.PageSize <= 0 ? 20 : search.PageSize;
+            search.PageSize = search.PageSize <= 0 ? 10 : search.PageSize; // Default to 10 per page
             search.SortBy = string.IsNullOrEmpty(search.SortBy) ? "updated_at" : search.SortBy;
 
             // Get documents
@@ -76,14 +77,19 @@ public class DocumentsController : Controller
     [HttpGet("upload")]
     public IActionResult Upload(Guid? collectionId)
     {
+        _logger.LogInformation("DocumentsController.Upload GET called with collectionId: {CollectionId}", collectionId);
         var viewModel = new DocumentUploadViewModel
         {
             CollectionId = collectionId,
             MaxFileSize = 100 * 1024 * 1024, // 100MB
             AllowedFileTypes = new List<string>
             {
-                ".pdf", ".doc", ".docx", ".txt", ".md",
-                ".ppt", ".pptx", ".xls", ".xlsx"
+                // R2R Supported file types only
+                ".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls",
+                ".pptx", ".ppt", ".html", ".csv", ".rtf", ".epub", ".odt",
+                ".rst", ".org", ".tsv", ".eml", ".msg", ".png", ".jpeg",
+                ".jpg", ".bmp", ".tiff", ".heic", ".mp3", ".py", ".js",
+                ".ts", ".css"
             }
         };
 
@@ -104,13 +110,22 @@ public class DocumentsController : Controller
     {
         try
         {
+            _logger.LogInformation("DocumentsController.Upload POST called with file: {FileName}, CollectionId: {CollectionId}",
+                model.File?.FileName, model.CollectionId);
+
             if (!ModelState.IsValid)
             {
+                _logger.LogWarning("ModelState is invalid for upload");
+                foreach (var error in ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    _logger.LogWarning("ModelState error: {ErrorMessage}", error.ErrorMessage);
+                }
                 return View(model);
             }
 
             if (model.File == null || model.File.Length == 0)
             {
+                _logger.LogWarning("No file provided for upload");
                 ModelState.AddModelError("File", "Please select a file to upload.");
                 return View(model);
             }
@@ -122,26 +137,74 @@ public class DocumentsController : Controller
                 return View(model);
             }
 
-            // Validate file type
+            // Validate file type - R2R supported extensions only
             var fileExtension = Path.GetExtension(model.File.FileName).ToLowerInvariant();
-            var allowedExtensions = new[] { ".pdf", ".doc", ".docx", ".txt", ".md", ".ppt", ".pptx", ".xls", ".xlsx" };
+            var allowedExtensions = new[] {
+                ".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls",
+                ".pptx", ".ppt", ".html", ".csv", ".rtf", ".epub", ".odt",
+                ".rst", ".org", ".tsv", ".eml", ".msg", ".png", ".jpeg",
+                ".jpg", ".bmp", ".tiff", ".heic", ".mp3", ".py", ".js",
+                ".ts", ".css"
+            };
 
             if (!allowedExtensions.Contains(fileExtension))
             {
-                ModelState.AddModelError("File", "File type not supported. Please upload a PDF, Word, PowerPoint, Excel, or text file.");
+                ModelState.AddModelError("File", "File type not supported by R2R. Please upload a supported file type.");
                 return View(model);
             }
 
-            // TODO: Implement actual upload logic using _documentApiClient
-            // For now, just show success message
-            TempData["SuccessMessage"] = $"Document '{model.File.FileName}' uploaded successfully.";
-
-            if (model.CollectionId.HasValue)
+            // Implement actual upload logic using _documentApiClient
+            try
             {
-                return RedirectToAction("Details", "Collections", new { collectionId = model.CollectionId.Value });
-            }
+                _logger.LogInformation("Starting document upload process for file: {FileName} ({FileSize} bytes)",
+                    model.File.FileName, model.File.Length);
 
-            return RedirectToAction("Index");
+                // Create upload request
+                var uploadRequest = new DocumentUploadViewModel
+                {
+                    Title = model.Title,
+                    Description = model.Description,
+                    File = model.File,
+                    CollectionId = model.CollectionId,
+                    TagsInput = model.TagsInput,
+                    IsFavorite = model.IsFavorite
+                };
+
+                _logger.LogInformation("Calling DocumentApiClient.UploadDocumentAsync...");
+
+                // Upload document to backend
+                var uploadedDocument = await _documentApiClient.UploadDocumentAsync(uploadRequest);
+
+                _logger.LogInformation("DocumentApiClient.UploadDocumentAsync completed. Result: {IsNull}",
+                    uploadedDocument == null ? "NULL" : "SUCCESS");
+
+                if (uploadedDocument != null)
+                {
+                    _logger.LogInformation("Upload successful! Document ID: {DocumentId}", uploadedDocument.Id);
+                    TempData["SuccessMessage"] = $"Document '{model.File.FileName}' uploaded successfully and added to the database.";
+
+                    if (model.CollectionId.HasValue)
+                    {
+                        _logger.LogInformation("Redirecting to collection details: {CollectionId}", model.CollectionId.Value);
+                        return RedirectToAction("Details", "Collections", new { collectionId = model.CollectionId.Value });
+                    }
+
+                    _logger.LogInformation("Redirecting to document details: {DocumentId}", uploadedDocument.Id);
+                    return RedirectToAction("Details", new { documentId = uploadedDocument.Id });
+                }
+                else
+                {
+                    _logger.LogWarning("Upload failed - DocumentApiClient returned null");
+                    ModelState.AddModelError("", "Failed to upload document. Please try again.");
+                    return View(model);
+                }
+            }
+            catch (Exception uploadEx)
+            {
+                _logger.LogError(uploadEx, "Error uploading document to backend");
+                ModelState.AddModelError("", "Failed to upload document to the system. Please try again.");
+                return View(model);
+            }
         }
         catch (Exception ex)
         {
@@ -386,6 +449,18 @@ public class DocumentsController : Controller
             _logger.LogError(ex, "Error getting search suggestions for term: {Term}", term);
             return Json(new List<string>());
         }
+    }
+
+    /// <summary>
+    /// R2R Processing Test page
+    /// </summary>
+    [HttpGet("r2r-test")]
+    public IActionResult R2RTest()
+    {
+        _logger.LogInformation("DocumentsController.R2RTest called");
+        ViewBag.PageTitle = "R2R Processing Test";
+        ViewBag.PageDescription = "Test real-time R2R document processing status updates";
+        return View();
     }
 
     // Helper methods

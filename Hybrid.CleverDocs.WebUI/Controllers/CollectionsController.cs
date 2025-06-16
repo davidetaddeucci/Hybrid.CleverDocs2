@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Hybrid.CleverDocs.WebUI.Models.Collections;
 using Hybrid.CleverDocs.WebUI.Models.Common;
+using Hybrid.CleverDocs.WebUI.Models.Documents;
 using Hybrid.CleverDocs.WebUI.Services.Collections;
+using Hybrid.CleverDocs.WebUI.Services.Documents;
 using Hybrid.CleverDocs.WebUI.Services;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
@@ -16,15 +18,18 @@ namespace Hybrid.CleverDocs.WebUI.Controllers;
 public class CollectionsController : Controller
 {
     private readonly ICollectionsApiClient _collectionsApiClient;
+    private readonly IDocumentApiClient _documentApiClient;
     private readonly ICacheService _cacheService;
     private readonly ILogger<CollectionsController> _logger;
 
     public CollectionsController(
         ICollectionsApiClient collectionsApiClient,
+        IDocumentApiClient documentApiClient,
         ICacheService cacheService,
         ILogger<CollectionsController> logger)
     {
         _collectionsApiClient = collectionsApiClient;
+        _documentApiClient = documentApiClient;
         _cacheService = cacheService;
         _logger = logger;
     }
@@ -110,6 +115,20 @@ public class CollectionsController : Controller
             // Get analytics data
             var analytics = await _collectionsApiClient.GetCollectionAnalyticsAsync(collectionId);
 
+            // Get documents for this collection
+            var documentsSearch = new DocumentSearchViewModel
+            {
+                Page = 1,
+                PageSize = 10, // Show first 10 documents in details view
+                SortBy = "updated_at",
+                SortDirection = SortDirection.Desc
+            };
+
+            _logger.LogInformation("Calling GetCollectionDocumentsAsync for collection {CollectionId}", collectionId);
+            var documentsResult = await _documentApiClient.GetCollectionDocumentsAsync(collectionId, documentsSearch);
+            _logger.LogInformation("GetCollectionDocumentsAsync returned {Count} documents for collection {CollectionId}",
+                documentsResult.Items.Count, collectionId);
+
             var viewModel = new CollectionDetailsViewModel
             {
                 Collection = collection,
@@ -119,7 +138,7 @@ public class CollectionsController : Controller
                 CanShare = collection.Permissions.CanShare,
                 CanAddDocuments = collection.Permissions.CanAddDocuments,
                 RelatedCollections = new List<CollectionViewModel>(),
-                RecentDocuments = new List<DocumentViewModel>()
+                RecentDocuments = documentsResult.Items.Select(ConvertToCollectionDocumentViewModel).ToList()
             };
 
             ViewBag.PageTitle = collection.Name;
@@ -593,6 +612,42 @@ public class CollectionsController : Controller
         {
             _logger.LogError(ex, "Error populating edit options");
         }
+    }
+
+    /// <summary>
+    /// Convert Documents.DocumentViewModel to Collections.DocumentViewModel
+    /// </summary>
+    private static Models.Collections.DocumentViewModel ConvertToCollectionDocumentViewModel(Models.Documents.DocumentViewModel doc)
+    {
+        return new Models.Collections.DocumentViewModel
+        {
+            Id = doc.Id,
+            Name = doc.Name,
+            Description = doc.Description,
+            CreatedAt = doc.CreatedAt,
+            UpdatedAt = doc.UpdatedAt,
+            Size = doc.Size,
+            ContentType = doc.ContentType,
+            FileType = GetFileTypeFromContentType(doc.ContentType),
+            Status = doc.StatusDisplayName
+        };
+    }
+
+    /// <summary>
+    /// Get file type from content type
+    /// </summary>
+    private static string GetFileTypeFromContentType(string contentType)
+    {
+        return contentType.ToLower() switch
+        {
+            var ct when ct.Contains("pdf") => "PDF",
+            var ct when ct.Contains("word") || ct.Contains("msword") => "Word",
+            var ct when ct.Contains("excel") || ct.Contains("spreadsheet") => "Excel",
+            var ct when ct.Contains("powerpoint") || ct.Contains("presentation") => "PowerPoint",
+            var ct when ct.Contains("text") => "Text",
+            var ct when ct.Contains("image") => "Image",
+            _ => "Document"
+        };
     }
 
     #endregion

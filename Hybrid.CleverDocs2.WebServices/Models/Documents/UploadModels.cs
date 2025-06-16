@@ -9,6 +9,7 @@ public class DocumentUploadSessionDto
 {
     public Guid SessionId { get; set; } = Guid.NewGuid();
     public string UserId { get; set; } = string.Empty;
+    public Guid? CompanyId { get; set; }
     public Guid? CollectionId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAt { get; set; }
@@ -152,6 +153,8 @@ public class R2RProcessingQueueItemDto
     public Guid DocumentId { get; set; }
     public Guid FileId { get; set; }
     public string UserId { get; set; } = string.Empty;
+    public Guid? CompanyId { get; set; }
+    public Guid? CollectionId { get; set; }
     public string FileName { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
     public long FileSize { get; set; }
@@ -235,14 +238,16 @@ public class InitializeUploadSessionDto
 {
     [Required]
     public List<FileInfoDto> Files { get; set; } = new();
-    
+
     public Guid? CollectionId { get; set; }
-    
+
     public List<string> Tags { get; set; } = new();
-    
+
     public UploadOptionsDto Options { get; set; } = new();
-    
+
     public string UserId { get; set; } = string.Empty;
+
+    public Guid? CompanyId { get; set; }
 }
 
 /// <summary>

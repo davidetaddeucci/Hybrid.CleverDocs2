@@ -129,6 +129,22 @@ app.UseSession(); // Enable session support
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Collections routes with GUID support
+app.MapControllerRoute(
+    name: "collection-details",
+    pattern: "collections/{collectionId:guid}",
+    defaults: new { controller = "Collections", action = "Details" });
+
+app.MapControllerRoute(
+    name: "collection-edit",
+    pattern: "collections/{collectionId:guid}/edit",
+    defaults: new { controller = "Collections", action = "Edit" });
+
+app.MapControllerRoute(
+    name: "collection-delete",
+    pattern: "collections/{collectionId:guid}/delete",
+    defaults: new { controller = "Collections", action = "Delete" });
+
 // Default route should go to login
 app.MapControllerRoute(
     name: "default",

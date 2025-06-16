@@ -122,14 +122,47 @@ public class UploadValidationService : IUploadValidationService
 {
     private readonly ILogger<UploadValidationService> _logger;
 
-    // Supported file types
+    // R2R Supported file types only - based on official R2R documentation
     private readonly HashSet<string> _supportedTypes = new()
     {
-        "application/pdf", "text/plain", "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "image/jpeg", "image/png", "image/gif", "image/bmp", "image/tiff"
+        // Documents
+        "application/pdf",                                                                      // .pdf
+        "text/plain",                                                                          // .txt
+        "text/markdown",                                                                       // .md
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",           // .docx
+        "application/msword",                                                                  // .doc
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",                 // .xlsx
+        "application/vnd.ms-excel",                                                           // .xls
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",         // .pptx
+        "application/vnd.ms-powerpoint",                                                      // .ppt
+        "text/html",                                                                          // .html
+        "text/csv",                                                                           // .csv
+        "application/rtf",                                                                    // .rtf
+        "application/epub+zip",                                                               // .epub
+        "application/vnd.oasis.opendocument.text",                                           // .odt
+        "text/x-rst",                                                                         // .rst
+        "text/x-org",                                                                         // .org
+        "text/tab-separated-values",                                                          // .tsv
+
+        // Email
+        "message/rfc822",                                                                     // .eml
+        "application/vnd.ms-outlook",                                                         // .msg
+
+        // Images
+        "image/png",                                                                          // .png
+        "image/jpeg",                                                                         // .jpeg, .jpg
+        "image/bmp",                                                                          // .bmp
+        "image/tiff",                                                                         // .tiff
+        "image/heic",                                                                         // .heic
+
+        // Audio
+        "audio/mpeg",                                                                         // .mp3
+
+        // Code files
+        "text/x-python",                                                                      // .py
+        "application/javascript",                                                             // .js
+        "application/typescript",                                                             // .ts
+        "text/css"                                                                            // .css
     };
 
     public UploadValidationService(ILogger<UploadValidationService> logger)
@@ -141,23 +174,38 @@ public class UploadValidationService : IUploadValidationService
     {
         var errors = new List<string>();
 
+        _logger.LogInformation("Validating file: {FileName}, ContentType: {ContentType}, Size: {Size}",
+            file.FileName, file.ContentType, file.Length);
+
         // Validate file size
         if (file.Length > options.MaxFileSize)
         {
             errors.Add($"File size {file.Length} exceeds maximum allowed size {options.MaxFileSize}");
+            _logger.LogWarning("File size validation failed: {FileName}, Size: {Size}, MaxSize: {MaxSize}",
+                file.FileName, file.Length, options.MaxFileSize);
         }
 
-        // Validate file type
+        // Validate file type with smart content type handling
+        var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
+
+        _logger.LogInformation("File validation details: Extension: {Extension}, ContentType: {ContentType}",
+            fileExtension, contentType);
+
         if (options.ValidateFileTypes && options.AllowedFileTypes.Any())
         {
-            if (!options.AllowedFileTypes.Contains(file.ContentType))
+            if (!options.AllowedFileTypes.Contains(contentType))
             {
-                errors.Add($"File type {file.ContentType} is not allowed");
+                errors.Add($"File type {contentType} is not allowed");
+                _logger.LogWarning("Content type not in allowed list: {ContentType}, AllowedTypes: {AllowedTypes}",
+                    contentType, string.Join(", ", options.AllowedFileTypes));
             }
         }
-        else if (!_supportedTypes.Contains(file.ContentType))
+        else if (!IsContentTypeValidForExtension(contentType, fileExtension))
         {
-            errors.Add($"File type {file.ContentType} is not supported");
+            errors.Add($"File type {contentType} is not supported for extension {fileExtension}");
+            _logger.LogWarning("Content type validation failed: {ContentType} not valid for extension {Extension}",
+                contentType, fileExtension);
         }
 
         // Validate file name
@@ -166,8 +214,71 @@ public class UploadValidationService : IUploadValidationService
             errors.Add("File name is required");
         }
 
+        _logger.LogInformation("File validation result: {IsValid}, Errors: {Errors}",
+            !errors.Any(), string.Join("; ", errors));
+
         await Task.CompletedTask;
         return (!errors.Any(), errors);
+    }
+
+    private bool IsContentTypeValidForExtension(string contentType, string fileExtension)
+    {
+        _logger.LogDebug("Checking content type validity: {ContentType} for extension {Extension}",
+            contentType, fileExtension);
+
+        // Direct match with supported types
+        if (_supportedTypes.Contains(contentType))
+        {
+            _logger.LogDebug("Content type {ContentType} found in supported types list", contentType);
+            return true;
+        }
+
+        // Handle browser quirks for specific file types
+        bool isValid = false;
+        switch (fileExtension)
+        {
+            case ".md":
+                // Browsers often send text/plain for .md files instead of text/markdown
+                isValid = contentType == "text/plain" || contentType == "text/markdown";
+                _logger.LogDebug("Markdown file validation: {ContentType} -> {IsValid}", contentType, isValid);
+                break;
+
+            case ".txt":
+                // Text files should be text/plain
+                isValid = contentType == "text/plain";
+                break;
+
+            case ".csv":
+                // CSV files might be sent as text/plain or application/vnd.ms-excel
+                isValid = contentType == "text/csv" || contentType == "text/plain" || contentType == "application/vnd.ms-excel";
+                break;
+
+            case ".tsv":
+                // TSV files might be sent as text/plain
+                isValid = contentType == "text/tab-separated-values" || contentType == "text/plain";
+                break;
+
+            case ".py":
+            case ".js":
+            case ".ts":
+            case ".css":
+            case ".rst":
+            case ".org":
+                // Code files might be sent as text/plain
+                isValid = contentType == "text/plain" || _supportedTypes.Contains(contentType);
+                break;
+
+            default:
+                // For all other extensions, require exact match with supported types
+                isValid = false;
+                _logger.LogDebug("Extension {Extension} requires exact content type match, result: {IsValid}",
+                    fileExtension, isValid);
+                break;
+        }
+
+        _logger.LogDebug("Final content type validation result: {ContentType} for {Extension} -> {IsValid}",
+            contentType, fileExtension, isValid);
+        return isValid;
     }
 
     public async Task<UploadValidationResultDto> ValidateFilesAsync(List<IFormFile> files, UploadOptionsDto options, string userId)

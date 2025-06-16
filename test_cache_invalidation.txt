@@ -1,0 +1,15 @@
+Test Cache Invalidation Document
+
+Questo è un documento di test per verificare che l'invalidazione della cache funzioni correttamente.
+
+Quando questo documento viene caricato, dovrebbe apparire immediatamente nella lista dei documenti senza dover aspettare che la cache scada.
+
+Data: 16/06/2025 17:20
+Test ID: CACHE_INVALIDATION_TEST_001
+
+Contenuto del test:
+- Upload del documento
+- Verifica che appaia immediatamente nella lista
+- Conferma che la cache è stata invalidata correttamente
+
+Fine del test.

@@ -184,6 +184,7 @@
 </div>
 
 @section Scripts {
+    <script src="~/lib/signalr/signalr.min.js"></script>
     <script>
         async function toggleFavorite(collectionId) {
             try {
@@ -230,6 +231,81 @@
             }
         }
 
+        class CollectionDetailsManager {
+            constructor() {
+                this.collectionId = '@Model.Collection.Id';
+                this.connection = null;
+                this.initializeSignalR();
+            }
+
+            async initializeSignalR() {
+                try {
+                    // Get JWT token from meta tag
+                    const token = document.querySelector('meta[name="jwt-token"]')?.getAttribute('content') ||
+                                localStorage.getItem('authToken') ||
+                                sessionStorage.getItem('authToken') ||
+                                this.getCookieValue('authToken');
+
+                    if (!token) {
+                        console.warn('No JWT token found for SignalR connection');
+                        return;
+                    }
+
+                    // Initialize SignalR connection
+                    this.connection = new signalR.HubConnectionBuilder()
+                        .withUrl("http://localhost:5252/hubs/upload", {
+                            accessTokenFactory: () => token
+                        })
+                        .withAutomaticReconnect([0, 2000, 10000, 30000])
+                        .configureLogging(signalR.LogLevel.Information)
+                        .build();
+
+                    // Listen for document upload completion
+                    this.connection.on("FileUploadCompleted", (fileInfo) => {
+                        console.log('Document upload completed:', fileInfo);
+                        this.refreshDocumentsList();
+                    });
+
+                    // Listen for R2R processing updates
+                    this.connection.on("R2RProcessingUpdate", (queueItem) => {
+                        console.log('R2R processing update:', queueItem);
+                        if (queueItem.Status === 'Completed' || queueItem.Status === 'Failed') {
+                            this.refreshDocumentsList();
+                        }
+                    });
+
+                    // Start connection
+                    await this.connection.start();
+                    console.log('SignalR connected for Collection Details');
+
+                } catch (error) {
+                    console.error('SignalR connection failed:', error);
+                }
+            }
+
+            getCookieValue(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return null;
+            }
+
+            async refreshDocumentsList() {
+                try {
+                    console.log('Refreshing documents list for collection:', this.collectionId);
+
+                    // Reload the page to show updated documents
+                    // In a more sophisticated implementation, we could fetch and update just the documents section
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000); // Wait 2 seconds to ensure database is updated
+
+                } catch (error) {
+                    console.error('Error refreshing documents list:', error);
+                }
+            }
+        }
+
         async function deleteDocument(documentId) {
             if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
                 return;
@@ -253,5 +329,10 @@
                 alert('An error occurred while deleting the document');
             }
         }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            window.collectionDetailsManager = new CollectionDetailsManager();
+        });
     </script>
 }
