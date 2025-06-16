@@ -1,8 +1,8 @@
-# R2R WebUI Frontend Blazor
+# R2R WebUI Frontend MVC
 
 ## Panoramica
 
-Il Frontend Blazor è l'interfaccia utente (WebUI) del sistema multitenant per SciPhi AI R2R. È sviluppato in Microsoft .NET 9.0 Blazor Server (o Blazor WebAssembly, a seconda delle preferenze di deployment e interattività) e utilizza la libreria di componenti MudBlazor per un design moderno e responsivo. L'obiettivo principale è fornire un'esperienza utente intuitiva, accattivante e facile da usare, anche per utenti non tecnici, nascondendo la complessità del sistema sottostante.
+Il Frontend MVC è l'interfaccia utente (WebUI) del sistema multitenant per SciPhi AI R2R. È sviluppato in Microsoft .NET 9.0 ASP.NET Core MVC e utilizza Bootstrap 5 per un design moderno e responsivo. L'obiettivo principale è fornire un'esperienza utente intuitiva, accattivante e facile da usare, anche per utenti non tecnici, nascondendo la complessità del sistema sottostante.
 
 ## Architettura Frontend
 

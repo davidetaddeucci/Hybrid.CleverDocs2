@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace Hybrid.CleverDocs.WebUI.Models.Documents;
 
@@ -359,9 +360,56 @@ public class DocumentViewEvent
     public TimeSpan? Duration { get; set; }
 }
 
-public class SelectListItem
+/// <summary>
+/// View model for document upload
+/// </summary>
+public class DocumentUploadViewModel
 {
-    public string Value { get; set; } = string.Empty;
-    public string Text { get; set; } = string.Empty;
-    public bool Selected { get; set; }
+    [Required]
+    [Display(Name = "File")]
+    public IFormFile? File { get; set; }
+
+    [Display(Name = "Collection")]
+    public Guid? CollectionId { get; set; }
+
+    [StringLength(255)]
+    [Display(Name = "Title (optional)")]
+    public string? Title { get; set; }
+
+    [StringLength(1000)]
+    [Display(Name = "Description (optional)")]
+    public string? Description { get; set; }
+
+    [Display(Name = "Tags (comma-separated)")]
+    public string? TagsInput { get; set; }
+
+    public List<string> Tags => string.IsNullOrEmpty(TagsInput)
+        ? new List<string>()
+        : TagsInput.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
+
+    [Display(Name = "Add to favorites")]
+    public bool IsFavorite { get; set; }
+
+    // UI Properties
+    public long MaxFileSize { get; set; } = 100 * 1024 * 1024; // 100MB
+    public List<string> AllowedFileTypes { get; set; } = new();
+    public List<SelectListItem> AvailableCollections { get; set; } = new();
+    public string FormattedMaxFileSize => FormatFileSize(MaxFileSize);
+    public string AllowedFileTypesText => string.Join(", ", AllowedFileTypes);
+
+    private static string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
 }
+
+

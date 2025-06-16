@@ -52,11 +52,11 @@ Per una comprensione approfondita del frontend, consultare i seguenti documenti:
 
 ### Documentazione Specifica del Frontend
 
-- [Documentazione Dettagliata del Frontend](./docs/README_frontend_blazor.md)
+- [Documentazione Dettagliata del Frontend](./docs/README_frontend_mvc.md)
 - [Progettazione dell'Interfaccia Utente](./docs/interfaccia_utente.md)
 - [Workflow per i Ruoli Utente](./docs/workflow_ruoli_dettagliati.md)
 - [Guida al Template Grafico](./docs/guida_template_grafico.md)
-- [Implementazione dei Componenti MudBlazor](./docs/implementazione_componenti.md)
+- [Implementazione dei Componenti Bootstrap](./docs/implementazione_componenti.md)
 - [Gestione dello Stato Frontend](./docs/gestione_stato_frontend.md)
 - [Integrazione con WebServices](./docs/integrazione_webservices.md)
 - [Testing Frontend](./docs/testing_frontend.md)
@@ -146,7 +146,7 @@ Per dettagli sui workflow specifici per ciascun ruolo, consultare [Workflow per 
 
 ## Interfaccia Utente
 
-L'interfaccia utente è costruita con MudBlazor, un framework Material Design per Blazor. Il design è responsive e accessibile, con un focus sulla semplicità e sull'usabilità per utenti non tecnici.
+L'interfaccia utente è costruita con Bootstrap 5, un framework CSS moderno per applicazioni web responsive. Il design è responsive e accessibile, con un focus sulla semplicità e sull'usabilità per utenti non tecnici.
 
 Principali componenti UI:
 

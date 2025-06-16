@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Hybrid.CleverDocs2.WebServices.Models.Collections;
 using Hybrid.CleverDocs2.WebServices.Services.Collections;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
+using System.Security.Claims;
 
 namespace Hybrid.CleverDocs2.WebServices.Hubs;
 
@@ -46,7 +47,7 @@ public class CollectionHub : Hub
             await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
 
             // Send initial data to the connected client
-            await SendInitialDataAsync(userId);
+            await SendInitialDataAsync(userId.ToString());
 
             await base.OnConnectedAsync();
         }
@@ -93,7 +94,7 @@ public class CollectionHub : Hub
         try
         {
             // Validate user has access to the collection
-            var collection = await _collectionService.GetCollectionByIdAsync(Guid.Parse(collectionId), userId);
+            var collection = await _collectionService.GetCollectionByIdAsync(Guid.Parse(collectionId), userId.ToString());
             if (collection == null)
             {
                 _logger.LogWarning("User {UserId} attempted to join collection group {CollectionId} without access, CorrelationId: {CorrelationId}", 
@@ -104,7 +105,7 @@ public class CollectionHub : Hub
             await Groups.AddToGroupAsync(Context.ConnectionId, $"collection_{collectionId}");
             
             // Track analytics
-            await _analyticsService.TrackActivityAsync(Guid.Parse(collectionId), userId, "collection_viewed");
+            await _analyticsService.TrackActivityAsync(Guid.Parse(collectionId), userId.ToString(), "collection_viewed");
 
             _logger.LogDebug("User {UserId} joined collection group {CollectionId}, CorrelationId: {CorrelationId}", 
                 userId, collectionId, correlationId);
@@ -148,7 +149,7 @@ public class CollectionHub : Hub
 
         try
         {
-            var analytics = await _analyticsService.GetUsageStatisticsAsync(Guid.Parse(collectionId), userId);
+            var analytics = await _analyticsService.GetUsageStatisticsAsync(Guid.Parse(collectionId), userId.ToString());
             await Clients.Caller.SendAsync("CollectionStatsUpdated", collectionId, analytics);
 
             _logger.LogDebug("Sent collection stats for {CollectionId} to user {UserId}, CorrelationId: {CorrelationId}", 
@@ -172,7 +173,7 @@ public class CollectionHub : Hub
         try
         {
             // Track the activity
-            await _analyticsService.TrackActivityAsync(Guid.Parse(collectionId), userId, activityType, 
+            await _analyticsService.TrackActivityAsync(Guid.Parse(collectionId), userId.ToString(), activityType,
                 data as Dictionary<string, object>);
 
             // Notify all users in the collection group
@@ -199,7 +200,7 @@ public class CollectionHub : Hub
 
         try
         {
-            var suggestions = await _collectionService.GetCollectionSuggestionsAsync(userId, context);
+            var suggestions = await _collectionService.GetCollectionSuggestionsAsync(userId.ToString(), context);
             await Clients.Caller.SendAsync("CollectionSuggestionsReceived", suggestions);
 
             _logger.LogDebug("Sent collection suggestions to user {UserId}, Context: {Context}, CorrelationId: {CorrelationId}", 
@@ -269,16 +270,21 @@ public class CollectionHub : Hub
     }
 
     // Helper methods
-    private string GetUserId()
+    private Guid GetUserId()
     {
-        return Context.User?.Identity?.Name ?? Context.UserIdentifier ?? "anonymous";
+        var userIdClaim = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Guid.Empty; // Return empty Guid for anonymous users
+        }
+        return userId;
     }
 
     private string GetUserName()
     {
-        return Context.User?.FindFirst("name")?.Value ?? 
-               Context.User?.FindFirst("preferred_username")?.Value ?? 
-               GetUserId();
+        return Context.User?.FindFirst("name")?.Value ??
+               Context.User?.FindFirst("preferred_username")?.Value ??
+               GetUserId().ToString();
     }
 
     private async Task SendInitialDataAsync(string userId)

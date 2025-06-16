@@ -17,7 +17,7 @@ public class UserDocumentDto
     public string? DownloadUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
-    public string UserId { get; set; } = string.Empty;
+    public Guid UserId { get; set; }
     public Guid? CollectionId { get; set; }
     public string? CollectionName { get; set; }
     public List<string> Tags { get; set; } = new();
@@ -46,7 +46,7 @@ public class DocumentQueryDto
     public string SortBy { get; set; } = "updated_at";
     public SortDirection SortDirection { get; set; } = SortDirection.Desc;
     public Guid? CollectionId { get; set; }
-    public string? UserId { get; set; }
+    public Guid? UserId { get; set; }
     public List<string> Tags { get; set; } = new();
     public Dictionary<string, object> Filters { get; set; } = new();
     public DateTime? CreatedAfter { get; set; }
@@ -99,7 +99,7 @@ public class BatchOperationRequestDto
     public List<Guid> DocumentIds { get; set; } = new();
     
     [Required]
-    public string UserId { get; set; } = string.Empty;
+    public Guid UserId { get; set; }
     
     public Guid? TargetCollectionId { get; set; }
     public List<string> Tags { get; set; } = new();
@@ -166,7 +166,7 @@ public class DocumentPermissions
 public class DocumentViewEvent
 {
     public DateTime Timestamp { get; set; }
-    public string UserId { get; set; } = string.Empty;
+    public Guid UserId { get; set; }
     public string? UserName { get; set; }
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }

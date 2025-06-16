@@ -1,0 +1,120 @@
+@model Hybrid.CleverDocs.WebUI.Models.Documents.DocumentListViewModel
+@{
+    ViewData["Title"] = "Documents";
+    ViewData["PageTitle"] = "Document Management";
+}
+
+<div class="documents-page">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="header-content">
+            <div class="header-info">
+                <h1 class="page-title">
+                    <i class="material-symbols-rounded">description</i>
+                    Documents
+                </h1>
+                <p class="page-description">Manage and organize your documents</p>
+            </div>
+            
+            <div class="header-actions">
+                <a href="@Url.Action("Index", "Upload")" class="btn btn-primary">
+                    <i class="material-symbols-rounded">upload</i>
+                    Upload Documents
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents Content -->
+    <div class="documents-content">
+        @if (!Model.Documents.Any())
+        {
+            <div class="empty-state text-center py-5">
+                <div class="empty-icon mb-3">
+                    <i class="material-symbols-rounded" style="font-size: 4rem; color: #6c757d;">folder_open</i>
+                </div>
+                <h3>No documents yet</h3>
+                <p class="text-muted">Upload your first document to get started.</p>
+                <a href="@Url.Action("Index", "Upload")" class="btn btn-primary">
+                    <i class="material-symbols-rounded">upload</i>
+                    Upload Documents
+                </a>
+            </div>
+        }
+        else
+        {
+            <!-- Document Grid View -->
+            <div class="row">
+                @foreach (var document in Model.Documents)
+                {
+                    <div class="col-md-4 col-lg-3 mb-4">
+                        <div class="card document-card h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="material-symbols-rounded me-2" style="font-size: 2rem; color: #007bff;">description</i>
+                                    <div class="flex-grow-1">
+                                        <h6 class="card-title mb-1">
+                                            <a href="@Url.Action("Details", new { documentId = document.Id })" class="text-decoration-none">
+                                                @document.Name
+                                            </a>
+                                        </h6>
+                                        <small class="text-muted">@document.FormattedSize</small>
+                                    </div>
+                                </div>
+                                
+                                @if (!string.IsNullOrEmpty(document.Description))
+                                {
+                                    <p class="card-text small text-muted">@document.Description</p>
+                                }
+                                
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">@document.RelativeUpdatedTime</small>
+                                    <div class="btn-group" role="group">
+                                        <a href="@Url.Action("Details", new { documentId = document.Id })" class="btn btn-sm btn-outline-primary">
+                                            <i class="material-symbols-rounded">visibility</i>
+                                        </a>
+                                        @if (document.Permissions.CanEdit)
+                                        {
+                                            <a href="@Url.Action("Edit", new { documentId = document.Id })" class="btn btn-sm btn-outline-secondary">
+                                                <i class="material-symbols-rounded">edit</i>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Pagination -->
+            @if (Model.Pagination.TotalPages > 1)
+            {
+                <nav aria-label="Documents pagination">
+                    <ul class="pagination justify-content-center">
+                        @if (Model.Pagination.HasPreviousPage)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" href="@Url.Action("Index", new { page = Model.Pagination.CurrentPage - 1 })">Previous</a>
+                            </li>
+                        }
+                        
+                        @for (int i = Math.Max(1, Model.Pagination.CurrentPage - 2); i <= Math.Min(Model.Pagination.TotalPages, Model.Pagination.CurrentPage + 2); i++)
+                        {
+                            <li class="page-item @(i == Model.Pagination.CurrentPage ? "active" : "")">
+                                <a class="page-link" href="@Url.Action("Index", new { page = i })">@i</a>
+                            </li>
+                        }
+                        
+                        @if (Model.Pagination.HasNextPage)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" href="@Url.Action("Index", new { page = Model.Pagination.CurrentPage + 1 })">Next</a>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+            }
+        }
+    </div>
+</div>

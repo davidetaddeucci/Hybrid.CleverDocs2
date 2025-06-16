@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Hybrid.CleverDocs2.WebServices.Models.Collections;
 using Hybrid.CleverDocs2.WebServices.Models.Common;
 using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Hubs;
+using Hybrid.CleverDocs2.WebServices.Data;
 using System.Text.Json;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Collections;
@@ -14,6 +16,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Collections;
 /// </summary>
 public class UserCollectionService : IUserCollectionService
 {
+    private readonly ApplicationDbContext _dbContext;
     private readonly IMultiLevelCacheService _cacheService;
     private readonly ICollectionSyncService _syncService;
     private readonly ICollectionSuggestionService _suggestionService;
@@ -23,10 +26,8 @@ public class UserCollectionService : IUserCollectionService
     private readonly ICorrelationService _correlationService;
     private readonly UserCollectionOptions _options;
 
-    // Mock repository - in real implementation this would be injected
-    private readonly List<UserCollectionDto> _mockCollections = new();
-
     public UserCollectionService(
+        ApplicationDbContext dbContext,
         IMultiLevelCacheService cacheService,
         ICollectionSyncService syncService,
         ICollectionSuggestionService suggestionService,
@@ -36,6 +37,7 @@ public class UserCollectionService : IUserCollectionService
         ICorrelationService correlationService,
         IOptions<UserCollectionOptions> options)
     {
+        _dbContext = dbContext;
         _cacheService = cacheService;
         _syncService = syncService;
         _suggestionService = suggestionService;
@@ -45,7 +47,7 @@ public class UserCollectionService : IUserCollectionService
         _correlationService = correlationService;
         _options = options.Value;
 
-        InitializeMockData();
+        // InitializeMockData(); // ❌ REMOVED: No longer using mock data
     }
 
     public async Task<List<UserCollectionDto>> GetUserCollectionsAsync(string userId)
@@ -57,14 +59,18 @@ public class UserCollectionService : IUserCollectionService
         {
             return await _cacheService.GetAsync(cacheKey, async () =>
             {
-                _logger.LogDebug("Loading collections for user {UserId}, CorrelationId: {CorrelationId}", 
+                _logger.LogDebug("Loading collections for user {UserId}, CorrelationId: {CorrelationId}",
                     userId, correlationId);
 
-                // Mock implementation - in real app this would query database
-                var collections = _mockCollections
-                    .Where(c => c.CreatedBy == userId)
+                // Query database for user's collections
+                var userGuid = Guid.Parse(userId);
+                var collectionEntities = await _dbContext.Collections
+                    .Where(c => c.UserId == userGuid)
                     .OrderByDescending(c => c.UpdatedAt)
-                    .ToList();
+                    .ToListAsync();
+
+                // Convert to DTOs
+                var collections = collectionEntities.Select(MapEntityToDto).ToList();
 
                 // Update stats for each collection
                 foreach (var collection in collections)
@@ -90,13 +96,18 @@ public class UserCollectionService : IUserCollectionService
 
         try
         {
-            var collection = _mockCollections.FirstOrDefault(c => c.Id == collectionId && c.CreatedBy == userId);
+            // Query database for collection
+            var userGuid = Guid.Parse(userId);
+            var collectionEntity = await _dbContext.Collections
+                .FirstOrDefaultAsync(c => c.Id == collectionId && c.UserId == userGuid);
 
-            if (collection != null)
-            {
-                collection.Stats = await GetCollectionStatsAsync(collectionId);
-                await UpdateLastAccessedAsync(collectionId, userId);
-            }
+            if (collectionEntity == null)
+                return null;
+
+            // Convert to DTO
+            var collection = MapEntityToDto(collectionEntity);
+            collection.Stats = await GetCollectionStatsAsync(collectionId);
+            await UpdateLastAccessedAsync(collectionId, userId);
 
             return collection;
         }
@@ -132,27 +143,30 @@ public class UserCollectionService : IUserCollectionService
                 };
             }
 
-            // Create collection
-            var collection = new UserCollectionDto
+            // Create collection entity for database
+            var collectionEntity = new Data.Entities.Collection
             {
                 Id = Guid.NewGuid(),
                 Name = request.Name,
                 Description = request.Description,
                 Color = request.Color ?? await _suggestionService.SuggestColorAsync(request.Name, request.Description),
                 Icon = request.Icon ?? await _suggestionService.SuggestIconAsync(request.Name, request.Description),
-                Tags = request.Tags,
-                CreatedBy = request.UserId,
-                TenantId = GetTenantIdForUser(request.UserId),
+                Tags = request.Tags, // Uses the helper property for JSON serialization
+                IsFavorite = request.SetAsFavorite,
+                UserId = Guid.Parse(request.UserId),
+                CompanyId = Guid.Parse(GetTenantIdForUser(request.UserId)),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
-                IsFavorite = request.SetAsFavorite,
-                DocumentCount = 0,
-                Stats = new CollectionStatsDto(),
-                Permissions = new CollectionPermissionsDto { IsOwner = true }
+                CreatedBy = request.UserId,
+                UpdatedBy = request.UserId
             };
 
-            // Add to mock storage
-            _mockCollections.Add(collection);
+            // Save to database
+            await _dbContext.Collections.AddAsync(collectionEntity);
+            await _dbContext.SaveChangesAsync();
+
+            // Convert to DTO for response
+            var collection = MapEntityToDto(collectionEntity);
 
             // Create in R2R asynchronously
             _ = Task.Run(async () =>
@@ -213,9 +227,12 @@ public class UserCollectionService : IUserCollectionService
 
         try
         {
-            var collection = _mockCollections.FirstOrDefault(c => c.Id == request.CollectionId && c.CreatedBy == request.UserId);
-            
-            if (collection == null)
+            // Find collection in database
+            var userGuid = Guid.Parse(request.UserId);
+            var collectionEntity = await _dbContext.Collections
+                .FirstOrDefaultAsync(c => c.Id == request.CollectionId && c.UserId == userGuid);
+
+            if (collectionEntity == null)
             {
                 return new CollectionOperationResponseDto
                 {
@@ -226,7 +243,7 @@ public class UserCollectionService : IUserCollectionService
             }
 
             // Check name uniqueness if name is being changed
-            if (!string.IsNullOrEmpty(request.Name) && request.Name != collection.Name)
+            if (!string.IsNullOrEmpty(request.Name) && request.Name != collectionEntity.Name)
             {
                 var isUnique = await IsCollectionNameUniqueAsync(request.Name, request.UserId, request.CollectionId);
                 if (!isUnique)
@@ -241,14 +258,21 @@ public class UserCollectionService : IUserCollectionService
             }
 
             // Update collection properties
-            if (!string.IsNullOrEmpty(request.Name)) collection.Name = request.Name;
-            if (request.Description != null) collection.Description = request.Description;
-            if (!string.IsNullOrEmpty(request.Color)) collection.Color = request.Color;
-            if (!string.IsNullOrEmpty(request.Icon)) collection.Icon = request.Icon;
-            if (request.Tags != null) collection.Tags = request.Tags;
-            if (request.IsFavorite.HasValue) collection.IsFavorite = request.IsFavorite.Value;
-            
-            collection.UpdatedAt = DateTime.UtcNow;
+            if (!string.IsNullOrEmpty(request.Name)) collectionEntity.Name = request.Name;
+            if (request.Description != null) collectionEntity.Description = request.Description;
+            if (!string.IsNullOrEmpty(request.Color)) collectionEntity.Color = request.Color;
+            if (!string.IsNullOrEmpty(request.Icon)) collectionEntity.Icon = request.Icon;
+            if (request.Tags != null) collectionEntity.Tags = request.Tags;
+            if (request.IsFavorite.HasValue) collectionEntity.IsFavorite = request.IsFavorite.Value;
+
+            collectionEntity.UpdatedAt = DateTime.UtcNow;
+            collectionEntity.UpdatedBy = request.UserId;
+
+            // Save changes to database
+            await _dbContext.SaveChangesAsync();
+
+            // Convert to DTO for response
+            var collection = MapEntityToDto(collectionEntity);
 
             // Update in R2R asynchronously
             _ = Task.Run(async () =>
@@ -301,9 +325,12 @@ public class UserCollectionService : IUserCollectionService
 
         try
         {
-            var collection = _mockCollections.FirstOrDefault(c => c.Id == collectionId && c.CreatedBy == userId);
-            
-            if (collection == null)
+            // Find collection in database
+            var userGuid = Guid.Parse(userId);
+            var collectionEntity = await _dbContext.Collections
+                .FirstOrDefaultAsync(c => c.Id == collectionId && c.UserId == userGuid);
+
+            if (collectionEntity == null)
             {
                 return new CollectionOperationResponseDto
                 {
@@ -312,8 +339,11 @@ public class UserCollectionService : IUserCollectionService
                 };
             }
 
-            // Check if collection has documents
-            if (collection.DocumentCount > 0)
+            // Check if collection has documents (count from related documents)
+            var documentCount = await _dbContext.CollectionDocuments
+                .CountAsync(cd => cd.CollectionId == collectionId);
+
+            if (documentCount > 0)
             {
                 return new CollectionOperationResponseDto
                 {
@@ -323,8 +353,12 @@ public class UserCollectionService : IUserCollectionService
                 };
             }
 
-            // Remove from mock storage (in real app this would be soft delete)
-            _mockCollections.Remove(collection);
+            // Convert to DTO for R2R operations
+            var collection = MapEntityToDto(collectionEntity);
+
+            // Remove from database
+            _dbContext.Collections.Remove(collectionEntity);
+            await _dbContext.SaveChangesAsync();
 
             // Delete from R2R asynchronously
             if (!string.IsNullOrEmpty(collection.R2RCollectionId))
@@ -375,9 +409,12 @@ public class UserCollectionService : IUserCollectionService
 
     public async Task<CollectionOperationResponseDto> ToggleFavoriteAsync(Guid collectionId, string userId)
     {
-        var collection = _mockCollections.FirstOrDefault(c => c.Id == collectionId && c.CreatedBy == userId);
-        
-        if (collection == null)
+        // Find collection in database
+        var userGuid = Guid.Parse(userId);
+        var collectionEntity = await _dbContext.Collections
+            .FirstOrDefaultAsync(c => c.Id == collectionId && c.UserId == userGuid);
+
+        if (collectionEntity == null)
         {
             return new CollectionOperationResponseDto
             {
@@ -386,11 +423,19 @@ public class UserCollectionService : IUserCollectionService
             };
         }
 
-        collection.IsFavorite = !collection.IsFavorite;
-        collection.UpdatedAt = DateTime.UtcNow;
+        // Toggle favorite status
+        collectionEntity.IsFavorite = !collectionEntity.IsFavorite;
+        collectionEntity.UpdatedAt = DateTime.UtcNow;
+        collectionEntity.UpdatedBy = userId;
+
+        // Save changes
+        await _dbContext.SaveChangesAsync();
+
+        // Convert to DTO for response
+        var collection = MapEntityToDto(collectionEntity);
 
         await InvalidateCollectionCache(collectionId, userId);
-        await _analyticsService.TrackActivityAsync(collectionId, userId, 
+        await _analyticsService.TrackActivityAsync(collectionId, userId,
             collection.IsFavorite ? "collection_favorited" : "collection_unfavorited");
 
         await _hubContext.Clients.User(userId)
@@ -407,9 +452,99 @@ public class UserCollectionService : IUserCollectionService
     // Additional methods implementation continues...
     public async Task<PagedResult<UserCollectionDto>> SearchCollectionsAsync(CollectionSearchDto searchRequest, string userId)
     {
-        // Implementation for search with filtering
-        await Task.Delay(10); // Simulate async work
-        return new PagedResult<UserCollectionDto>();
+        var correlationId = _correlationService.GetCorrelationId();
+        _logger.LogInformation("Searching collections for user {UserId}, CorrelationId: {CorrelationId}", userId, correlationId);
+
+        try
+        {
+            var userGuid = Guid.Parse(userId);
+            var query = _dbContext.Collections.Where(c => c.UserId == userGuid);
+
+            // Apply search filters
+            if (!string.IsNullOrEmpty(searchRequest.SearchTerm))
+            {
+                var searchTerm = searchRequest.SearchTerm.ToLower();
+                query = query.Where(c => c.Name.ToLower().Contains(searchTerm) ||
+                                        (c.Description != null && c.Description.ToLower().Contains(searchTerm)));
+            }
+
+            if (searchRequest.Tags.Any())
+            {
+                foreach (var tag in searchRequest.Tags)
+                {
+                    query = query.Where(c => c.TagsJson != null && c.TagsJson.Contains(tag));
+                }
+            }
+
+            if (!string.IsNullOrEmpty(searchRequest.Color))
+            {
+                query = query.Where(c => c.Color == searchRequest.Color);
+            }
+
+            if (!string.IsNullOrEmpty(searchRequest.Icon))
+            {
+                query = query.Where(c => c.Icon == searchRequest.Icon);
+            }
+
+            if (searchRequest.IsFavorite.HasValue)
+            {
+                query = query.Where(c => c.IsFavorite == searchRequest.IsFavorite.Value);
+            }
+
+            if (searchRequest.CreatedAfter.HasValue)
+            {
+                query = query.Where(c => c.CreatedAt >= searchRequest.CreatedAfter.Value);
+            }
+
+            if (searchRequest.CreatedBefore.HasValue)
+            {
+                query = query.Where(c => c.CreatedAt <= searchRequest.CreatedBefore.Value);
+            }
+
+            // Apply sorting
+            query = searchRequest.SortBy.ToLower() switch
+            {
+                "name" => searchRequest.SortDirection.ToUpper() == "ASC"
+                    ? query.OrderBy(c => c.Name)
+                    : query.OrderByDescending(c => c.Name),
+                "createdat" => searchRequest.SortDirection.ToUpper() == "ASC"
+                    ? query.OrderBy(c => c.CreatedAt)
+                    : query.OrderByDescending(c => c.CreatedAt),
+                _ => searchRequest.SortDirection.ToUpper() == "ASC"
+                    ? query.OrderBy(c => c.UpdatedAt)
+                    : query.OrderByDescending(c => c.UpdatedAt)
+            };
+
+            // Get total count
+            var totalCount = await query.CountAsync();
+
+            // Apply pagination
+            var collections = await query
+                .Skip((searchRequest.Page - 1) * searchRequest.PageSize)
+                .Take(searchRequest.PageSize)
+                .ToListAsync();
+
+            // Map to DTOs
+            var collectionDtos = collections.Select(MapEntityToDto).ToList();
+
+            // Use the constructor that automatically calculates TotalPages
+            var result = new PagedResult<UserCollectionDto>(
+                collectionDtos,
+                totalCount,
+                searchRequest.Page,
+                searchRequest.PageSize);
+
+            _logger.LogInformation("Found {Count} collections for user {UserId}, CorrelationId: {CorrelationId}",
+                totalCount, userId, correlationId);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching collections for user {UserId}, CorrelationId: {CorrelationId}",
+                userId, correlationId);
+            throw;
+        }
     }
 
     public async Task<CollectionOperationResponseDto> ReorderCollectionsAsync(ReorderCollectionsDto request)
@@ -454,21 +589,29 @@ public class UserCollectionService : IUserCollectionService
 
     public async Task UpdateLastAccessedAsync(Guid collectionId, string userId)
     {
-        var collection = _mockCollections.FirstOrDefault(c => c.Id == collectionId && c.CreatedBy == userId);
-        if (collection != null)
+        // Find collection in database
+        var userGuid = Guid.Parse(userId);
+        var collectionEntity = await _dbContext.Collections
+            .FirstOrDefaultAsync(c => c.Id == collectionId && c.UserId == userGuid);
+
+        if (collectionEntity != null)
         {
-            collection.LastAccessedAt = DateTime.UtcNow;
+            // Note: LastAccessedAt is not in the entity model, but we can update UpdatedAt
+            // In a real implementation, you might want to add LastAccessedAt to the entity
+            collectionEntity.UpdatedAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync();
             await InvalidateCollectionCache(collectionId, userId);
         }
     }
 
     public async Task<bool> IsCollectionNameUniqueAsync(string name, string userId, Guid? excludeCollectionId = null)
     {
-        await Task.Delay(10); // Simulate async work
-        return !_mockCollections.Any(c => 
-            c.CreatedBy == userId && 
-            c.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && 
-            c.Id != excludeCollectionId);
+        var userGuid = Guid.Parse(userId);
+        var exists = await _dbContext.Collections
+            .AnyAsync(c => c.UserId == userGuid &&
+                          c.Name.ToLower() == name.ToLower() &&
+                          c.Id != excludeCollectionId);
+        return !exists;
     }
 
     public async Task<List<string>> GetAvailableColorsAsync()
@@ -549,8 +692,35 @@ public class UserCollectionService : IUserCollectionService
 
     private string GetTenantIdForUser(string userId)
     {
-        // Extract tenant ID from user context
-        return "default-tenant";
+        // For now, use a default GUID until we implement proper tenant resolution
+        // In production, this should get the actual tenant ID from the user context
+        return "f2e9cab2-c7b4-446b-a9b9-13501b2b5973"; // Default tenant GUID
+    }
+
+    /// <summary>
+    /// Maps Collection entity to UserCollectionDto
+    /// </summary>
+    private UserCollectionDto MapEntityToDto(Data.Entities.Collection entity)
+    {
+        return new UserCollectionDto
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            Description = entity.Description,
+            Color = entity.Color,
+            Icon = entity.Icon,
+            Tags = entity.Tags,
+            CreatedBy = entity.CreatedBy ?? entity.UserId.ToString(),
+            TenantId = entity.CompanyId.ToString(),
+            CreatedAt = entity.CreatedAt,
+            UpdatedAt = entity.UpdatedAt,
+            LastAccessedAt = null, // Will be updated when accessed
+            IsFavorite = entity.IsFavorite,
+            DocumentCount = 0, // Will be calculated from related documents
+            Stats = new CollectionStatsDto(),
+            Permissions = new CollectionPermissionsDto { IsOwner = true },
+            R2RCollectionId = entity.R2RCollectionId
+        };
     }
 
     private async Task InvalidateUserCollectionsCache(string userId)
@@ -566,38 +736,7 @@ public class UserCollectionService : IUserCollectionService
         );
     }
 
-    private void InitializeMockData()
-    {
-        // Initialize with some mock collections for testing
-        _mockCollections.AddRange(new[]
-        {
-            new UserCollectionDto
-            {
-                Id = Guid.NewGuid(),
-                Name = "Research Papers",
-                Description = "Academic research and scientific papers",
-                Color = "#3B82F6",
-                Icon = "book",
-                CreatedBy = "user1",
-                DocumentCount = 15,
-                CreatedAt = DateTime.UtcNow.AddDays(-30),
-                UpdatedAt = DateTime.UtcNow.AddDays(-2),
-                IsFavorite = true
-            },
-            new UserCollectionDto
-            {
-                Id = Guid.NewGuid(),
-                Name = "Project Documentation",
-                Description = "Technical documentation for current projects",
-                Color = "#10B981",
-                Icon = "briefcase",
-                CreatedBy = "user1",
-                DocumentCount = 8,
-                CreatedAt = DateTime.UtcNow.AddDays(-15),
-                UpdatedAt = DateTime.UtcNow.AddDays(-1)
-            }
-        });
-    }
+
 }
 
 /// <summary>

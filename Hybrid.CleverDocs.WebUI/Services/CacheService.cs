@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 
@@ -6,48 +5,26 @@ namespace Hybrid.CleverDocs.WebUI.Services
 {
     public class CacheService : ICacheService
     {
-        private readonly IDistributedCache _distributedCache;
         private readonly IMemoryCache _memoryCache;
         private readonly ILogger<CacheService> _logger;
-        private readonly JsonSerializerOptions _jsonOptions;
 
         public CacheService(
-            IDistributedCache distributedCache,
             IMemoryCache memoryCache,
             ILogger<CacheService> logger)
         {
-            _distributedCache = distributedCache;
             _memoryCache = memoryCache;
             _logger = logger;
-            _jsonOptions = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = false
-            };
         }
 
         public async Task<T?> GetAsync<T>(string key) where T : class
         {
             try
             {
-                // Try memory cache first (faster)
+                // Use only memory cache (Redis disabled for stability)
                 if (_memoryCache.TryGetValue(key, out T? memoryValue))
                 {
                     _logger.LogDebug("Cache HIT (Memory): {Key}", key);
                     return memoryValue;
-                }
-
-                // Try distributed cache (Redis)
-                var distributedValue = await _distributedCache.GetStringAsync(key);
-                if (!string.IsNullOrEmpty(distributedValue))
-                {
-                    var deserializedValue = JsonSerializer.Deserialize<T>(distributedValue, _jsonOptions);
-                    
-                    // Store in memory cache for faster subsequent access
-                    _memoryCache.Set(key, deserializedValue, TimeSpan.FromMinutes(5));
-                    
-                    _logger.LogDebug("Cache HIT (Distributed): {Key}", key);
-                    return deserializedValue;
                 }
 
                 _logger.LogDebug("Cache MISS: {Key}", key);
@@ -65,19 +42,10 @@ namespace Hybrid.CleverDocs.WebUI.Services
             try
             {
                 var defaultExpiration = expiration ?? TimeSpan.FromMinutes(15);
-                
-                // Set in memory cache
+
+                // Set only in memory cache (Redis disabled for stability)
                 _memoryCache.Set(key, value, defaultExpiration);
 
-                // Set in distributed cache (Redis)
-                var serializedValue = JsonSerializer.Serialize(value, _jsonOptions);
-                var options = new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = defaultExpiration
-                };
-
-                await _distributedCache.SetStringAsync(key, serializedValue, options);
-                
                 _logger.LogDebug("Cache SET: {Key} (Expiration: {Expiration})", key, defaultExpiration);
             }
             catch (Exception ex)
@@ -91,8 +59,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
             try
             {
                 _memoryCache.Remove(key);
-                await _distributedCache.RemoveAsync(key);
-                
+
                 _logger.LogDebug("Cache REMOVE: {Key}", key);
             }
             catch (Exception ex)
@@ -159,13 +126,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
         {
             try
             {
-                if (_memoryCache.TryGetValue(key, out _))
-                {
-                    return true;
-                }
-
-                var distributedValue = await _distributedCache.GetStringAsync(key);
-                return !string.IsNullOrEmpty(distributedValue);
+                return _memoryCache.TryGetValue(key, out _);
             }
             catch (Exception ex)
             {
@@ -196,13 +157,8 @@ namespace Hybrid.CleverDocs.WebUI.Services
         {
             try
             {
-                // Refresh distributed cache entry
-                var value = await _distributedCache.GetStringAsync(key);
-                if (!string.IsNullOrEmpty(value))
-                {
-                    await _distributedCache.RefreshAsync(key);
-                    _logger.LogDebug("Cache REFRESH: {Key}", key);
-                }
+                // Memory cache doesn't need explicit refresh
+                _logger.LogDebug("Cache REFRESH: {Key} (Memory cache - no action needed)", key);
             }
             catch (Exception ex)
             {

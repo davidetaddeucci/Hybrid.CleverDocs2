@@ -17,6 +17,19 @@ public class UserDocumentService : IUserDocumentService
     private readonly ILogger<UserDocumentService> _logger;
     private readonly ICorrelationService _correlationService;
 
+    /// <summary>
+    /// Helper method to convert string userId to Guid for database compatibility
+    /// </summary>
+    private Guid ConvertUserIdToGuid(string userId)
+    {
+        if (Guid.TryParse(userId, out var guidUserId))
+        {
+            return guidUserId;
+        }
+        // For backward compatibility, if it's not a valid Guid, return empty Guid
+        return Guid.Empty;
+    }
+
     public UserDocumentService(
         ApplicationDbContext context,
         IMultiLevelCacheService cacheService,
@@ -53,9 +66,9 @@ public class UserDocumentService : IUserDocumentService
             var documentsQuery = _context.Documents.AsQueryable();
 
             // Apply user filter
-            if (!string.IsNullOrEmpty(query.UserId))
+            if (query.UserId.HasValue)
             {
-                documentsQuery = documentsQuery.Where(d => d.UserId == query.UserId);
+                documentsQuery = documentsQuery.Where(d => d.UserId == query.UserId.Value);
             }
 
             // Apply collection filter
@@ -210,14 +223,14 @@ public class UserDocumentService : IUserDocumentService
         }
     }
 
-    public async Task<PagedDocumentResultDto> GetCollectionDocumentsAsync(Guid collectionId, string userId, DocumentQueryDto query, CancellationToken cancellationToken = default)
+    public async Task<PagedDocumentResultDto> GetCollectionDocumentsAsync(Guid collectionId, Guid userId, DocumentQueryDto query, CancellationToken cancellationToken = default)
     {
         query.CollectionId = collectionId;
-        query.UserId = userId;
+        query.UserId = userId; // Now both are Guid
         return await SearchDocumentsAsync(query, cancellationToken);
     }
 
-    public async Task<UserDocumentDto?> GetDocumentByIdAsync(Guid documentId, string userId)
+    public async Task<UserDocumentDto?> GetDocumentByIdAsync(Guid documentId, Guid userId)
     {
         var correlationId = _correlationService.GetCorrelationId();
 
@@ -292,7 +305,7 @@ public class UserDocumentService : IUserDocumentService
         }
     }
 
-    public async Task<List<UserDocumentDto>> GetDocumentsByIdsAsync(List<Guid> documentIds, string userId)
+    public async Task<List<UserDocumentDto>> GetDocumentsByIdsAsync(List<Guid> documentIds, Guid userId)
     {
         var correlationId = _correlationService.GetCorrelationId();
 
@@ -412,11 +425,11 @@ public class UserDocumentService : IUserDocumentService
         return aggregations;
     }
 
-    private DocumentPermissions GetDocumentPermissions(Data.Entities.Document document, string? userId)
+    private static DocumentPermissions GetDocumentPermissions(Data.Entities.Document document, Guid? userId)
     {
         // Basic permission logic - can be extended based on business rules
         var isOwner = document.UserId == userId;
-        
+
         return new DocumentPermissions
         {
             CanView = true,
@@ -452,42 +465,42 @@ public class UserDocumentService : IUserDocumentService
     }
 
     // Placeholder implementations for remaining interface methods
-    public async Task<UserDocumentDto?> UpdateDocumentMetadataAsync(Guid documentId, string userId, DocumentMetadataUpdateDto update)
+    public async Task<UserDocumentDto?> UpdateDocumentMetadataAsync(Guid documentId, Guid userId, DocumentMetadataUpdateDto update)
     {
         // Implementation placeholder
         await Task.CompletedTask;
         return null;
     }
 
-    public async Task<bool> MoveDocumentToCollectionAsync(Guid documentId, string userId, Guid? targetCollectionId)
+    public async Task<bool> MoveDocumentToCollectionAsync(Guid documentId, Guid userId, Guid? targetCollectionId)
     {
         // Implementation placeholder
         await Task.CompletedTask;
         return false;
     }
 
-    public async Task<bool> DeleteDocumentAsync(Guid documentId, string userId)
+    public async Task<bool> DeleteDocumentAsync(Guid documentId, Guid userId)
     {
         // Implementation placeholder
         await Task.CompletedTask;
         return false;
     }
 
-    public async Task<bool> ToggleFavoriteAsync(Guid documentId, string userId)
+    public async Task<bool> ToggleFavoriteAsync(Guid documentId, Guid userId)
     {
         // Implementation placeholder
         await Task.CompletedTask;
         return false;
     }
 
-    public async Task<PagedDocumentResultDto> GetFavoriteDocumentsAsync(string userId, DocumentQueryDto query)
+    public async Task<PagedDocumentResultDto> GetFavoriteDocumentsAsync(Guid userId, DocumentQueryDto query)
     {
         query.IsFavorite = true;
-        query.UserId = userId;
+        query.UserId = userId; // Now both are Guid
         return await SearchDocumentsAsync(query);
     }
 
-    public async Task<List<UserDocumentDto>> GetRecentDocumentsAsync(string userId, int limit = 10)
+    public async Task<List<UserDocumentDto>> GetRecentDocumentsAsync(Guid userId, int limit = 10)
     {
         // Implementation placeholder
         await Task.CompletedTask;
@@ -501,40 +514,40 @@ public class UserDocumentService : IUserDocumentService
         return new BatchOperationResultDto();
     }
 
-    public async Task<DocumentAnalyticsDto> GetDocumentAnalyticsAsync(Guid documentId, string userId)
+    public async Task<DocumentAnalyticsDto> GetDocumentAnalyticsAsync(Guid documentId, Guid userId)
     {
         // Implementation placeholder
         await Task.CompletedTask;
         return new DocumentAnalyticsDto();
     }
 
-    public async Task TrackDocumentViewAsync(Guid documentId, string userId, string? ipAddress = null, string? userAgent = null)
+    public async Task TrackDocumentViewAsync(Guid documentId, Guid userId, string? ipAddress = null, string? userAgent = null)
     {
         // Implementation placeholder
         await Task.CompletedTask;
     }
 
-    public async Task TrackDocumentDownloadAsync(Guid documentId, string userId)
+    public async Task TrackDocumentDownloadAsync(Guid documentId, Guid userId)
     {
         // Implementation placeholder
         await Task.CompletedTask;
     }
 
-    public async Task<List<string>> GetSearchSuggestionsAsync(string term, string? userId = null, int limit = 10)
+    public async Task<List<string>> GetSearchSuggestionsAsync(string term, Guid? userId = null, int limit = 10)
     {
         // Implementation placeholder
         await Task.CompletedTask;
         return new List<string>();
     }
 
-    public async Task<DocumentSearchSuggestionsDto> GetAdvancedSearchSuggestionsAsync(string term, string? userId = null)
+    public async Task<DocumentSearchSuggestionsDto> GetAdvancedSearchSuggestionsAsync(string term, Guid? userId = null)
     {
         // Implementation placeholder
         await Task.CompletedTask;
         return new DocumentSearchSuggestionsDto();
     }
 
-    public async Task<byte[]> ExportDocumentsAsync(DocumentExportRequestDto request, string userId)
+    public async Task<byte[]> ExportDocumentsAsync(DocumentExportRequestDto request, Guid userId)
     {
         // Implementation placeholder
         await Task.CompletedTask;
@@ -544,36 +557,37 @@ public class UserDocumentService : IUserDocumentService
     // Additional placeholder implementations for remaining interface methods...
     // (These would be implemented in subsequent iterations)
 
-    public async Task<string?> GetDocumentDownloadUrlAsync(Guid documentId, string userId, TimeSpan? expiration = null) => await Task.FromResult<string?>(null);
-    public async Task<string?> GetDocumentPreviewUrlAsync(Guid documentId, string userId, TimeSpan? expiration = null) => await Task.FromResult<string?>(null);
-    public async Task<string?> GetDocumentThumbnailUrlAsync(Guid documentId, string userId, TimeSpan? expiration = null) => await Task.FromResult<string?>(null);
-    public async Task<DocumentPermissions> GetDocumentPermissionsAsync(Guid documentId, string userId) => await Task.FromResult(new DocumentPermissions());
-    public async Task<List<UserDocumentDto>> GetDocumentVersionsAsync(Guid documentId, string userId) => await Task.FromResult(new List<UserDocumentDto>());
-    public async Task<UserDocumentDto?> CreateDocumentVersionAsync(Guid documentId, string userId, byte[] content, string? versionNote = null) => await Task.FromResult<UserDocumentDto?>(null);
-    public async Task<bool> RestoreDocumentVersionAsync(Guid documentId, string userId, string version) => await Task.FromResult(false);
-    public async Task<byte[]?> GetDocumentContentAsync(Guid documentId, string userId) => await Task.FromResult<byte[]?>(null);
-    public async Task<string?> GetDocumentTextContentAsync(Guid documentId, string userId) => await Task.FromResult<string?>(null);
-    public async Task<bool> UpdateDocumentTagsAsync(Guid documentId, string userId, List<string> tags) => await Task.FromResult(false);
-    public async Task<List<string>> GetAvailableTagsAsync(string userId) => await Task.FromResult(new List<string>());
-    public async Task<Dictionary<string, object>> GetUserDocumentStatisticsAsync(string userId) => await Task.FromResult(new Dictionary<string, object>());
-    public async Task<Dictionary<string, object>> GetCollectionDocumentStatisticsAsync(Guid collectionId, string userId) => await Task.FromResult(new Dictionary<string, object>());
-    public async Task<UserDocumentDto?> DuplicateDocumentAsync(Guid documentId, string userId, string? newName = null, Guid? targetCollectionId = null) => await Task.FromResult<UserDocumentDto?>(null);
-    public async Task<bool> ArchiveDocumentAsync(Guid documentId, string userId) => await Task.FromResult(false);
-    public async Task<bool> RestoreDocumentAsync(Guid documentId, string userId) => await Task.FromResult(false);
-    public async Task<PagedDocumentResultDto> GetArchivedDocumentsAsync(string userId, DocumentQueryDto query) => await Task.FromResult(new PagedDocumentResultDto());
-    public async Task<bool> PermanentlyDeleteDocumentAsync(Guid documentId, string userId) => await Task.FromResult(false);
-    public async Task<List<UserDocumentDto>> GetPendingProcessingDocumentsAsync(string userId) => await Task.FromResult(new List<UserDocumentDto>());
-    public async Task<bool> RetryDocumentProcessingAsync(Guid documentId, string userId) => await Task.FromResult(false);
-    public async Task<Dictionary<string, object>> GetDocumentProcessingStatusAsync(Guid documentId, string userId) => await Task.FromResult(new Dictionary<string, object>());
-    public async Task<string> ShareDocumentAsync(Guid documentId, string userId, List<string> targetUserIds, DocumentPermissions permissions, TimeSpan? expiration = null) => await Task.FromResult(string.Empty);
-    public async Task<PagedDocumentResultDto> GetSharedDocumentsAsync(string userId, DocumentQueryDto query) => await Task.FromResult(new PagedDocumentResultDto());
-    public async Task<PagedDocumentResultDto> GetSharedWithMeDocumentsAsync(string userId, DocumentQueryDto query) => await Task.FromResult(new PagedDocumentResultDto());
-    public async Task<bool> RevokeDocumentSharingAsync(Guid documentId, string userId, string? targetUserId = null) => await Task.FromResult(false);
-    public async Task<Dictionary<string, object>> GetDocumentSharingInfoAsync(Guid documentId, string userId) => await Task.FromResult(new Dictionary<string, object>());
-    public async Task<bool> ValidateDocumentAccessAsync(Guid documentId, string userId, DocumentAction action) => await Task.FromResult(false);
-    public async Task<List<Dictionary<string, object>>> GetDocumentActivityLogAsync(Guid documentId, string userId, int limit = 50) => await Task.FromResult(new List<Dictionary<string, object>>());
-    public async Task<Dictionary<string, object>> AddDocumentCommentAsync(Guid documentId, string userId, string comment) => await Task.FromResult(new Dictionary<string, object>());
-    public async Task<List<Dictionary<string, object>>> GetDocumentCommentsAsync(Guid documentId, string userId) => await Task.FromResult(new List<Dictionary<string, object>>());
-    public async Task<bool> UpdateDocumentCommentAsync(Guid commentId, string userId, string comment) => await Task.FromResult(false);
-    public async Task<bool> DeleteDocumentCommentAsync(Guid commentId, string userId) => await Task.FromResult(false);
+    public async Task<string?> GetDocumentDownloadUrlAsync(Guid documentId, Guid userId, TimeSpan? expiration = null) => await Task.FromResult<string?>(null);
+    public async Task<string?> GetDocumentPreviewUrlAsync(Guid documentId, Guid userId, TimeSpan? expiration = null) => await Task.FromResult<string?>(null);
+    public async Task<string?> GetDocumentThumbnailUrlAsync(Guid documentId, Guid userId, TimeSpan? expiration = null) => await Task.FromResult<string?>(null);
+    public async Task<DocumentPermissions> GetDocumentPermissionsAsync(Guid documentId, Guid userId) => await Task.FromResult(new DocumentPermissions());
+    public async Task<List<UserDocumentDto>> GetDocumentVersionsAsync(Guid documentId, Guid userId) => await Task.FromResult(new List<UserDocumentDto>());
+    public async Task<UserDocumentDto?> CreateDocumentVersionAsync(Guid documentId, Guid userId, byte[] content, string? versionNote = null) => await Task.FromResult<UserDocumentDto?>(null);
+    public async Task<bool> RestoreDocumentVersionAsync(Guid documentId, Guid userId, string version) => await Task.FromResult(false);
+    public async Task<byte[]?> GetDocumentContentAsync(Guid documentId, Guid userId) => await Task.FromResult<byte[]?>(null);
+    public async Task<string?> GetDocumentTextContentAsync(Guid documentId, Guid userId) => await Task.FromResult<string?>(null);
+    public async Task<bool> UpdateDocumentTagsAsync(Guid documentId, Guid userId, List<string> tags) => await Task.FromResult(false);
+    public async Task<List<string>> GetAvailableTagsAsync(Guid userId) => await Task.FromResult(new List<string>());
+    public async Task<Dictionary<string, object>> GetUserDocumentStatisticsAsync(Guid userId) => await Task.FromResult(new Dictionary<string, object>());
+    public async Task<Dictionary<string, object>> GetCollectionDocumentStatisticsAsync(Guid collectionId, Guid userId) => await Task.FromResult(new Dictionary<string, object>());
+    public async Task<UserDocumentDto?> DuplicateDocumentAsync(Guid documentId, Guid userId, string? newName = null, Guid? targetCollectionId = null) => await Task.FromResult<UserDocumentDto?>(null);
+    public async Task<bool> ArchiveDocumentAsync(Guid documentId, Guid userId) => await Task.FromResult(false);
+    public async Task<bool> RestoreDocumentAsync(Guid documentId, Guid userId) => await Task.FromResult(false);
+    public async Task<PagedDocumentResultDto> GetArchivedDocumentsAsync(Guid userId, DocumentQueryDto query) => await Task.FromResult(new PagedDocumentResultDto());
+    public async Task<bool> PermanentlyDeleteDocumentAsync(Guid documentId, Guid userId) => await Task.FromResult(false);
+    public async Task<List<UserDocumentDto>> GetPendingProcessingDocumentsAsync(Guid userId) => await Task.FromResult(new List<UserDocumentDto>());
+    public async Task<bool> RetryDocumentProcessingAsync(Guid documentId, Guid userId) => await Task.FromResult(false);
+    public async Task<Dictionary<string, object>> GetDocumentProcessingStatusAsync(Guid documentId, Guid userId) => await Task.FromResult(new Dictionary<string, object>());
+    public async Task<string> ShareDocumentAsync(Guid documentId, Guid userId, List<string> targetUserIds, DocumentPermissions permissions, TimeSpan? expiration = null) => await Task.FromResult(string.Empty);
+    // Additional interface methods implementations
+    public async Task<PagedDocumentResultDto> GetSharedDocumentsAsync(Guid userId, DocumentQueryDto query) => await Task.FromResult(new PagedDocumentResultDto());
+    public async Task<PagedDocumentResultDto> GetSharedWithMeDocumentsAsync(Guid userId, DocumentQueryDto query) => await Task.FromResult(new PagedDocumentResultDto());
+    public async Task<bool> RevokeDocumentSharingAsync(Guid documentId, Guid userId, string? targetUserId = null) => await Task.FromResult(false);
+    public async Task<Dictionary<string, object>> GetDocumentSharingInfoAsync(Guid documentId, Guid userId) => await Task.FromResult(new Dictionary<string, object>());
+    public async Task<bool> ValidateDocumentAccessAsync(Guid documentId, Guid userId, DocumentAction action) => await Task.FromResult(false);
+    public async Task<List<Dictionary<string, object>>> GetDocumentActivityLogAsync(Guid documentId, Guid userId, int limit = 50) => await Task.FromResult(new List<Dictionary<string, object>>());
+    public async Task<Dictionary<string, object>> AddDocumentCommentAsync(Guid documentId, Guid userId, string comment) => await Task.FromResult(new Dictionary<string, object>());
+    public async Task<List<Dictionary<string, object>>> GetDocumentCommentsAsync(Guid documentId, Guid userId) => await Task.FromResult(new List<Dictionary<string, object>>());
+    public async Task<bool> UpdateDocumentCommentAsync(Guid commentId, Guid userId, string comment) => await Task.FromResult(false);
+    public async Task<bool> DeleteDocumentCommentAsync(Guid commentId, Guid userId) => await Task.FromResult(false);
 }

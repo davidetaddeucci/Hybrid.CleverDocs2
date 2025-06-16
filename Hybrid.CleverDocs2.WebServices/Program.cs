@@ -51,16 +51,28 @@ builder.Services.AddDbContext<ApplicationDbContext>(opts => {
     }
 });
 
+// Memory Cache - Required for L1 cache
+builder.Services.AddMemoryCache();
+
 // Redis Cache - Dynamically configured
 builder.Services.AddStackExchangeRedisCache(opts => {
     var redisConfig = builder.Configuration.GetSection("Redis");
-    opts.Configuration = redisConfig["Configuration"] 
+    opts.Configuration = redisConfig["Configuration"]
         ?? throw new InvalidOperationException("Redis configuration not found");
     opts.InstanceName = redisConfig["InstanceName"] ?? "CleverDocs2";
-    
+
     // Additional Redis options from configuration
     if (int.TryParse(redisConfig["ConnectTimeout"], out var connectTimeout))
         opts.ConfigurationOptions = StackExchange.Redis.ConfigurationOptions.Parse(opts.Configuration);
+});
+
+// Redis Connection Multiplexer - Required for L2 cache
+builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(provider =>
+{
+    var redisConfig = builder.Configuration.GetSection("Redis");
+    var connectionString = redisConfig["Configuration"]
+        ?? throw new InvalidOperationException("Redis configuration not found");
+    return StackExchange.Redis.ConnectionMultiplexer.Connect(connectionString);
 });
 
 // MassTransit / RabbitMQ - Temporarily disabled for testing
@@ -208,7 +220,7 @@ builder.Services.AddCorrelationServices();
 
 // Rate Limiting Services
 builder.Services.Configure<RateLimitingOptions>(builder.Configuration.GetSection("RateLimiting"));
-builder.Services.AddSingleton<IRateLimitingService, RateLimitingService>();
+builder.Services.AddScoped<IRateLimitingService, RateLimitingService>();
 
 // RabbitMQ Services (placeholder implementation)
 builder.Services.Configure<RabbitMQOptions>(builder.Configuration.GetSection("RabbitMQ"));
@@ -227,9 +239,9 @@ builder.Services.AddSingleton<ICacheKeyGenerator, CacheKeyGenerator>();
 builder.Services.AddSingleton<IL1MemoryCache, L1MemoryCache>();
 builder.Services.AddSingleton<IL2RedisCache, L2RedisCache>();
 builder.Services.AddSingleton<IL3PersistentCache, L3PersistentCache>();
-builder.Services.AddSingleton<IMultiLevelCacheService, MultiLevelCacheService>();
+builder.Services.AddScoped<IMultiLevelCacheService, MultiLevelCacheService>();
 builder.Services.AddScoped<ICacheInvalidationService, CacheInvalidationService>();
-builder.Services.AddSingleton<ICacheWarmingService, CacheWarmingService>();
+builder.Services.AddScoped<ICacheWarmingService, CacheWarmingService>();
 
 // R2R-Specific Cache Service
 builder.Services.Configure<R2RCacheOptions>(builder.Configuration.GetSection("R2RCache"));
@@ -353,5 +365,6 @@ app.MapControllers();
 // SignalR Hubs
 app.MapHub<CollectionHub>("/hubs/collection");
 app.MapHub<DocumentUploadHub>("/hubs/upload");
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

@@ -17,6 +17,19 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
 
         public bool IsPublic { get; set; } = false;
 
+        // UI Properties
+        [MaxLength(7)]
+        [RegularExpression(@"^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")]
+        public string Color { get; set; } = "#3B82F6";
+
+        [MaxLength(50)]
+        public string Icon { get; set; } = "folder";
+
+        // Tags stored as JSON array
+        public string? TagsJson { get; set; }
+
+        public bool IsFavorite { get; set; } = false;
+
         // R2R Integration
         public string? R2RCollectionId { get; set; }
 
@@ -37,6 +50,18 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public string? CreatedBy { get; set; }
         public string? UpdatedBy { get; set; }
+
+        // Helper property for Tags (not mapped to database)
+        [NotMapped]
+        public List<string> Tags
+        {
+            get => string.IsNullOrEmpty(TagsJson)
+                ? new List<string>()
+                : System.Text.Json.JsonSerializer.Deserialize<List<string>>(TagsJson) ?? new List<string>();
+            set => TagsJson = value?.Any() == true
+                ? System.Text.Json.JsonSerializer.Serialize(value)
+                : null;
+        }
 
         // Navigation properties
         public ICollection<CollectionDocument> CollectionDocuments { get; set; } = new List<CollectionDocument>();

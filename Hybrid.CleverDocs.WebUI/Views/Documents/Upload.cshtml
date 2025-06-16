@@ -1,0 +1,255 @@
+@model Hybrid.CleverDocs.WebUI.Models.Documents.DocumentUploadViewModel
+@{
+    ViewData["Title"] = "Upload Document";
+    ViewData["PageTitle"] = "Upload Document";
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">Upload Document</h1>
+                    <p class="text-muted mb-0">
+                        @if (Model.CollectionId.HasValue)
+                        {
+                            <span>Upload a document to the selected collection</span>
+                        }
+                        else
+                        {
+                            <span>Upload a document to your library</span>
+                        }
+                    </p>
+                </div>
+                <div>
+                    @if (Model.CollectionId.HasValue)
+                    {
+                        <a href="@Url.Action("Details", "Collections", new { collectionId = Model.CollectionId })" 
+                           class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Collection
+                        </a>
+                    }
+                    else
+                    {
+                        <a href="@Url.Action("Index", "Documents")" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Documents
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Form -->
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <form asp-action="Upload" method="post" enctype="multipart/form-data" id="uploadForm">
+                        @Html.AntiForgeryToken()
+                        
+                        <!-- Hidden Collection ID -->
+                        @if (Model.CollectionId.HasValue)
+                        {
+                            <input type="hidden" asp-for="CollectionId" />
+                        }
+
+                        <!-- File Upload Area -->
+                        <div class="mb-4">
+                            <label asp-for="File" class="form-label fw-bold">
+                                Select File <span class="text-danger">*</span>
+                            </label>
+                            <div class="upload-area border-2 border-dashed rounded p-4 text-center" 
+                                 id="uploadArea" 
+                                 ondrop="handleDrop(event)" 
+                                 ondragover="handleDragOver(event)" 
+                                 ondragleave="handleDragLeave(event)">
+                                <div class="upload-content">
+                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                    <h5 class="mb-2">Drag and drop your file here</h5>
+                                    <p class="text-muted mb-3">or</p>
+                                    <input type="file" asp-for="File" class="d-none" id="fileInput" accept="@string.Join(",", Model.AllowedFileTypes)" />
+                                    <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                                        <i class="fas fa-folder-open me-2"></i>Browse Files
+                                    </button>
+                                </div>
+                                <div class="file-info d-none" id="fileInfo">
+                                    <div class="d-flex align-items-center justify-content-center">
+                                        <i class="fas fa-file fa-2x text-primary me-3"></i>
+                                        <div class="text-start">
+                                            <div class="fw-bold" id="fileName"></div>
+                                            <div class="text-muted small" id="fileSize"></div>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger ms-3" onclick="clearFile()">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-text">
+                                <small class="text-muted">
+                                    Maximum file size: @Model.FormattedMaxFileSize<br>
+                                    Supported formats: @Model.AllowedFileTypesText
+                                </small>
+                            </div>
+                            <span asp-validation-for="File" class="text-danger"></span>
+                        </div>
+
+                        <!-- Document Details -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label asp-for="Title" class="form-label">Title (optional)</label>
+                                    <input asp-for="Title" class="form-control" placeholder="Leave empty to use filename" />
+                                    <span asp-validation-for="Title" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label asp-for="TagsInput" class="form-label">Tags</label>
+                                    <input asp-for="TagsInput" class="form-control" placeholder="e.g., report, finance, 2024" />
+                                    <div class="form-text">
+                                        <small class="text-muted">Separate multiple tags with commas</small>
+                                    </div>
+                                    <span asp-validation-for="TagsInput" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Description" class="form-label">Description (optional)</label>
+                            <textarea asp-for="Description" class="form-control" rows="3" 
+                                      placeholder="Add a description to help others understand this document"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <!-- Options -->
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input asp-for="IsFavorite" class="form-check-input" />
+                                <label asp-for="IsFavorite" class="form-check-label">
+                                    Add to favorites
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex justify-content-end gap-2">
+                            @if (Model.CollectionId.HasValue)
+                            {
+                                <a href="@Url.Action("Details", "Collections", new { collectionId = Model.CollectionId })" 
+                                   class="btn btn-outline-secondary">Cancel</a>
+                            }
+                            else
+                            {
+                                <a href="@Url.Action("Index", "Documents")" class="btn btn-outline-secondary">Cancel</a>
+                            }
+                            <button type="submit" class="btn btn-primary" id="uploadBtn">
+                                <i class="fas fa-upload me-2"></i>Upload Document
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // File upload handling
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const uploadContent = document.querySelector('.upload-content');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                displayFileInfo(file);
+            }
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            uploadArea.classList.remove('border-primary', 'bg-light');
+            
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                displayFileInfo(files[0]);
+            }
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            uploadArea.classList.add('border-primary', 'bg-light');
+        }
+
+        function handleDragLeave(event) {
+            event.preventDefault();
+            uploadArea.classList.remove('border-primary', 'bg-light');
+        }
+
+        function displayFileInfo(file) {
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            
+            uploadContent.classList.add('d-none');
+            fileInfo.classList.remove('d-none');
+            uploadArea.classList.add('border-success');
+        }
+
+        function clearFile() {
+            fileInput.value = '';
+            uploadContent.classList.remove('d-none');
+            fileInfo.classList.add('d-none');
+            uploadArea.classList.remove('border-success', 'border-primary', 'bg-light');
+        }
+
+        function formatFileSize(bytes) {
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            if (bytes === 0) return '0 B';
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Form validation
+        document.getElementById('uploadForm').addEventListener('submit', function(event) {
+            if (!fileInput.files.length) {
+                event.preventDefault();
+                alert('Please select a file to upload.');
+                return false;
+            }
+            
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
+        });
+    </script>
+
+    <style>
+        .upload-area {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover {
+            border-color: var(--bs-primary) !important;
+            background-color: var(--bs-light);
+        }
+        
+        .upload-area.border-primary {
+            border-color: var(--bs-primary) !important;
+        }
+        
+        .upload-area.border-success {
+            border-color: var(--bs-success) !important;
+        }
+    </style>
+}

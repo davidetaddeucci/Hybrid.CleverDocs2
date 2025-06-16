@@ -5,6 +5,7 @@ using Hybrid.CleverDocs2.WebServices.Services.Documents;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Extensions;
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 
 namespace Hybrid.CleverDocs2.WebServices.Controllers;
 
@@ -472,9 +473,16 @@ public class UserDocumentsController : ControllerBase
     }
 
     // Helper methods
-    private string GetCurrentUserId()
+    private Guid GetCurrentUserId()
     {
-        return User.Identity?.Name ?? User.FindFirst("sub")?.Value ?? "anonymous";
+        var userIdClaim = User.Identity?.Name ?? User.FindFirst("sub")?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Guid.Empty; // Return empty Guid for anonymous users
+        }
+
+        return userId;
     }
 }
 

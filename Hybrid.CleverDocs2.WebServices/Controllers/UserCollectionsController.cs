@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using Hybrid.CleverDocs2.WebServices.Models.Collections;
 using Hybrid.CleverDocs2.WebServices.Models.Common;
 using Hybrid.CleverDocs2.WebServices.Services.Collections;
@@ -412,6 +413,31 @@ public class UserCollectionsController : ControllerBase
     }
 
     /// <summary>
+    /// Tracks collection view for analytics
+    /// </summary>
+    [HttpPost("{collectionId:guid}/track-view")]
+    public async Task<IActionResult> TrackCollectionView(Guid collectionId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            await _collectionService.UpdateLastAccessedAsync(collectionId, userId);
+            await _analyticsService.TrackActivityAsync(collectionId, userId, "collection_viewed");
+
+            return this.Success("View tracked successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error tracking view for collection {CollectionId}, user {UserId}, CorrelationId: {CorrelationId}",
+                collectionId, userId, correlationId);
+
+            return this.Error("Failed to track collection view", ex.Message, 500);
+        }
+    }
+
+    /// <summary>
     /// Validates collection name uniqueness
     /// </summary>
     [HttpGet("validate-name")]
@@ -475,6 +501,9 @@ public class UserCollectionsController : ControllerBase
     // Helper methods
     private string GetCurrentUserId()
     {
-        return User.Identity?.Name ?? User.FindFirst("sub")?.Value ?? "anonymous";
+        // Get the user ID from the NameIdentifier claim (which contains the GUID)
+        return User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+               User.FindFirst("sub")?.Value ??
+               "anonymous";
     }
 }

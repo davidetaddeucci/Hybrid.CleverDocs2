@@ -1,0 +1,296 @@
+@model ConversationDetailViewModel
+
+<div class="conversation-view" data-conversation-id="@Model.Id">
+    <!-- Conversation Header -->
+    <div class="conversation-header">
+        <div class="conversation-title">
+            <h5 class="mb-0">
+                <i class="fas fa-comment-dots text-primary"></i>
+                <span id="conversationTitle" contenteditable="true" onblur="updateConversationTitle('@Model.Id', this.textContent)">@Model.Title</span>
+            </h5>
+            <small class="text-muted">
+                Creata il @Model.CreatedAt.ToString("dd/MM/yyyy HH:mm") • 
+                @Model.Messages.Count messaggi
+            </small>
+        </div>
+        
+        <div class="conversation-actions">
+            <button class="btn btn-sm btn-outline-secondary" onclick="exportConversation()" title="Esporta conversazione">
+                <i class="fas fa-download"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="shareConversation('@Model.Id')" title="Condividi conversazione">
+                <i class="fas fa-share"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteConversation('@Model.Id')" title="Elimina conversazione">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Collections Info -->
+    @if (Model.Collections.Any())
+    {
+        <div class="conversation-collections">
+            <small class="text-muted">Collections attive:</small>
+            @foreach (var collection in Model.Collections)
+            {
+                <span class="badge" style="background-color: @collection.Color; color: white;">
+                    @collection.Name
+                </span>
+            }
+        </div>
+    }
+    
+    <!-- Messages Container -->
+    <div class="messages-container" id="messagesContainer">
+        @foreach (var message in Model.Messages)
+        {
+            <div class="message @(message.IsUser ? "user-message" : "assistant-message")" data-message-id="@message.Id">
+                @if (message.IsUser)
+                {
+                    <!-- User Message -->
+                    <div class="message-content user-content">
+                        <div class="message-text">@Html.Raw(message.Content)</div>
+                        <div class="message-meta">
+                            <span class="message-time">@message.CreatedAt.ToString("HH:mm")</span>
+                        </div>
+                    </div>
+                    <div class="message-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                }
+                else
+                {
+                    <!-- Assistant Message -->
+                    <div class="message-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content assistant-content">
+                        <div class="message-text">@Html.Raw(message.Content)</div>
+                        
+                        @if (message.Citations.Any())
+                        {
+                            <div class="message-citations">
+                                <h6 class="citations-title">
+                                    <i class="fas fa-quote-left"></i> Fonti
+                                </h6>
+                                <div class="citations-list">
+                                    @foreach (var citation in message.Citations)
+                                    {
+                                        <div class="citation-item" onclick="openDocument('@citation.DocumentId', @citation.PageNumber)">
+                                            <div class="citation-header">
+                                                <span class="citation-document">@citation.DocumentName</span>
+                                                <span class="citation-score badge bg-info">@citation.Score.ToString("F2")</span>
+                                            </div>
+                                            <div class="citation-text">@citation.Text</div>
+                                            <div class="citation-meta">
+                                                <small class="text-muted">
+                                                    @if (citation.PageNumber > 0)
+                                                    {
+                                                        <span>Pagina @citation.PageNumber</span>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(citation.CollectionName))
+                                                    {
+                                                        <span>• @citation.CollectionName</span>
+                                                    }
+                                                </small>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        
+                        <div class="message-meta">
+                            <span class="message-time">@message.CreatedAt.ToString("HH:mm")</span>
+                            <div class="message-actions">
+                                <button class="btn btn-sm btn-link" onclick="copyMessage('@message.Id')" title="Copia messaggio">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button class="btn btn-sm btn-link" onclick="branchConversation('@message.Id')" title="Crea branch">
+                                    <i class="fas fa-code-branch"></i>
+                                </button>
+                                <button class="btn btn-sm btn-link" onclick="regenerateResponse('@message.Id')" title="Rigenera risposta">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        
+        <!-- Typing Indicator -->
+        <div class="typing-indicator" id="typingIndicator" style="display: none;">
+            <div class="message assistant-message">
+                <div class="message-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message-content assistant-content">
+                    <div class="typing-animation">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Message Input -->
+    <div class="message-input-container">
+        <form id="messageForm" onsubmit="return false;">
+            <div class="input-group">
+                <textarea class="form-control" id="messageInput" 
+                         placeholder="Scrivi il tuo messaggio..." 
+                         rows="1" 
+                         onkeydown="handleMessageKeydown(event)"
+                         oninput="autoResizeTextarea(this)"></textarea>
+                <button class="btn btn-primary" type="submit" id="sendButton">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </form>
+        
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <button class="btn btn-sm btn-outline-secondary" onclick="insertQuickMessage('Riassumi i documenti principali')" title="Riassumi">
+                <i class="fas fa-compress-alt"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="insertQuickMessage('Trova informazioni su: ')" title="Cerca">
+                <i class="fas fa-search"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="insertQuickMessage('Confronta i seguenti documenti: ')" title="Confronta">
+                <i class="fas fa-balance-scale"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="insertQuickMessage('Spiega in dettaglio: ')" title="Spiega">
+                <i class="fas fa-lightbulb"></i>
+            </button>
+        </div>
+        
+        <!-- Input Status -->
+        <div class="input-status" id="inputStatus">
+            <small class="text-muted">
+                <span id="characterCount">0</span> caratteri • 
+                <span id="selectedCollections">@Model.Collections.Count collections selezionate</span>
+            </small>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Initialize conversation-specific functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set current conversation ID
+        if (window.chatManager) {
+            window.chatManager.currentConversationId = '@Model.Id';
+        }
+        
+        // Auto-scroll to bottom
+        scrollToBottom();
+        
+        // Initialize message input
+        const messageInput = document.getElementById('messageInput');
+        if (messageInput) {
+            messageInput.focus();
+            
+            // Character count
+            messageInput.addEventListener('input', function() {
+                document.getElementById('characterCount').textContent = this.value.length;
+            });
+        }
+        
+        // Initialize quick actions
+        initializeQuickActions();
+    });
+    
+    function handleMessageKeydown(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            document.getElementById('messageForm').dispatchEvent(new Event('submit'));
+        }
+    }
+    
+    function autoResizeTextarea(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    }
+    
+    function scrollToBottom() {
+        const container = document.getElementById('messagesContainer');
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+    
+    function insertQuickMessage(text) {
+        const input = document.getElementById('messageInput');
+        if (input) {
+            input.value = text;
+            input.focus();
+            autoResizeTextarea(input);
+            
+            // Position cursor at end
+            input.setSelectionRange(input.value.length, input.value.length);
+        }
+    }
+    
+    function copyMessage(messageId) {
+        const messageElement = document.querySelector(`[data-message-id="${messageId}"] .message-text`);
+        if (messageElement) {
+            navigator.clipboard.writeText(messageElement.textContent).then(() => {
+                showToast('Messaggio copiato negli appunti', 'success');
+            });
+        }
+    }
+    
+    function branchConversation(messageId) {
+        if (window.chatManager) {
+            window.chatManager.branchConversation(messageId);
+        }
+    }
+    
+    function regenerateResponse(messageId) {
+        if (window.chatManager) {
+            window.chatManager.regenerateResponse(messageId);
+        }
+    }
+    
+    function updateConversationTitle(conversationId, newTitle) {
+        if (window.chatManager) {
+            window.chatManager.updateConversationTitle(conversationId, newTitle);
+        }
+    }
+    
+    function openDocument(documentId, pageNumber) {
+        // Open document in new tab/modal
+        window.open(`/Documents/${documentId}?page=${pageNumber}`, '_blank');
+    }
+    
+    function shareConversation(conversationId) {
+        // Generate shareable link
+        const shareUrl = `${window.location.origin}/Chat/Shared/${conversationId}`;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+            showToast('Link di condivisione copiato negli appunti', 'success');
+        });
+    }
+    
+    function initializeQuickActions() {
+        // Add more quick action functionality here
+        console.log('Quick actions initialized');
+    }
+    
+    function showToast(message, type = 'info') {
+        // Simple toast notification
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+        toast.style.zIndex = '9999';
+        toast.textContent = message;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+</script>

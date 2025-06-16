@@ -83,7 +83,7 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         public Company Company { get; set; } = null!;
 
         [Required]
-        public string UserId { get; set; } = string.Empty;
+        public Guid UserId { get; set; }
 
         [ForeignKey(nameof(UserId))]
         public User User { get; set; } = null!;

@@ -8,6 +8,7 @@ public interface IAuthService
     Task<bool> LoginAsync(string username, string password);
     Task LogoutAsync();
     Task<bool> IsAuthenticatedAsync();
+    Task<string?> GetTokenAsync();
 }
 
 /// <summary>
@@ -42,5 +43,12 @@ public class AuthService : IAuthService
         // Placeholder implementation
         await Task.CompletedTask;
         return false;
+    }
+
+    public async Task<string?> GetTokenAsync()
+    {
+        // Placeholder implementation - return a mock token for development
+        await Task.CompletedTask;
+        return "mock-jwt-token-for-development";
     }
 }

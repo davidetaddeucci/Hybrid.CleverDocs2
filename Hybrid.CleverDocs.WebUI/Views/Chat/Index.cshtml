@@ -1,0 +1,287 @@
+@model ChatIndexViewModel
+@{
+    ViewData["Title"] = "Chat RAG - CleverDocs";
+    Layout = "~/Views/Shared/_LayoutUser.cshtml";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/chat.css" />
+}
+
+<!-- Chat Container -->
+<div class="chat-container">
+    <!-- Sidebar conversazioni -->
+    <div class="chat-sidebar">
+        <div class="sidebar-header">
+            <h5><i class="fas fa-comments"></i> Conversazioni</h5>
+            <button class="btn btn-primary btn-sm" onclick="newConversation()">
+                <i class="fas fa-plus"></i> Nuova Chat
+            </button>
+        </div>
+        
+        <!-- Lista conversazioni con search -->
+        <div class="conversation-search">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="Cerca conversazioni..." 
+                       id="conversationSearch" onkeyup="filterConversations(this.value)">
+                <button class="btn btn-outline-secondary" type="button">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="conversation-list" id="conversationList">
+            @foreach(var conv in Model.Conversations)
+            {
+                <div class="conversation-item @(conv.IsActive ? "active" : "")" 
+                     data-conversation-id="@conv.Id"
+                     onclick="loadConversation('@conv.Id')">
+                    <div class="conv-header">
+                        <div class="conv-title">@conv.Title</div>
+                        <div class="conv-actions">
+                            <button class="btn btn-sm btn-link" onclick="event.stopPropagation(); deleteConversation('@conv.Id')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="conv-preview">@conv.LastMessage</div>
+                    <div class="conv-meta">
+                        <span class="conv-date">@conv.UpdatedAt.ToString("dd/MM HH:mm")</span>
+                        <span class="conv-count">@conv.MessageCount msg</span>
+                    </div>
+                </div>
+            }
+            
+            @if (!Model.Conversations.Any())
+            {
+                <div class="no-conversations">
+                    <i class="fas fa-comments fa-2x text-muted mb-2"></i>
+                    <p class="text-muted">Nessuna conversazione trovata</p>
+                    <button class="btn btn-primary btn-sm" onclick="newConversation()">
+                        <i class="fas fa-plus"></i> Crea la prima conversazione
+                    </button>
+                </div>
+            }
+        </div>
+        
+        <!-- Pagination -->
+        @if(Model.Pagination.TotalPages > 1)
+        {
+            <div class="sidebar-pagination">
+                <nav aria-label="Conversation pagination">
+                    <ul class="pagination pagination-sm">
+                        <li class="page-item @(!Model.Pagination.HasPreviousPage ? "disabled" : "")">
+                            <a class="page-link" href="#" onclick="loadConversationPage(@(Model.Pagination.CurrentPage - 1))">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item active">
+                            <span class="page-link">@Model.Pagination.CurrentPage / @Model.Pagination.TotalPages</span>
+                        </li>
+                        <li class="page-item @(!Model.Pagination.HasNextPage ? "disabled" : "")">
+                            <a class="page-link" href="#" onclick="loadConversationPage(@(Model.Pagination.CurrentPage + 1))">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        }
+    </div>
+    
+    <!-- Area chat principale -->
+    <div class="chat-main">
+        <div id="chat-placeholder" class="chat-welcome">
+            <div class="welcome-content">
+                <i class="fas fa-robot fa-4x text-primary mb-3"></i>
+                <h4>Benvenuto in CleverDocs Chat</h4>
+                <p class="text-muted">Seleziona una conversazione o creane una nuova per iniziare a chattare con i tuoi documenti.</p>
+                <div class="welcome-features">
+                    <div class="feature-item">
+                        <i class="fas fa-search text-info"></i>
+                        <span>Ricerca semantica avanzata</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-quote-left text-success"></i>
+                        <span>Citazioni precise dai documenti</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-brain text-warning"></i>
+                        <span>AI conversazionale intelligente</span>
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-lg mt-3" onclick="newConversation()">
+                    <i class="fas fa-plus"></i> Inizia Nuova Conversazione
+                </button>
+            </div>
+        </div>
+        
+        <!-- Conversation view will be loaded here -->
+        <div id="conversation-container" style="display: none;">
+            <!-- This will be populated by AJAX calls -->
+        </div>
+    </div>
+    
+    <!-- Panel configurazione -->
+    <div class="chat-settings">
+        <div class="settings-header">
+            <h6><i class="fas fa-cog"></i> Configurazione</h6>
+            <button class="btn btn-sm btn-outline-secondary" onclick="toggleSettings()" id="settingsToggle">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+        </div>
+        
+        <div class="settings-content" id="settingsContent">
+            <!-- Collections selection -->
+            <div class="setting-group">
+                <label class="form-label">
+                    <i class="fas fa-folder"></i> Collections Attive
+                </label>
+                <div class="collections-list">
+                    @foreach(var collection in Model.AvailableCollections)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input collection-checkbox" type="checkbox" 
+                                   value="@collection.Id" id="coll_@collection.Id"
+                                   @(Model.Settings.SelectedCollectionIds.Contains(collection.Id) ? "checked" : "")>
+                            <label class="form-check-label" for="coll_@collection.Id">
+                                <span class="collection-badge" style="background-color: @collection.Color">
+                                    @collection.Name
+                                </span>
+                                <small class="text-muted d-block">@collection.DocumentCount documenti</small>
+                            </label>
+                        </div>
+                    }
+                    
+                    @if (!Model.AvailableCollections.Any())
+                    {
+                        <div class="no-collections">
+                            <i class="fas fa-folder-open text-muted"></i>
+                            <p class="text-muted small">Nessuna collection disponibile</p>
+                            <a href="/Collections" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-plus"></i> Crea Collection
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+            
+            <!-- Search configuration -->
+            <div class="setting-group">
+                <label class="form-label">
+                    <i class="fas fa-search"></i> Configurazione Ricerca
+                </label>
+                
+                <div class="form-group mb-3">
+                    <label class="form-label small">Soglia Rilevanza</label>
+                    <input type="range" class="form-range" min="0.1" max="1.0" step="0.1" 
+                           value="@Model.Settings.RelevanceThreshold" id="relevanceThreshold">
+                    <div class="d-flex justify-content-between">
+                        <small class="text-muted">0.1</small>
+                        <small class="text-primary" id="thresholdValue">@Model.Settings.RelevanceThreshold</small>
+                        <small class="text-muted">1.0</small>
+                    </div>
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label class="form-label small">Max Risultati</label>
+                    <select class="form-select form-select-sm" id="maxResults">
+                        <option value="5" selected="@(Model.Settings.MaxResults == 5)">5</option>
+                        <option value="10" selected="@(Model.Settings.MaxResults == 10)">10</option>
+                        <option value="15" selected="@(Model.Settings.MaxResults == 15)">15</option>
+                        <option value="20" selected="@(Model.Settings.MaxResults == 20)">20</option>
+                    </select>
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label class="form-label small">Modalità Ricerca</label>
+                    <select class="form-select form-select-sm" id="searchMode">
+                        <option value="hybrid" selected="@(Model.Settings.SearchMode == "hybrid")">Ibrida</option>
+                        <option value="semantic" selected="@(Model.Settings.SearchMode == "semantic")">Semantica</option>
+                        <option value="keyword" selected="@(Model.Settings.SearchMode == "keyword")">Keyword</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Advanced options -->
+            <div class="setting-group">
+                <label class="form-label">
+                    <i class="fas fa-sliders-h"></i> Opzioni Avanzate
+                </label>
+                
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="useVectorSearch" 
+                           @(Model.Settings.UseVectorSearch ? "checked" : "")>
+                    <label class="form-check-label small" for="useVectorSearch">
+                        Ricerca vettoriale
+                    </label>
+                </div>
+                
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="useHybridSearch" 
+                           @(Model.Settings.UseHybridSearch ? "checked" : "")>
+                    <label class="form-check-label small" for="useHybridSearch">
+                        Ricerca ibrida
+                    </label>
+                </div>
+                
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="includeTitleIfAvailable" 
+                           @(Model.Settings.IncludeTitleIfAvailable ? "checked" : "")>
+                    <label class="form-check-label small" for="includeTitleIfAvailable">
+                        Includi titoli documenti
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-download"></i> Esporta Conversazione
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label class="form-label">Formato</label>
+                    <select class="form-select" id="exportFormat">
+                        <option value="json">JSON</option>
+                        <option value="txt">Testo</option>
+                        <option value="pdf">PDF</option>
+                    </select>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="includeCitations" checked>
+                    <label class="form-check-label" for="includeCitations">
+                        Includi citazioni
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="performExport()">
+                    <i class="fas fa-download"></i> Esporta
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/signalr/signalr.min.js"></script>
+    <script src="~/js/chat.js"></script>
+    <script>
+        // Initialize page-specific data
+        window.chatData = {
+            userId: '@Model.UserId',
+            companyId: '@Model.CompanyId',
+            settings: @Html.Raw(Json.Serialize(Model.Settings))
+        };
+    </script>
+}

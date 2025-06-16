@@ -125,7 +125,7 @@ public class UpdateDocumentDto
     
     public List<string>? Tags { get; set; }
     
-    public string UserId { get; set; } = string.Empty;
+    public Guid UserId { get; set; }
 }
 
 /// <summary>
@@ -362,7 +362,7 @@ public class BulkDocumentOperationDto
     public List<Guid> DocumentIds { get; set; } = new();
     public string Operation { get; set; } = string.Empty; // "delete", "move", "tag", "untag", "archive"
     public Dictionary<string, object> Parameters { get; set; } = new();
-    public string UserId { get; set; } = string.Empty;
+    public Guid UserId { get; set; }
 }
 
 /// <summary>

@@ -1,5 +1,6 @@
 using Hybrid.CleverDocs.WebUI.Services;
 using Hybrid.CleverDocs.WebUI.Services.Documents;
+using Hybrid.CleverDocs.WebUI.Services.Collections;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,14 +13,7 @@ builder.Services.AddControllersWithViews()
     });
 builder.Services.AddHttpContextAccessor();
 
-// Configure Redis Distributed Cache with authentication
-builder.Services.AddStackExchangeRedisCache(options =>
-{
-    options.Configuration = "192.168.1.4:6380,password=your_redis_password,abortConnect=false,connectRetry=5,connectTimeout=30000,syncTimeout=10000,asyncTimeout=10000,responseTimeout=10000";
-    options.InstanceName = "CleverDocs2WebUI";
-});
-
-// Add Memory Cache for fast local caching
+// Add Memory Cache for fast local caching (Redis disabled for stability)
 builder.Services.AddMemoryCache();
 
 // Register caching services
@@ -84,6 +78,25 @@ builder.Services.AddHttpClient<IDocumentApiClient, DocumentApiClient>(client =>
     {
         handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
     }
+    handler.MaxConnectionsPerServer = 10;
+    return handler;
+});
+
+// Add Collections API Client with enterprise-grade configuration
+builder.Services.AddHttpClient<ICollectionsApiClient, CollectionsApiClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7219");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "Hybrid.CleverDocs.WebUI/1.0");
+    client.Timeout = TimeSpan.FromSeconds(60); // Optimized for Collections operations
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new HttpClientHandler();
+    if (builder.Environment.IsDevelopment())
+    {
+        handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
+    }
+    // Connection pooling optimization for Collections API
     handler.MaxConnectionsPerServer = 10;
     return handler;
 });

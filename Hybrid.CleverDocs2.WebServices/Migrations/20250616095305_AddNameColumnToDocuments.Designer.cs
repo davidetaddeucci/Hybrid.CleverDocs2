@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Hybrid.CleverDocs2.WebServices.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250616095305_AddNameColumnToDocuments")]
+    partial class AddNameColumnToDocuments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -90,11 +93,6 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)");
-
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid");
 
@@ -110,14 +108,6 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<string>("Icon")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<bool>("IsFavorite")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("IsPublic")
                         .HasColumnType("boolean");
 
@@ -127,9 +117,6 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                         .HasColumnType("character varying(255)");
 
                     b.Property<string>("R2RCollectionId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("TagsJson")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("UpdatedAt")
