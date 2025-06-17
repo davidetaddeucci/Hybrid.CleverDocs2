@@ -1,0 +1,83 @@
+{
+  "backup_date": "2025-06-17",
+  "backup_time": "19:30:00",
+  "project_status": "REDIS_CACHE_INVALIDATION_ISSUE_IDENTIFIED",
+  "critical_findings": {
+    "document_upload_works": true,
+    "document_appears_in_grid": false,
+    "root_cause": "Cache invalidation pattern mismatch",
+    "test_document": {
+      "id": "1881b580-e9f2-4b84-b9d8-aa1774bd6ed8",
+      "filename": "16.Jaques-Taylor-et-al-PredictingHealthStressHappiness.pdf",
+      "status": 2,
+      "collection_id": "231d95ba-1377-4e2d-ab57-f20bc8e8a532",
+      "created_at": "2025-06-17 18:27:31",
+      "r2r_document_id": "pending_1881b580-e9f2-4b84-b9d8-aa1774bd6ed8"
+    }
+  },
+  "cache_invalidation_problem": {
+    "wrong_pattern": "type:pageddocumentresultdto:documents:search:*",
+    "correct_pattern": "*type:pageddocumentresultdto:documents:search:*",
+    "actual_cache_key": "cleverdocs2:type:pageddocumentresultdto:documents:search:eyJQYWdlIjox...",
+    "files_to_fix": [
+      "Hybrid.CleverDocs2.WebServices/Services/Documents/DocumentUploadService.cs"
+    ]
+  },
+  "redis_strategy_decision": {
+    "keep_redis": true,
+    "modify_strategy": true,
+    "remove_problematic_caching": true,
+    "implement_semantic_caching": true,
+    "benefits": {
+      "performance_improvement": "30-50%",
+      "llm_cost_reduction": "31%",
+      "cache_hit_rate": "30% even with diverse queries",
+      "latency_improvement": "sub-100ms vs 500ms+"
+    }
+  },
+  "system_status": {
+    "backend": {
+      "status": "running",
+      "url": "localhost:5252",
+      "terminal_id": 4
+    },
+    "frontend": {
+      "status": "running", 
+      "url": "localhost:5168",
+      "terminal_id": 5
+    },
+    "database": {
+      "host": "192.168.1.4:5433",
+      "database": "cleverdocs",
+      "user": "admin",
+      "password": "your_postgres_password"
+    },
+    "redis": {
+      "host": "192.168.1.4:6380",
+      "password": "your_redis_password",
+      "status": "cache_cleared_manually"
+    }
+  },
+  "next_steps": {
+    "immediate": [
+      "Fix cache invalidation pattern in DocumentUploadService.cs",
+      "Test upload -> display workflow",
+      "Verify all invalidation patterns are consistent"
+    ],
+    "phase_2": [
+      "Implement semantic caching with RedisVL",
+      "Replace exact matching with similarity search",
+      "Test with semantically similar queries"
+    ],
+    "phase_3": [
+      "Remove cache from dynamic document lists",
+      "Keep cache only for static/semi-static data",
+      "Implement version-based keys for chunks"
+    ]
+  },
+  "research_conclusions": {
+    "redis_value": "HIGH - Perfect for static document chunks and semantic query caching",
+    "current_problems": "Implementation issues, not Redis limitations",
+    "recommended_approach": "Selective caching with proper invalidation patterns"
+  }
+}

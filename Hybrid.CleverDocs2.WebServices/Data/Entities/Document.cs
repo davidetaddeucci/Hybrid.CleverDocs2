@@ -41,7 +41,7 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         public string? Description { get; set; }
 
         [Required]
-        public int Status { get; set; } = (int)DocumentStatus.Uploaded;
+        public int Status { get; set; } = (int)DocumentStatus.Draft;
 
         [MaxLength(500)]
         public string? StatusMessage { get; set; }
@@ -100,10 +100,11 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
 
     public enum DocumentStatus
     {
-        Uploaded = 1,
-        Processing = 2,
-        Processed = 3,
-        Failed = 4,
+        Draft = 0,
+        Processing = 1,
+        Ready = 2,
+        Error = 3,
+        Archived = 4,
         Deleted = 5
     }
 }

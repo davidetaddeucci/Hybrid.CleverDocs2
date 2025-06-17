@@ -765,7 +765,7 @@ public class DocumentApiClient : IDocumentApiClient
             Description = dto.Description,
             ContentType = dto.ContentType,
             Size = dto.Size,
-            Status = MapDocumentStatus(dto.Status.ToString()),
+            Status = MapDocumentStatus(((int)dto.Status).ToString()),
             CollectionId = dto.CollectionId,
             Tags = dto.Tags ?? new List<string>(),
             IsFavorite = dto.IsFavorite,
@@ -785,17 +785,18 @@ public class DocumentApiClient : IDocumentApiClient
 
     private static DocumentStatus MapDocumentStatus(string status)
     {
+        // Handle both string and numeric status values
         return status?.ToLowerInvariant() switch
         {
-            "uploaded" => DocumentStatus.Processing,
-            "processing" => DocumentStatus.Processing,
-            "processed" => DocumentStatus.Ready,
-            "failed" => DocumentStatus.Error,
+            "uploaded" or "1" => DocumentStatus.Processing,
+            "processing" or "2" => DocumentStatus.Processing,
+            "processed" or "3" => DocumentStatus.Ready,
+            "failed" or "4" => DocumentStatus.Error,
+            "deleted" or "5" => DocumentStatus.Deleted,
             "ready" => DocumentStatus.Ready,
             "error" => DocumentStatus.Error,
-            "draft" => DocumentStatus.Draft,
+            "draft" or "0" => DocumentStatus.Draft,
             "archived" => DocumentStatus.Archived,
-            "deleted" => DocumentStatus.Deleted,
             _ => DocumentStatus.Draft
         };
     }

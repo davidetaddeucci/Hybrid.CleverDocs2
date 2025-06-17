@@ -765,13 +765,13 @@ public class DocumentUploadService : IDocumentUploadService
             await context.SaveChangesAsync();
 
             // Invalidate cache so frontend sees the new document immediately
-            await _cacheService.InvalidateAsync($"type:pageddocumentresultdto:documents:search:*");
-            await _cacheService.InvalidateAsync($"user:documents:{queueItem.UserId}*");
+            await _cacheService.InvalidateAsync($"*type:pageddocumentresultdto:documents:search:*");
+            await _cacheService.InvalidateAsync($"*user:documents:{queueItem.UserId}*");
             if (queueItem.CollectionId.HasValue)
             {
-                await _cacheService.InvalidateAsync($"collection:documents:{queueItem.CollectionId}*");
+                await _cacheService.InvalidateAsync($"*collection:documents:{queueItem.CollectionId}*");
                 // Also invalidate collection details cache to update document count
-                await _cacheService.InvalidateAsync($"collection:details:{queueItem.CollectionId}");
+                await _cacheService.InvalidateAsync($"*collection:details:{queueItem.CollectionId}*");
             }
 
             _logger.LogInformation("Document {DocumentId} saved to database immediately with Processing status and cache invalidated, CorrelationId: {CorrelationId}",

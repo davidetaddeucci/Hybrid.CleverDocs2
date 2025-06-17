@@ -435,10 +435,22 @@ public class DocumentProcessingService : IDocumentProcessingService
                 }
             };
 
-            // Add collection ID if provided
+            // Add R2R collection ID if provided
             if (queueItem.CollectionId.HasValue)
             {
-                documentRequest.CollectionIds = new List<string> { queueItem.CollectionId.Value.ToString() };
+                // Get R2R collection ID from cache or database
+                var r2rCollectionId = await GetR2RCollectionIdAsync(queueItem.CollectionId.Value);
+                if (!string.IsNullOrEmpty(r2rCollectionId))
+                {
+                    documentRequest.CollectionIds = new List<string> { r2rCollectionId };
+                    _logger.LogInformation("Using R2R collection ID {R2RCollectionId} for document {DocumentId}, CorrelationId: {CorrelationId}",
+                        r2rCollectionId, queueItem.DocumentId, correlationId);
+                }
+                else
+                {
+                    _logger.LogWarning("No R2R collection ID found for collection {CollectionId}, document {DocumentId} will be uploaded without collection, CorrelationId: {CorrelationId}",
+                        queueItem.CollectionId.Value, queueItem.DocumentId, correlationId);
+                }
             }
 
             // Call real R2R API via DocumentClient
@@ -559,6 +571,45 @@ public class DocumentProcessingService : IDocumentProcessingService
         return exponentialDelay.Add(jitter);
     }
 
+    private async Task<string?> GetR2RCollectionIdAsync(Guid collectionId)
+    {
+        try
+        {
+            // First check cache
+            var cacheKey = $"r2r:collection:mapping:{collectionId}";
+            var cachedId = await _cacheService.GetAsync<string>(cacheKey);
+            if (!string.IsNullOrEmpty(cachedId))
+            {
+                return cachedId;
+            }
+
+            // Check database
+            using var scope = _serviceScopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var collection = await context.Collections
+                .FirstOrDefaultAsync(c => c.Id == collectionId);
+
+            if (collection != null && !string.IsNullOrEmpty(collection.R2RCollectionId))
+            {
+                // Cache for future use
+                await _cacheService.SetAsync(cacheKey, collection.R2RCollectionId,
+                    new CacheOptions { L1TTL = TimeSpan.FromMinutes(30), L2TTL = TimeSpan.FromHours(2) });
+
+                return collection.R2RCollectionId;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            var correlationId = _correlationService.GetCorrelationId();
+            _logger.LogError(ex, "Error getting R2R collection ID for collection {CollectionId}, CorrelationId: {CorrelationId}",
+                collectionId, correlationId);
+            return null;
+        }
+    }
+
     private async Task SaveDocumentToDatabaseAsync(R2RProcessingQueueItemDto queueItem)
     {
         using var scope = _serviceScopeFactory.CreateScope();
@@ -580,7 +631,7 @@ public class DocumentProcessingService : IDocumentProcessingService
                 // Update existing document with R2R information
                 existingDocument.R2RDocumentId = queueItem.R2RDocumentId;
                 existingDocument.R2RProcessedAt = DateTime.UtcNow;
-                existingDocument.Status = (int)Data.Entities.DocumentStatus.Processed;
+                existingDocument.Status = (int)Data.Entities.DocumentStatus.Ready;
                 existingDocument.UpdatedAt = DateTime.UtcNow;
 
                 _logger.LogInformation("Updated existing document {DocumentId} with R2R data, CorrelationId: {CorrelationId}",
@@ -622,7 +673,7 @@ public class DocumentProcessingService : IDocumentProcessingService
                     SizeBytes = queueItem.FileSize,
                     Size = queueItem.FileSize,
                     ContentType = queueItem.ContentType,
-                    Status = (int)Data.Entities.DocumentStatus.Processed,
+                    Status = (int)Data.Entities.DocumentStatus.Ready,
                     R2RDocumentId = queueItem.R2RDocumentId,
                     R2RProcessedAt = DateTime.UtcNow,
                     UserId = userGuid,
@@ -645,17 +696,26 @@ public class DocumentProcessingService : IDocumentProcessingService
             await context.SaveChangesAsync();
 
             // Invalidate document cache patterns to ensure fresh data is loaded
-            await _cacheService.InvalidateAsync($"type:pageddocumentresultdto:documents:search:*");
-            await _cacheService.InvalidateAsync($"user:documents:{queueItem.UserId}*");
+            await _cacheService.InvalidateAsync($"*type:pageddocumentresultdto:documents:search:*");
+            await _cacheService.InvalidateAsync($"*user:documents:{queueItem.UserId}*");
             if (queueItem.CollectionId.HasValue)
             {
-                await _cacheService.InvalidateAsync($"collection:documents:{queueItem.CollectionId}*");
+                await _cacheService.InvalidateAsync($"*collection:documents:{queueItem.CollectionId}*");
                 // Also invalidate collection details cache to update document count
-                await _cacheService.InvalidateAsync($"collection:details:{queueItem.CollectionId}");
+                await _cacheService.InvalidateAsync($"*collection:details:{queueItem.CollectionId}*");
             }
 
             _logger.LogInformation("Document {DocumentId} saved to database successfully and cache invalidated, CorrelationId: {CorrelationId}",
                 queueItem.DocumentId, correlationId);
+
+            // Broadcast document added/updated event to refresh collection view
+            await _hubContext.Clients.Group($"user_{queueItem.UserId}")
+                .SendAsync("DocumentUpdated", new {
+                    documentId = queueItem.DocumentId,
+                    collectionId = queueItem.CollectionId,
+                    action = existingDocument != null ? "updated" : "added",
+                    timestamp = DateTime.UtcNow
+                });
         }
         catch (Exception ex)
         {

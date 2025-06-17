@@ -5,7 +5,7 @@ using Hybrid.CleverDocs.WebUI.Models.Common;
 
 namespace Hybrid.CleverDocs.WebUI.Services.Collections;
 
-// DTOs for API communication
+// DTOs for API communication - aligned with WebServices UserCollectionDto
 public class CollectionDto
 {
     public Guid Id { get; set; }
@@ -135,14 +135,14 @@ public class CollectionsApiClient : ICollectionsApiClient
             {
                 var jsonResponse = await response.Content.ReadAsStringAsync();
                 var apiResponse = JsonSerializer.Deserialize<ApiResponse<PagedResult<CollectionDto>>>(jsonResponse, _jsonOptions);
-                
+
                 if (apiResponse?.Success == true && apiResponse.Data != null)
                 {
                     var result = MapToPagedResult(apiResponse.Data);
-                    
+
                     // Cache for 5 minutes
                     await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
-                    
+
                     return result;
                 }
             }
@@ -342,19 +342,27 @@ public class CollectionsApiClient : ICollectionsApiClient
             }
 
             var response = await _httpClient.GetAsync($"/api/UserCollections/favorites?page={page}&pageSize={pageSize}");
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var jsonResponse = await response.Content.ReadAsStringAsync();
-                var apiResponse = JsonSerializer.Deserialize<ApiResponse<PagedResult<CollectionDto>>>(jsonResponse, _jsonOptions);
-                
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<List<CollectionDto>>>(jsonResponse, _jsonOptions);
+
                 if (apiResponse?.Success == true && apiResponse.Data != null)
                 {
-                    var result = MapToPagedResult(apiResponse.Data);
-                    
+                    // Convert List to PagedResult for consistency
+                    var result = new PagedResult<CollectionViewModel>
+                    {
+                        Items = apiResponse.Data.Select(MapToViewModel).ToList(),
+                        Page = page,
+                        PageSize = pageSize,
+                        TotalCount = apiResponse.Data.Count,
+                        TotalPages = 1
+                    };
+
                     // Cache for 3 minutes
                     await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(3));
-                    
+
                     return result;
                 }
             }

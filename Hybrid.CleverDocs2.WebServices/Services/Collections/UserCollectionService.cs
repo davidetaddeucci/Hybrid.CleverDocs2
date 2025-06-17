@@ -178,13 +178,21 @@ public class UserCollectionService : IUserCollectionService
                     var r2rId = await _syncService.CreateR2RCollectionAsync(collection);
                     if (!string.IsNullOrEmpty(r2rId))
                     {
+                        // Update database with R2R collection ID
+                        collectionEntity.R2RCollectionId = r2rId;
+                        await _dbContext.SaveChangesAsync();
+
+                        // Update DTO for response
                         collection.R2RCollectionId = r2rId;
                         await InvalidateUserCollectionsCache(request.UserId);
+
+                        _logger.LogInformation("R2R collection ID {R2RCollectionId} saved to database for collection {CollectionId}, CorrelationId: {CorrelationId}",
+                            r2rId, collection.Id, correlationId);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to create R2R collection for {CollectionId}, CorrelationId: {CorrelationId}", 
+                    _logger.LogError(ex, "Failed to create R2R collection for {CollectionId}, CorrelationId: {CorrelationId}",
                         collection.Id, correlationId);
                 }
             });

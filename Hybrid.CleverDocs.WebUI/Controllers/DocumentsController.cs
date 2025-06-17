@@ -120,6 +120,8 @@ public class DocumentsController : Controller
                 {
                     _logger.LogWarning("ModelState error: {ErrorMessage}", error.ErrorMessage);
                 }
+                // Repopulate UI properties before returning view
+                PopulateUploadViewModelProperties(model);
                 return View(model);
             }
 
@@ -127,6 +129,8 @@ public class DocumentsController : Controller
             {
                 _logger.LogWarning("No file provided for upload");
                 ModelState.AddModelError("File", "Please select a file to upload.");
+                // Repopulate UI properties before returning view
+                PopulateUploadViewModelProperties(model);
                 return View(model);
             }
 
@@ -134,6 +138,8 @@ public class DocumentsController : Controller
             if (model.File.Length > 100 * 1024 * 1024)
             {
                 ModelState.AddModelError("File", "File size cannot exceed 100MB.");
+                // Repopulate UI properties before returning view
+                PopulateUploadViewModelProperties(model);
                 return View(model);
             }
 
@@ -150,6 +156,8 @@ public class DocumentsController : Controller
             if (!allowedExtensions.Contains(fileExtension))
             {
                 ModelState.AddModelError("File", "File type not supported by R2R. Please upload a supported file type.");
+                // Repopulate UI properties before returning view
+                PopulateUploadViewModelProperties(model);
                 return View(model);
             }
 
@@ -196,6 +204,8 @@ public class DocumentsController : Controller
                 {
                     _logger.LogWarning("Upload failed - DocumentApiClient returned null");
                     ModelState.AddModelError("", "Failed to upload document. Please try again.");
+                    // Repopulate UI properties before returning view
+                    PopulateUploadViewModelProperties(model);
                     return View(model);
                 }
             }
@@ -203,6 +213,8 @@ public class DocumentsController : Controller
             {
                 _logger.LogError(uploadEx, "Error uploading document to backend");
                 ModelState.AddModelError("", "Failed to upload document to the system. Please try again.");
+                // Repopulate UI properties before returning view
+                PopulateUploadViewModelProperties(model);
                 return View(model);
             }
         }
@@ -210,6 +222,8 @@ public class DocumentsController : Controller
         {
             _logger.LogError(ex, "Error uploading document");
             ModelState.AddModelError("", "An error occurred while uploading the document. Please try again.");
+            // Repopulate UI properties before returning view
+            PopulateUploadViewModelProperties(model);
             return View(model);
         }
     }
@@ -560,5 +574,20 @@ public class DocumentsController : Controller
         };
 
         await Task.CompletedTask;
+    }
+
+    private static void PopulateUploadViewModelProperties(DocumentUploadViewModel model)
+    {
+        // Ensure UI properties are populated for view rendering
+        model.MaxFileSize = 100 * 1024 * 1024; // 100MB
+        model.AllowedFileTypes = new List<string>
+        {
+            // R2R Supported file types only
+            ".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls",
+            ".pptx", ".ppt", ".html", ".csv", ".rtf", ".epub", ".odt",
+            ".rst", ".org", ".tsv", ".eml", ".msg", ".png", ".jpeg",
+            ".jpg", ".bmp", ".tiff", ".heic", ".mp3", ".py", ".js",
+            ".ts", ".css"
+        };
     }
 }

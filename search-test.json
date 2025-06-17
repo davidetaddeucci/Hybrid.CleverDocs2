@@ -1,0 +1,16 @@
+{
+  "searchTerm": null,
+  "tags": [],
+  "color": null,
+  "icon": null,
+  "isFavorite": null,
+  "isShared": null,
+  "createdAfter": null,
+  "createdBefore": null,
+  "minDocuments": null,
+  "maxDocuments": null,
+  "sortBy": "UpdatedAt",
+  "sortDirection": "DESC",
+  "page": 1,
+  "pageSize": 20
+}

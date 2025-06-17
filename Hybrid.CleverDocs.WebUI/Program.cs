@@ -158,6 +158,57 @@ app.MapControllerRoute(
     pattern: "collections/{collectionId:guid}/documents/{documentId:guid}/delete",
     defaults: new { controller = "Collections", action = "DeleteDocument" });
 
+// Document routes
+app.MapControllerRoute(
+    name: "document-upload",
+    pattern: "documents/upload",
+    defaults: new { controller = "Documents", action = "Upload" });
+
+app.MapControllerRoute(
+    name: "document-details",
+    pattern: "documents/{documentId:guid}",
+    defaults: new { controller = "Documents", action = "Details" });
+
+app.MapControllerRoute(
+    name: "document-edit",
+    pattern: "documents/{documentId:guid}/edit",
+    defaults: new { controller = "Documents", action = "Edit" });
+
+app.MapControllerRoute(
+    name: "document-delete",
+    pattern: "documents/{documentId:guid}/delete",
+    defaults: new { controller = "Documents", action = "Delete" });
+
+app.MapControllerRoute(
+    name: "document-download",
+    pattern: "documents/{documentId:guid}/download",
+    defaults: new { controller = "Documents", action = "Download" });
+
+app.MapControllerRoute(
+    name: "document-toggle-favorite",
+    pattern: "documents/{documentId:guid}/toggle-favorite",
+    defaults: new { controller = "Documents", action = "ToggleFavorite" });
+
+app.MapControllerRoute(
+    name: "documents-favorites",
+    pattern: "documents/favorites",
+    defaults: new { controller = "Documents", action = "Favorites" });
+
+app.MapControllerRoute(
+    name: "documents-r2r-test",
+    pattern: "documents/r2r-test",
+    defaults: new { controller = "Documents", action = "R2RTest" });
+
+app.MapControllerRoute(
+    name: "documents-search-suggestions",
+    pattern: "documents/search-suggestions",
+    defaults: new { controller = "Documents", action = "GetSearchSuggestions" });
+
+app.MapControllerRoute(
+    name: "documents-index",
+    pattern: "documents",
+    defaults: new { controller = "Documents", action = "Index" });
+
 // Default route should go to login
 app.MapControllerRoute(
     name: "default",
