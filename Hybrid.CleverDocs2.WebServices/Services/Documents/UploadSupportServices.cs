@@ -238,8 +238,8 @@ public class UploadValidationService : IUploadValidationService
         switch (fileExtension)
         {
             case ".md":
-                // Browsers often send text/plain for .md files instead of text/markdown
-                isValid = contentType == "text/plain" || contentType == "text/markdown";
+                // Browsers often send text/plain, text/markdown, or application/text for .md files
+                isValid = contentType == "text/plain" || contentType == "text/markdown" || contentType == "application/text";
                 _logger.LogDebug("Markdown file validation: {ContentType} -> {IsValid}", contentType, isValid);
                 break;
 

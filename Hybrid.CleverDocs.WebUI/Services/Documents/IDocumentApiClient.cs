@@ -77,6 +77,11 @@ public interface IDocumentApiClient
     /// </summary>
     Task<bool> TrackDocumentViewAsync(Guid documentId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Get document download URL
+    /// </summary>
+    Task<string?> GetDocumentDownloadUrlAsync(Guid documentId, CancellationToken cancellationToken = default);
+
     // Advanced Search Methods
 
     /// <summary>

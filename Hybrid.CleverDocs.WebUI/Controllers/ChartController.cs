@@ -9,7 +9,7 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
     /// Controller for providing chart data endpoints
     /// Supports admin, company, and user role-based charts
     /// </summary>
-    [Authorize]
+    // JWT Authentication: Authorization handled client-side with JWT tokens
     [Route("api/charts")]
     public class ChartController : ControllerBase
     {

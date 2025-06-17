@@ -427,10 +427,40 @@ public static class DocumentUploadHubExtensions
     /// <summary>
     /// Broadcasts system-wide R2R status update
     /// </summary>
-    public static async Task BroadcastR2RStatusUpdate(this IHubContext<DocumentUploadHub> hubContext, 
+    public static async Task BroadcastR2RStatusUpdate(this IHubContext<DocumentUploadHub> hubContext,
         R2RRateLimitStatusDto status)
     {
         await hubContext.Clients.All
             .SendAsync("R2RStatusUpdate", status);
+    }
+
+    /// <summary>
+    /// Broadcasts document deletion progress
+    /// </summary>
+    public static async Task BroadcastDocumentDeletionProgress(this IHubContext<DocumentUploadHub> hubContext,
+        string userId, string documentId, string status, string? message = null)
+    {
+        await hubContext.Clients.Group($"user_{userId}")
+            .SendAsync("DocumentDeletionProgress", new { documentId, status, message, timestamp = DateTime.UtcNow });
+    }
+
+    /// <summary>
+    /// Broadcasts document deletion completed
+    /// </summary>
+    public static async Task BroadcastDocumentDeletionCompleted(this IHubContext<DocumentUploadHub> hubContext,
+        string userId, string documentId, bool success, string? message = null)
+    {
+        await hubContext.Clients.Group($"user_{userId}")
+            .SendAsync("DocumentDeletionCompleted", new { documentId, success, message, timestamp = DateTime.UtcNow });
+    }
+
+    /// <summary>
+    /// Broadcasts document deletion error
+    /// </summary>
+    public static async Task BroadcastDocumentDeletionError(this IHubContext<DocumentUploadHub> hubContext,
+        string userId, string documentId, string error)
+    {
+        await hubContext.Clients.Group($"user_{userId}")
+            .SendAsync("DocumentDeletionError", new { documentId, error, timestamp = DateTime.UtcNow });
     }
 }

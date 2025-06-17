@@ -12,8 +12,8 @@ namespace Hybrid.CleverDocs.WebUI.Controllers;
 
 /// <summary>
 /// Enterprise-grade MVC Controller for Collections management with Redis caching and RabbitMQ integration
+/// JWT Authentication: Authorization handled client-side with JWT tokens
 /// </summary>
-[Authorize]
 [Route("collections")]
 public class CollectionsController : Controller
 {
@@ -98,7 +98,7 @@ public class CollectionsController : Controller
     /// Collection details page with analytics and document preview
     /// </summary>
     [HttpGet("{collectionId:guid}")]
-    public async Task<IActionResult> Details(Guid collectionId)
+    public async Task<IActionResult> Details(Guid collectionId, int page = 1, int pageSize = 10, string sortBy = "updated_at", SortDirection sortDirection = SortDirection.Desc)
     {
         try
         {
@@ -115,16 +115,16 @@ public class CollectionsController : Controller
             // Get analytics data
             var analytics = await _collectionsApiClient.GetCollectionAnalyticsAsync(collectionId);
 
-            // Get documents for this collection
+            // Get documents for this collection with pagination
             var documentsSearch = new DocumentSearchViewModel
             {
-                Page = 1,
-                PageSize = 10, // Show first 10 documents in details view
-                SortBy = "updated_at",
-                SortDirection = SortDirection.Desc
+                Page = page,
+                PageSize = pageSize,
+                SortBy = sortBy,
+                SortDirection = sortDirection
             };
 
-            _logger.LogInformation("Calling GetCollectionDocumentsAsync for collection {CollectionId}", collectionId);
+            _logger.LogInformation("Calling GetCollectionDocumentsAsync for collection {CollectionId}, page {Page}", collectionId, page);
             var documentsResult = await _documentApiClient.GetCollectionDocumentsAsync(collectionId, documentsSearch);
             _logger.LogInformation("GetCollectionDocumentsAsync returned {Count} documents for collection {CollectionId}",
                 documentsResult.Items.Count, collectionId);
@@ -138,7 +138,15 @@ public class CollectionsController : Controller
                 CanShare = collection.Permissions.CanShare,
                 CanAddDocuments = collection.Permissions.CanAddDocuments,
                 RelatedCollections = new List<CollectionViewModel>(),
-                RecentDocuments = documentsResult.Items.Select(ConvertToCollectionDocumentViewModel).ToList()
+                RecentDocuments = documentsResult.Items.Select(ConvertToCollectionDocumentViewModel).ToList(),
+                DocumentsPagination = new Models.Collections.PaginationViewModel
+                {
+                    CurrentPage = documentsResult.Page,
+                    TotalPages = documentsResult.TotalPages,
+                    TotalItems = documentsResult.TotalCount,
+                    PageSize = documentsResult.PageSize
+                },
+                DocumentsSearch = documentsSearch
             };
 
             ViewBag.PageTitle = collection.Name;
@@ -423,6 +431,7 @@ public class CollectionsController : Controller
     /// Toggle favorite status - AJAX endpoint
     /// </summary>
     [HttpPost("{collectionId:guid}/toggle-favorite")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> ToggleFavorite(Guid collectionId)
     {
         try
@@ -477,6 +486,36 @@ public class CollectionsController : Controller
         {
             _logger.LogError(ex, "Error reordering collections");
             return Json(new { success = false, error = "Failed to reorder collections" });
+        }
+    }
+
+    /// <summary>
+    /// Delete document from collection - AJAX endpoint
+    /// </summary>
+    [HttpPost("{collectionId:guid}/documents/{documentId:guid}/delete")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteDocument(Guid collectionId, Guid documentId)
+    {
+        try
+        {
+            _logger.LogInformation("Deleting document {DocumentId} from collection {CollectionId}", documentId, collectionId);
+
+            var success = await _documentApiClient.DeleteDocumentAsync(documentId);
+            if (success)
+            {
+                _logger.LogInformation("Document {DocumentId} deleted successfully", documentId);
+                return Json(new { success = true, message = "Document deleted successfully" });
+            }
+            else
+            {
+                _logger.LogWarning("Failed to delete document {DocumentId}", documentId);
+                return Json(new { success = false, error = "Failed to delete document" });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting document {DocumentId} from collection {CollectionId}", documentId, collectionId);
+            return Json(new { success = false, error = "An error occurred while deleting the document" });
         }
     }
 
@@ -629,7 +668,24 @@ public class CollectionsController : Controller
             Size = doc.Size,
             ContentType = doc.ContentType,
             FileType = GetFileTypeFromContentType(doc.ContentType),
-            Status = doc.StatusDisplayName
+            Status = MapDocumentStatusForCollectionView(doc.Status)
+        };
+    }
+
+    /// <summary>
+    /// Map document status to collection view expected strings
+    /// </summary>
+    private static string MapDocumentStatusForCollectionView(Models.Documents.DocumentStatus status)
+    {
+        return status switch
+        {
+            Models.Documents.DocumentStatus.Draft => "Draft",
+            Models.Documents.DocumentStatus.Processing => "Processing",
+            Models.Documents.DocumentStatus.Ready => "Completed",
+            Models.Documents.DocumentStatus.Error => "Failed",
+            Models.Documents.DocumentStatus.Archived => "Archived",
+            Models.Documents.DocumentStatus.Deleted => "Deleted",
+            _ => "Unknown"
         };
     }
 

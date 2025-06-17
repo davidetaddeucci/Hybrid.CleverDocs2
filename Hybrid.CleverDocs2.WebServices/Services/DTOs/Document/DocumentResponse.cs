@@ -56,6 +56,56 @@ public class DocumentResponse
     public List<DocumentChunk>? Chunks { get; set; }
 }
 
+// DTO for handling R2R async ingestion responses (HTTP 202)
+public class R2RTaskResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("task_id")]
+    public string TaskId { get; set; } = string.Empty;
+
+    [JsonPropertyName("monitor_url")]
+    public string? MonitorUrl { get; set; }
+
+    [JsonPropertyName("eta")]
+    public DateTime? EstimatedCompletion { get; set; }
+
+    [JsonPropertyName("message")]
+    public string? Message { get; set; }
+}
+
+// DTO for R2R task status polling
+public class R2RTaskStatusResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("task_id")]
+    public string TaskId { get; set; } = string.Empty;
+
+    [JsonPropertyName("document_id")]
+    public string? DocumentId { get; set; }
+
+    [JsonPropertyName("processed_at")]
+    public DateTime? ProcessedAt { get; set; }
+
+    [JsonPropertyName("error_message")]
+    public string? ErrorMessage { get; set; }
+
+    [JsonPropertyName("progress")]
+    public int? Progress { get; set; }
+}
+
+// Unified response for both sync and async operations
+public class R2RIngestionResponse
+{
+    public bool IsAsync { get; set; }
+    public DocumentResponse? Document { get; set; }
+    public R2RTaskResponse? Task { get; set; }
+    public string? DocumentId => Document?.Id ?? Task?.TaskId;
+}
+
 public class DocumentChunk
 {
     [JsonPropertyName("id")]

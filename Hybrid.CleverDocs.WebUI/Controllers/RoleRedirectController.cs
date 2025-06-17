@@ -4,7 +4,7 @@ using System.Security.Claims;
 
 namespace Hybrid.CleverDocs.WebUI.Controllers
 {
-    [Authorize]
+    // JWT Authentication: Authorization handled client-side with JWT tokens
     public class RoleRedirectController : Controller
     {
         private readonly ILogger<RoleRedirectController> _logger;

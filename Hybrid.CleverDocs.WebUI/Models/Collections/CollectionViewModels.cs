@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Hybrid.CleverDocs.WebUI.Models.Common;
+using Hybrid.CleverDocs.WebUI.Models.Documents;
 
 namespace Hybrid.CleverDocs.WebUI.Models.Collections;
 
@@ -297,6 +298,10 @@ public class CollectionDetailsViewModel
     public bool CanDelete { get; set; }
     public bool CanShare { get; set; }
     public bool CanAddDocuments { get; set; }
+
+    // Documents pagination
+    public PaginationViewModel DocumentsPagination { get; set; } = new();
+    public DocumentSearchViewModel DocumentsSearch { get; set; } = new();
 }
 
 /// <summary>

@@ -9,7 +9,7 @@ namespace Hybrid.CleverDocs.WebUI.Controllers;
 /// <summary>
 /// MVC Controller for document management operations
 /// </summary>
-[Authorize]
+// JWT Authentication: Authorization handled client-side with JWT tokens
 [Route("documents")]
 public class DocumentsController : Controller
 {
@@ -249,6 +249,43 @@ public class DocumentsController : Controller
         {
             _logger.LogError(ex, "Error loading document details for {DocumentId}", documentId);
             TempData["ErrorMessage"] = "Failed to load document details. Please try again.";
+            return RedirectToAction("Index");
+        }
+    }
+
+    /// <summary>
+    /// Download document
+    /// </summary>
+    [HttpGet("{documentId:guid}/download")]
+    public async Task<IActionResult> Download(Guid documentId)
+    {
+        try
+        {
+            var document = await _documentApiClient.GetDocumentAsync(documentId);
+            if (document == null)
+            {
+                TempData["ErrorMessage"] = "Document not found.";
+                return RedirectToAction("Index");
+            }
+
+            // Track download
+            _ = Task.Run(async () => await _documentApiClient.TrackDocumentViewAsync(documentId));
+
+            // Get download URL from the API
+            var downloadUrl = await _documentApiClient.GetDocumentDownloadUrlAsync(documentId);
+            if (string.IsNullOrEmpty(downloadUrl))
+            {
+                TempData["ErrorMessage"] = "Unable to generate download link for this document.";
+                return RedirectToAction("Details", new { documentId });
+            }
+
+            // Redirect to the download URL
+            return Redirect(downloadUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading document {DocumentId}", documentId);
+            TempData["ErrorMessage"] = "An error occurred while downloading the document.";
             return RedirectToAction("Index");
         }
     }

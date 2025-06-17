@@ -100,27 +100,39 @@ public class RecentActivityDto
 
 public class RecentDocumentDto
 {
-    public int DocumentId { get; set; }
-    public string FileName { get; set; } = string.Empty;
-    public string FileType { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; }
-    public string StatusBadgeClass => Status.ToLower() switch
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public long Size { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public int Status { get; set; }
+
+    // Compatibility properties for Views
+    public int DocumentId => 0; // Legacy compatibility
+    public string FileName => Name;
+    public string FileType => ContentType;
+    public DateTime CreatedAt => UpdatedAt;
+
+    public string StatusBadgeClass => Status switch
     {
-        "completed" => "badge-success",
-        "processing" => "badge-warning",
-        "failed" => "badge-danger",
+        1 => "badge-warning", // Processing
+        2 => "badge-success", // Ready
+        3 => "badge-danger",  // Error
         _ => "badge-secondary"
     };
 }
 
 public class RecentConversationDto
 {
-    public int ConversationId { get; set; }
+    public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public int MessageCount { get; set; }
-    public DateTime LastMessage { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+
+    // Compatibility properties for Views
+    public int ConversationId => 0; // Legacy compatibility
+    public DateTime LastMessage => UpdatedAt;
+    public DateTime CreatedAt => UpdatedAt;
 }
 
 public class QuotaUsageDto

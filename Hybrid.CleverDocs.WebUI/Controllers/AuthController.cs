@@ -22,8 +22,7 @@ public class AuthController : Controller
     [HttpGet]
     public async Task<IActionResult> Login(string? returnUrl = null)
     {
-        // Always clear authentication for fresh login
-        await HttpContext.SignOutAsync("Cookies");
+        // JWT Authentication: Clear any existing session data
         HttpContext.Session.Clear();
 
         var model = new LoginViewModel
@@ -57,29 +56,15 @@ public class AuthController : Controller
             {
                 _logger.LogInformation("User {Email} logged in successfully", model.Email);
 
-                // Map role string to numeric value for consistent authorization
-                var roleValue = MapRoleToNumericString(result.User?.Role ?? "User");
+                // JWT Authentication: Store token and user info for client-side access
+                ViewBag.AccessToken = result.AccessToken;
+                ViewBag.RefreshToken = result.RefreshToken;
+                ViewBag.UserInfo = result.User;
 
-                // Create claims for ASP.NET Core authentication
-                var claims = new List<Claim>
-                {
-                    new Claim(ClaimTypes.Email, model.Email),
-                    new Claim(ClaimTypes.Name, result.User?.FullName ?? model.Email),
-                    new Claim(ClaimTypes.NameIdentifier, result.User?.Id.ToString() ?? Guid.NewGuid().ToString()),
-                    new Claim(ClaimTypes.Role, roleValue),
-                    new Claim("RoleName", result.User?.Role ?? "User") // Keep original role name for display
-                };
-
-                if (result.User?.CompanyId != null)
-                {
-                    claims.Add(new Claim("CompanyId", result.User.CompanyId.ToString()));
-                }
-
-                var claimsIdentity = new ClaimsIdentity(claims, "Cookies");
-                var claimsPrincipal = new ClaimsPrincipal(claimsIdentity);
-
-                // Sign in the user
-                await HttpContext.SignInAsync("Cookies", claimsPrincipal);
+                // Store in HttpContext.Items for immediate server-side access
+                HttpContext.Items["AccessToken"] = result.AccessToken;
+                HttpContext.Items["RefreshToken"] = result.RefreshToken;
+                HttpContext.Items["UserInfo"] = result.User;
 
                 // Add redirect tracking to prevent loops
                 var redirectCount = HttpContext.Session.GetInt32("RedirectCount") ?? 0;
@@ -92,14 +77,13 @@ public class AuthController : Controller
 
                 HttpContext.Session.SetInt32("RedirectCount", redirectCount + 1);
 
-                // Redirect to return URL or role-based dashboard
-                if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
-                {
-                    HttpContext.Session.Remove("RedirectCount");
-                    return Redirect(model.ReturnUrl);
-                }
+                // JWT Authentication: Return special view that saves token and redirects
+                // Don't use RoleRedirect anymore - JavaScript will handle role-based redirect
+                ViewBag.ReturnUrl = !string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl)
+                    ? model.ReturnUrl
+                    : "";
 
-                return RedirectToAction("Index", "RoleRedirect");
+                return View("LoginSuccess", model);
             }
             else
             {
@@ -174,14 +158,14 @@ public class AuthController : Controller
     }
 
     [HttpPost]
-    [Authorize]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
     {
         try
         {
             await _authService.LogoutAsync();
-            await HttpContext.SignOutAsync("Cookies");
+            // JWT Authentication: Clear session data
+            HttpContext.Session.Clear();
             _logger.LogInformation("User logged out successfully");
         }
         catch (Exception ex)
@@ -228,14 +212,14 @@ public class AuthController : Controller
     }
 
     [HttpGet]
-    [Authorize]
+    // JWT Authentication: Authorization handled client-side
     public IActionResult ChangePassword()
     {
         return View(new ChangePasswordViewModel());
     }
 
     [HttpPost]
-    [Authorize]
+    // JWT Authentication: Authorization handled client-side
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model)
     {

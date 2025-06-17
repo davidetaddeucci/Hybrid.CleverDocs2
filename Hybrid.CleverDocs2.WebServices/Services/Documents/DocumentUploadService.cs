@@ -1,10 +1,13 @@
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Hybrid.CleverDocs2.WebServices.Models.Documents;
 using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Services.Queue;
 using Hybrid.CleverDocs2.WebServices.Hubs;
+using Hybrid.CleverDocs2.WebServices.Data;
+using Hybrid.CleverDocs2.WebServices.Data.Entities;
 using System.Collections.Concurrent;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Documents;
@@ -25,6 +28,7 @@ public class DocumentUploadService : IDocumentUploadService
     private readonly IHubContext<DocumentUploadHub> _hubContext;
     private readonly ILogger<DocumentUploadService> _logger;
     private readonly ICorrelationService _correlationService;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly DocumentUploadOptions _options;
 
     // Thread-safe storage for upload sessions
@@ -43,6 +47,7 @@ public class DocumentUploadService : IDocumentUploadService
         IHubContext<DocumentUploadHub> hubContext,
         ILogger<DocumentUploadService> logger,
         ICorrelationService correlationService,
+        IServiceScopeFactory serviceScopeFactory,
         IOptions<DocumentUploadOptions> options)
     {
         _chunkedUploadService = chunkedUploadService;
@@ -56,6 +61,7 @@ public class DocumentUploadService : IDocumentUploadService
         _hubContext = hubContext;
         _logger = logger;
         _correlationService = correlationService;
+        _serviceScopeFactory = serviceScopeFactory;
         _options = options.Value;
     }
 
@@ -683,6 +689,9 @@ public class DocumentUploadService : IDocumentUploadService
         fileInfo.DocumentId = queueItem.DocumentId;
         fileInfo.Status = FileUploadStatusDto.Processing;
 
+        // CRITICAL FIX: Save document to database IMMEDIATELY so frontend can see it
+        await SaveDocumentToDatabaseImmediatelyAsync(queueItem);
+
         await _processingService.QueueDocumentForProcessingAsync(queueItem);
     }
 
@@ -702,8 +711,78 @@ public class DocumentUploadService : IDocumentUploadService
     private async Task UpdateSessionInCache(DocumentUploadSessionDto session)
     {
         _activeSessions[session.SessionId] = session;
-        await _cacheService.SetAsync($"upload:session:{session.SessionId}", session, 
+        await _cacheService.SetAsync($"upload:session:{session.SessionId}", session,
             new CacheOptions { L1TTL = TimeSpan.FromHours(1), L2TTL = TimeSpan.FromHours(6) });
+    }
+
+    private async Task SaveDocumentToDatabaseImmediatelyAsync(R2RProcessingQueueItemDto queueItem)
+    {
+        using var scope = _serviceScopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
+        {
+            _logger.LogInformation("Saving document to database immediately after upload: {DocumentId}, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, correlationId);
+
+            // Get user's company ID from database
+            var userGuid = Guid.Parse(queueItem.UserId);
+            var user = await context.Users.FirstOrDefaultAsync(u => u.Id == userGuid);
+
+            if (user == null)
+            {
+                _logger.LogError("User {UserId} not found in database, CorrelationId: {CorrelationId}",
+                    queueItem.UserId, correlationId);
+                return;
+            }
+
+            // Create document record with Processing status
+            var document = new Document
+            {
+                Id = queueItem.DocumentId,
+                Name = queueItem.FileName,
+                FileName = queueItem.FileName,
+                OriginalFileName = queueItem.FileName,
+                SizeBytes = queueItem.FileSize,
+                Size = queueItem.FileSize,
+                ContentType = queueItem.ContentType,
+                Status = (int)Data.Entities.DocumentStatus.Processing, // Processing status
+                R2RDocumentId = null, // Will be set when R2R completes
+                R2RProcessedAt = null, // Will be set when R2R completes
+                UserId = userGuid,
+                CompanyId = user.CompanyId,
+                CollectionId = queueItem.CollectionId,
+                FilePath = queueItem.FilePath,
+                Tags = new List<string>(),
+                Metadata = new Dictionary<string, object>(),
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsProcessing = true
+            };
+
+            context.Documents.Add(document);
+            await context.SaveChangesAsync();
+
+            // Invalidate cache so frontend sees the new document immediately
+            await _cacheService.InvalidateAsync($"type:pageddocumentresultdto:documents:search:*");
+            await _cacheService.InvalidateAsync($"user:documents:{queueItem.UserId}*");
+            if (queueItem.CollectionId.HasValue)
+            {
+                await _cacheService.InvalidateAsync($"collection:documents:{queueItem.CollectionId}*");
+                // Also invalidate collection details cache to update document count
+                await _cacheService.InvalidateAsync($"collection:details:{queueItem.CollectionId}");
+            }
+
+            _logger.LogInformation("Document {DocumentId} saved to database immediately with Processing status and cache invalidated, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, correlationId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving document {DocumentId} to database immediately, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, correlationId);
+            throw;
+        }
     }
 }
 

@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Models.Documents;
 using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
+using Hybrid.CleverDocs2.WebServices.Services.Clients;
+using Hybrid.CleverDocs2.WebServices.Hubs;
 using System.Text.Json;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Documents;
@@ -16,6 +19,9 @@ public class UserDocumentService : IUserDocumentService
     private readonly IMultiLevelCacheService _cacheService;
     private readonly ILogger<UserDocumentService> _logger;
     private readonly ICorrelationService _correlationService;
+    private readonly IDocumentClient _documentClient;
+    private readonly ICollectionClient _collectionClient;
+    private readonly IHubContext<DocumentUploadHub> _hubContext;
 
     /// <summary>
     /// Helper method to convert string userId to Guid for database compatibility
@@ -34,12 +40,18 @@ public class UserDocumentService : IUserDocumentService
         ApplicationDbContext context,
         IMultiLevelCacheService cacheService,
         ILogger<UserDocumentService> logger,
-        ICorrelationService correlationService)
+        ICorrelationService correlationService,
+        IDocumentClient documentClient,
+        ICollectionClient collectionClient,
+        IHubContext<DocumentUploadHub> hubContext)
     {
         _context = context;
         _cacheService = cacheService;
         _logger = logger;
         _correlationService = correlationService;
+        _documentClient = documentClient;
+        _collectionClient = collectionClient;
+        _hubContext = hubContext;
     }
 
     public async Task<PagedDocumentResultDto> SearchDocumentsAsync(DocumentQueryDto query, CancellationToken cancellationToken = default)
@@ -449,17 +461,17 @@ public class UserDocumentService : IUserDocumentService
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json)).Replace("/", "_").Replace("+", "-");
     }
 
-    private string? GenerateThumbnailUrl(Guid documentId)
+    private static string? GenerateThumbnailUrl(Guid documentId)
     {
         return $"/api/documents/{documentId}/thumbnail";
     }
 
-    private string? GeneratePreviewUrl(Guid documentId)
+    private static string? GeneratePreviewUrl(Guid documentId)
     {
         return $"/api/documents/{documentId}/preview";
     }
 
-    private string? GenerateDownloadUrl(Guid documentId)
+    private static string? GenerateDownloadUrl(Guid documentId)
     {
         return $"/api/documents/{documentId}/download";
     }
@@ -481,9 +493,164 @@ public class UserDocumentService : IUserDocumentService
 
     public async Task<bool> DeleteDocumentAsync(Guid documentId, Guid userId)
     {
-        // Implementation placeholder
-        await Task.CompletedTask;
-        return false;
+        var correlationId = _correlationService.GetCorrelationId();
+        var userIdString = userId.ToString();
+
+        try
+        {
+            _logger.LogInformation("Starting document deletion process for {DocumentId}, user {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+
+            // Notify start of deletion process
+            await _hubContext.BroadcastDocumentDeletionProgress(userIdString, documentId.ToString(),
+                "starting", "Iniziando cancellazione documento...");
+
+            // Step 1: Verify document exists and get details
+            await _hubContext.BroadcastDocumentDeletionProgress(userIdString, documentId.ToString(),
+                "verifying", "Verifica esistenza documento...");
+
+            var document = await _context.Documents
+                .Include(d => d.Collection)
+                .FirstOrDefaultAsync(d => d.Id == documentId && d.UserId == userId);
+
+            if (document == null)
+            {
+                _logger.LogWarning("Document {DocumentId} not found for user {UserId}, CorrelationId: {CorrelationId}",
+                    documentId, userId, correlationId);
+
+                await _hubContext.BroadcastDocumentDeletionError(userIdString, documentId.ToString(),
+                    "Documento non trovato o accesso negato");
+                return false;
+            }
+
+            _logger.LogInformation("Found document {DocumentId} with name '{DocumentName}', R2RDocumentId '{R2RDocumentId}', Collection: {CollectionId}, CorrelationId: {CorrelationId}",
+                documentId, document.Name, document.R2RDocumentId, document.CollectionId, correlationId);
+
+            // Step 2: Remove from R2R Collection if exists
+            bool r2rCollectionRemovalSuccess = true;
+            if (document.CollectionId.HasValue && !string.IsNullOrEmpty(document.R2RDocumentId))
+            {
+                await _hubContext.BroadcastDocumentDeletionProgress(userIdString, documentId.ToString(),
+                    "removing_from_collection", "Rimozione da collection R2R...");
+
+                try
+                {
+                    // Get R2R collection ID from our collection
+                    var collection = document.Collection;
+                    if (collection != null && !string.IsNullOrEmpty(collection.R2RCollectionId))
+                    {
+                        _logger.LogInformation("Removing document {R2RDocumentId} from R2R collection {R2RCollectionId}, CorrelationId: {CorrelationId}",
+                            document.R2RDocumentId, collection.R2RCollectionId, correlationId);
+
+                        await _collectionClient.RemoveDocumentFromCollectionAsync(collection.R2RCollectionId, document.R2RDocumentId);
+
+                        _logger.LogInformation("Successfully removed document from R2R collection, CorrelationId: {CorrelationId}", correlationId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to remove document {R2RDocumentId} from R2R collection, CorrelationId: {CorrelationId}",
+                        document.R2RDocumentId, correlationId);
+                    r2rCollectionRemovalSuccess = false;
+                    // Continue with deletion process
+                }
+            }
+
+            // Step 3: Remove from R2R Dataset
+            bool r2rDatasetRemovalSuccess = true;
+            if (!string.IsNullOrEmpty(document.R2RDocumentId))
+            {
+                await _hubContext.BroadcastDocumentDeletionProgress(userIdString, documentId.ToString(),
+                    "removing_from_dataset", "Rimozione da dataset R2R...");
+
+                try
+                {
+                    // Skip R2R deletion for pending documents that were never processed
+                    if (document.R2RDocumentId.StartsWith("pending_"))
+                    {
+                        _logger.LogWarning("Skipping R2R deletion for pending document {R2RDocumentId} - document was never processed by R2R, CorrelationId: {CorrelationId}",
+                            document.R2RDocumentId, correlationId);
+                        // Consider this successful since the document doesn't exist in R2R anyway
+                        r2rDatasetRemovalSuccess = true;
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Deleting document {R2RDocumentId} from R2R dataset, CorrelationId: {CorrelationId}",
+                            document.R2RDocumentId, correlationId);
+
+                        await _documentClient.DeleteAsync(document.R2RDocumentId);
+
+                        _logger.LogInformation("Successfully deleted document {R2RDocumentId} from R2R dataset, CorrelationId: {CorrelationId}",
+                            document.R2RDocumentId, correlationId);
+                    }
+                }
+                catch (HttpRequestException httpEx) when (httpEx.Message.Contains("422") || httpEx.Message.Contains("Unprocessable Entity"))
+                {
+                    _logger.LogWarning("R2R returned 422 for document {R2RDocumentId} - document likely doesn't exist in R2R, treating as successful deletion, CorrelationId: {CorrelationId}",
+                        document.R2RDocumentId, correlationId);
+                    // Treat 422 as success since the document doesn't exist in R2R
+                    r2rDatasetRemovalSuccess = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to delete document {R2RDocumentId} from R2R dataset, CorrelationId: {CorrelationId}",
+                        document.R2RDocumentId, correlationId);
+                    r2rDatasetRemovalSuccess = false;
+                    // Continue with database deletion - don't let R2R failures block WebUI cleanup
+                }
+            }
+
+            // Step 4: Remove from database
+            await _hubContext.BroadcastDocumentDeletionProgress(userIdString, documentId.ToString(),
+                "removing_from_database", "Rimozione da database...");
+
+            _context.Documents.Remove(document);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Successfully removed document {DocumentId} from database, CorrelationId: {CorrelationId}",
+                documentId, correlationId);
+
+            // Step 5: Invalidate cache
+            await _hubContext.BroadcastDocumentDeletionProgress(userIdString, documentId.ToString(),
+                "invalidating_cache", "Invalidazione cache...");
+
+            // Invalidate document search cache (CRITICAL for frontend refresh)
+            await _cacheService.InvalidateAsync($"cleverdocs2:type:pageddocumentresultdto:documents:search:*");
+
+            // Invalidate document-specific caches
+            await _cacheService.InvalidateAsync($"*document*{documentId}*");
+            await _cacheService.InvalidateAsync($"*user:documents:{userId}*");
+            if (document.CollectionId.HasValue)
+            {
+                await _cacheService.InvalidateAsync($"*collection:documents:{document.CollectionId}*");
+                // Also invalidate collection details cache to update document count
+                await _cacheService.InvalidateAsync($"collection:details:{document.CollectionId}");
+            }
+
+            // Step 6: Determine overall success and notify completion
+            var overallSuccess = r2rCollectionRemovalSuccess && r2rDatasetRemovalSuccess;
+            var message = overallSuccess
+                ? "Documento cancellato completamente da WebUI e R2R"
+                : "Documento cancellato da WebUI, ma potrebbero esserci problemi con R2R";
+
+            await _hubContext.BroadcastDocumentDeletionCompleted(userIdString, documentId.ToString(),
+                overallSuccess, message);
+
+            _logger.LogInformation("Document deletion completed for {DocumentId}, user {UserId}, Overall success: {Success}, CorrelationId: {CorrelationId}",
+                documentId, userId, overallSuccess, correlationId);
+
+            return true; // Return true if database deletion succeeded, regardless of R2R issues
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Critical error during document deletion {DocumentId} for user {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+
+            await _hubContext.BroadcastDocumentDeletionError(userIdString, documentId.ToString(),
+                $"Errore critico durante la cancellazione: {ex.Message}");
+
+            return false;
+        }
     }
 
     public async Task<bool> ToggleFavoriteAsync(Guid documentId, Guid userId)
@@ -557,7 +724,39 @@ public class UserDocumentService : IUserDocumentService
     // Additional placeholder implementations for remaining interface methods...
     // (These would be implemented in subsequent iterations)
 
-    public async Task<string?> GetDocumentDownloadUrlAsync(Guid documentId, Guid userId, TimeSpan? expiration = null) => await Task.FromResult<string?>(null);
+    public async Task<string?> GetDocumentDownloadUrlAsync(Guid documentId, Guid userId, TimeSpan? expiration = null)
+    {
+        try
+        {
+            // Get document to verify access and get R2R document ID
+            var document = await GetDocumentByIdAsync(documentId, userId);
+            if (document == null || string.IsNullOrEmpty(document.R2RDocumentId))
+            {
+                _logger.LogWarning("Document {DocumentId} not found or missing R2R ID for user {UserId}", documentId, userId);
+                return null;
+            }
+
+            // Use R2R API to get download URL
+            var downloadStream = await _documentClient.DownloadAsync(document.R2RDocumentId);
+            if (downloadStream == null)
+            {
+                _logger.LogWarning("Failed to get download stream for R2R document {R2RDocumentId}", document.R2RDocumentId);
+                return null;
+            }
+
+            // For now, we'll return a direct download URL through our API
+            // In a production environment, you might want to generate signed URLs or use a CDN
+            var downloadUrl = $"/api/UserDocuments/{documentId}/download-direct";
+
+            _logger.LogInformation("Generated download URL for document {DocumentId}: {DownloadUrl}", documentId, downloadUrl);
+            return downloadUrl;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating download URL for document {DocumentId}, user {UserId}", documentId, userId);
+            return null;
+        }
+    }
     public async Task<string?> GetDocumentPreviewUrlAsync(Guid documentId, Guid userId, TimeSpan? expiration = null) => await Task.FromResult<string?>(null);
     public async Task<string?> GetDocumentThumbnailUrlAsync(Guid documentId, Guid userId, TimeSpan? expiration = null) => await Task.FromResult<string?>(null);
     public async Task<DocumentPermissions> GetDocumentPermissionsAsync(Guid documentId, Guid userId) => await Task.FromResult(new DocumentPermissions());

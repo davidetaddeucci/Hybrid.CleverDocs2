@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Json;
 using Hybrid.CleverDocs.WebUI.Models.Collections;
 using Hybrid.CleverDocs.WebUI.Models.Common;
-using Hybrid.CleverDocs.WebUI.Services.Auth;
 
 namespace Hybrid.CleverDocs.WebUI.Services.Collections;
 

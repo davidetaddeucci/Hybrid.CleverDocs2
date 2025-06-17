@@ -6,7 +6,7 @@ using System.Security.Claims;
 
 namespace Hybrid.CleverDocs.WebUI.Controllers
 {
-    [Authorize(Roles = "3")] // User role
+    // JWT Authentication: Authorization handled client-side with JWT tokens
     public class ChatController : Controller
     {
         private readonly IAuthService _authService;

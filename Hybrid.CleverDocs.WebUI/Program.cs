@@ -101,7 +101,7 @@ builder.Services.AddHttpClient<ICollectionsApiClient, CollectionsApiClient>(clie
     return handler;
 });
 
-// Add authentication
+// Cookie Authentication Configuration
 builder.Services.AddAuthentication("Cookies")
     .AddCookie("Cookies", options =>
     {
@@ -110,7 +110,13 @@ builder.Services.AddAuthentication("Cookies")
         options.AccessDeniedPath = "/Auth/AccessDenied";
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.Name = "CleverDocs.Auth";
     });
+
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -126,6 +132,8 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseSession(); // Enable session support
+
+// Cookie Authentication middleware
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -144,6 +152,11 @@ app.MapControllerRoute(
     name: "collection-delete",
     pattern: "collections/{collectionId:guid}/delete",
     defaults: new { controller = "Collections", action = "Delete" });
+
+app.MapControllerRoute(
+    name: "collection-document-delete",
+    pattern: "collections/{collectionId:guid}/documents/{documentId:guid}/delete",
+    defaults: new { controller = "Collections", action = "DeleteDocument" });
 
 // Default route should go to login
 app.MapControllerRoute(

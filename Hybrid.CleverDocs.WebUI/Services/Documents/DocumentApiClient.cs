@@ -2,6 +2,7 @@ using Hybrid.CleverDocs.WebUI.Models.Documents;
 using Hybrid.CleverDocs.WebUI.Services;
 using System.Text.Json;
 using System.Text;
+using Hybrid.CleverDocs.WebUI.Models.Shared;
 
 namespace Hybrid.CleverDocs.WebUI.Services.Documents;
 
@@ -289,9 +290,32 @@ public class DocumentApiClient : IDocumentApiClient
 
     public async Task<bool> DeleteDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
-        // Placeholder implementation
-        await Task.CompletedTask;
-        return false;
+        try
+        {
+            await SetAuthorizationHeaderAsync();
+
+            _logger.LogInformation("Calling delete document API for document {DocumentId}", documentId);
+
+            var response = await _httpClient.DeleteAsync($"api/UserDocuments/{documentId}", cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("Document {DocumentId} deleted successfully via API", documentId);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogWarning("Failed to delete document {DocumentId}. Status: {StatusCode}, Content: {Content}",
+                    documentId, response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting document {DocumentId}", documentId);
+            return false;
+        }
     }
 
     public async Task<bool> ToggleFavoriteAsync(Guid documentId, CancellationToken cancellationToken = default)
@@ -422,6 +446,38 @@ public class DocumentApiClient : IDocumentApiClient
         // Placeholder implementation
         await Task.CompletedTask;
         return false;
+    }
+
+    public async Task<string?> GetDocumentDownloadUrlAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await SetAuthorizationHeaderAsync();
+
+            _logger.LogInformation("Getting download URL for document {DocumentId}", documentId);
+
+            var response = await _httpClient.GetAsync($"api/UserDocuments/{documentId}/download-url", cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<string>>(responseContent, _jsonOptions);
+
+                if (apiResponse?.Success == true && !string.IsNullOrEmpty(apiResponse.Data))
+                {
+                    return apiResponse.Data;
+                }
+            }
+
+            _logger.LogWarning("Failed to get download URL for document {DocumentId}: {StatusCode}",
+                documentId, response.StatusCode);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting download URL for document {DocumentId}", documentId);
+            return null;
+        }
     }
 
     // Advanced Search Methods Implementation
@@ -812,115 +868,6 @@ public class BatchOperationItemResult
     public string? Error { get; set; }
 }
 
-// Enterprise Upload DTOs for backend communication
-public class InitializeUploadSessionDto
-{
-    public List<FileInfoDto> Files { get; set; } = new();
-    public Guid? CollectionId { get; set; }
-    public List<string> Tags { get; set; } = new();
-    public UploadOptionsDto Options { get; set; } = new();
-    public string UserId { get; set; } = string.Empty;
-}
-
-public class FileInfoDto
-{
-    public string FileName { get; set; } = string.Empty;
-    public long Size { get; set; }
-    public string ContentType { get; set; } = string.Empty;
-    public string? Checksum { get; set; }
-    public DateTime? LastModified { get; set; }
-}
-
-public class UploadResponseDto
-{
-    public bool Success { get; set; }
-    public string? Message { get; set; }
-    public Guid? SessionId { get; set; }
-    public List<FileUploadInfoDto> Files { get; set; } = new();
-    public List<string> Errors { get; set; } = new();
-    public UploadStatisticsDto Statistics { get; set; } = new();
-    public Dictionary<string, object> Metadata { get; set; } = new();
-}
-
-public class DocumentUploadSessionDto
-{
-    public Guid SessionId { get; set; } = Guid.NewGuid();
-    public string UserId { get; set; } = string.Empty;
-    public Guid? CollectionId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime? CompletedAt { get; set; }
-    public UploadSessionStatusDto Status { get; set; } = UploadSessionStatusDto.Initializing;
-    public List<FileUploadInfoDto> Files { get; set; } = new();
-    public UploadOptionsDto Options { get; set; } = new();
-    public UploadStatisticsDto Statistics { get; set; } = new();
-    public string? ErrorMessage { get; set; }
-}
-
-public class FileUploadInfoDto
-{
-    public Guid FileId { get; set; } = Guid.NewGuid();
-    public Guid SessionId { get; set; }
-    public string OriginalFileName { get; set; } = string.Empty;
-    public string ContentType { get; set; } = string.Empty;
-    public long TotalSize { get; set; }
-    public long UploadedSize { get; set; }
-    public FileUploadStatusDto Status { get; set; } = FileUploadStatusDto.Pending;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime? StartedAt { get; set; }
-    public DateTime? CompletedAt { get; set; }
-    public string? ErrorMessage { get; set; }
-    public int RetryCount { get; set; }
-}
-
-public class UploadOptionsDto
-{
-    public bool ExtractMetadata { get; set; } = true;
-    public bool PerformOCR { get; set; } = true;
-    public bool AutoDetectLanguage { get; set; } = true;
-    public string? PreferredLanguage { get; set; }
-    public bool GenerateThumbnails { get; set; } = true;
-    public bool EnableVersioning { get; set; } = true;
-    public bool OverwriteExisting { get; set; } = false;
-    public int MaxRetries { get; set; } = 3;
-    public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(5);
-    public bool EnableParallelProcessing { get; set; } = true;
-    public int MaxParallelUploads { get; set; } = 3;
-    public bool EnableChunkedUpload { get; set; } = true;
-}
-
-public class UploadStatisticsDto
-{
-    public long TotalBytes { get; set; }
-    public long UploadedBytes { get; set; }
-    public int TotalFiles { get; set; }
-    public int CompletedFiles { get; set; }
-    public int FailedFiles { get; set; }
-    public double ProgressPercentage => TotalBytes > 0 ? (double)UploadedBytes / TotalBytes * 100 : 0;
-    public TimeSpan ElapsedTime { get; set; }
-    public TimeSpan? EstimatedTimeRemaining { get; set; }
-    public double UploadSpeedBytesPerSecond { get; set; }
-}
-
-public enum UploadSessionStatusDto
-{
-    Initializing = 0,
-    Ready = 1,
-    Uploading = 2,
-    Processing = 3,
-    Completed = 4,
-    Failed = 5,
-    Cancelled = 6
-}
-
-public enum FileUploadStatusDto
-{
-    Pending = 0,
-    Uploading = 1,
-    Uploaded = 2,
-    Processing = 3,
-    Completed = 4,
-    Failed = 5,
-    Cancelled = 6
-}
+// Note: Upload DTOs are now imported from Hybrid.CleverDocs2.WebServices.Models.Documents
 
 

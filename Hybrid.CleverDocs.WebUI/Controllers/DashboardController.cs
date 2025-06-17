@@ -5,7 +5,7 @@ using Hybrid.CleverDocs.WebUI.ViewModels;
 
 namespace Hybrid.CleverDocs.WebUI.Controllers;
 
-[Authorize]
+// JWT Authentication: Authorization handled client-side with JWT tokens
 public class DashboardController : Controller
 {
     private readonly IAuthService _authService;

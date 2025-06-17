@@ -1,10 +1,14 @@
 @model Hybrid.CleverDocs.WebUI.Models.Collections.CollectionDetailsViewModel
+@using Hybrid.CleverDocs.WebUI.Models.Documents
 
 @{
     ViewData["Title"] = $"Collection: {Model.Collection.Name}";
     ViewData["PageTitle"] = Model.Collection.Name;
     ViewData["PageSubtitle"] = Model.Collection.Description;
 }
+
+@* Anti-forgery token for CSRF protection *@
+@Html.AntiForgeryToken()
 
 <div class="container-fluid">
     <!-- Collection Header -->
@@ -23,7 +27,7 @@
                                 <div class="d-flex align-items-center gap-3">
                                     <span class="badge bg-light text-dark">
                                         <i class="fas fa-file-alt me-1"></i>
-                                        @Model.Collection.DocumentCount documents
+                                        @Model.DocumentsPagination.TotalItems documents
                                     </span>
                                     <span class="badge bg-light text-dark">
                                         <i class="fas fa-eye me-1"></i>
@@ -91,21 +95,106 @@
                     @if (Model.RecentDocuments != null && Model.RecentDocuments.Any())
                     {
                         <div class="table-responsive">
-                            <table class="table table-hover">
+                            <table class="table table-hover documents-table">
                                 <thead>
                                     <tr>
-                                        <th>Name</th>
-                                        <th>Type</th>
-                                        <th>Size</th>
-                                        <th>Uploaded</th>
-                                        <th>Status</th>
+                                        <th class="sortable-header" data-column="name" style="cursor: pointer; user-select: none;">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-file-alt me-2 text-muted"></i>
+                                                    Name
+                                                </div>
+                                                <div class="sort-indicator" data-column="name">
+                                                    @if (Model.DocumentsSearch.SortBy == "name")
+                                                    {
+                                                        <i class="fas fa-sort-@(Model.DocumentsSearch.SortDirection == SortDirection.Asc ? "up" : "down") text-primary"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-sort text-muted"></i>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th class="sortable-header" data-column="content_type" style="cursor: pointer; user-select: none;">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-tag me-2 text-muted"></i>
+                                                    Type
+                                                </div>
+                                                <div class="sort-indicator" data-column="content_type">
+                                                    @if (Model.DocumentsSearch.SortBy == "content_type")
+                                                    {
+                                                        <i class="fas fa-sort-@(Model.DocumentsSearch.SortDirection == SortDirection.Asc ? "up" : "down") text-primary"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-sort text-muted"></i>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th class="sortable-header" data-column="size" style="cursor: pointer; user-select: none;">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-weight-hanging me-2 text-muted"></i>
+                                                    Size
+                                                </div>
+                                                <div class="sort-indicator" data-column="size">
+                                                    @if (Model.DocumentsSearch.SortBy == "size")
+                                                    {
+                                                        <i class="fas fa-sort-@(Model.DocumentsSearch.SortDirection == SortDirection.Asc ? "up" : "down") text-primary"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-sort text-muted"></i>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th class="sortable-header" data-column="created_at" style="cursor: pointer; user-select: none;">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-calendar me-2 text-muted"></i>
+                                                    Uploaded
+                                                </div>
+                                                <div class="sort-indicator" data-column="created_at">
+                                                    @if (Model.DocumentsSearch.SortBy == "created_at")
+                                                    {
+                                                        <i class="fas fa-sort-@(Model.DocumentsSearch.SortDirection == SortDirection.Asc ? "up" : "down") text-primary"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-sort text-muted"></i>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th class="sortable-header" data-column="status" style="cursor: pointer; user-select: none;">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-info-circle me-2 text-muted"></i>
+                                                    Status
+                                                </div>
+                                                <div class="sort-indicator" data-column="status">
+                                                    @if (Model.DocumentsSearch.SortBy == "status")
+                                                    {
+                                                        <i class="fas fa-sort-@(Model.DocumentsSearch.SortDirection == SortDirection.Asc ? "up" : "down") text-primary"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-sort text-muted"></i>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach (var document in Model.RecentDocuments)
                                     {
-                                        <tr>
+                                        <tr data-document-id="@document.Id">
                                             <td>
                                                 <div class="d-flex align-items-center">
                                                     <i class="fas fa-file-alt me-2 text-muted"></i>
@@ -123,16 +212,32 @@
                                                 @switch (document.Status)
                                                 {
                                                     case "Processing":
-                                                        <span class="badge bg-warning">Processing</span>
+                                                        <span class="badge bg-warning">
+                                                            <i class="fas fa-spinner fa-spin me-1"></i>Processing
+                                                        </span>
                                                         break;
                                                     case "Completed":
-                                                        <span class="badge bg-success">Completed</span>
+                                                        <span class="badge bg-success">
+                                                            <i class="fas fa-check me-1"></i>Completed
+                                                        </span>
                                                         break;
                                                     case "Failed":
-                                                        <span class="badge bg-danger">Failed</span>
+                                                        <span class="badge bg-danger">
+                                                            <i class="fas fa-exclamation-triangle me-1"></i>Failed
+                                                        </span>
+                                                        break;
+                                                    case "Draft":
+                                                        <span class="badge bg-secondary">
+                                                            <i class="fas fa-edit me-1"></i>Draft
+                                                        </span>
+                                                        break;
+                                                    case "Archived":
+                                                        <span class="badge bg-info">
+                                                            <i class="fas fa-archive me-1"></i>Archived
+                                                        </span>
                                                         break;
                                                     default:
-                                                        <span class="badge bg-secondary">@document.Status</span>
+                                                        <span class="badge bg-light text-dark">@document.Status</span>
                                                         break;
                                                 }
                                             </td>
@@ -154,6 +259,62 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        <!-- Pagination -->
+                        @if (Model.DocumentsPagination.TotalPages > 1)
+                        {
+                            <nav aria-label="Documents pagination" class="mt-4">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="text-muted">
+                                        Showing @Model.DocumentsPagination.StartItem - @Model.DocumentsPagination.EndItem of @Model.DocumentsPagination.TotalItems documents
+                                    </div>
+                                    <ul class="pagination mb-0">
+                                        @if (Model.DocumentsPagination.HasPreviousPage)
+                                        {
+                                            <li class="page-item">
+                                                <a class="page-link" href="@Url.Action("Details", new {
+                                                    collectionId = Model.Collection.Id,
+                                                    page = Model.DocumentsPagination.CurrentPage - 1,
+                                                    pageSize = Model.DocumentsPagination.PageSize,
+                                                    sortBy = Model.DocumentsSearch.SortBy,
+                                                    sortDirection = Model.DocumentsSearch.SortDirection
+                                                })" aria-label="Previous">
+                                                    <i class="material-symbols-rounded">chevron_left</i>
+                                                </a>
+                                            </li>
+                                        }
+
+                                        @foreach (var pageNumber in Model.DocumentsPagination.GetPageNumbers())
+                                        {
+                                            <li class="page-item @(pageNumber == Model.DocumentsPagination.CurrentPage ? "active" : "")">
+                                                <a class="page-link" href="@Url.Action("Details", new {
+                                                    collectionId = Model.Collection.Id,
+                                                    page = pageNumber,
+                                                    pageSize = Model.DocumentsPagination.PageSize,
+                                                    sortBy = Model.DocumentsSearch.SortBy,
+                                                    sortDirection = Model.DocumentsSearch.SortDirection
+                                                })">@pageNumber</a>
+                                            </li>
+                                        }
+
+                                        @if (Model.DocumentsPagination.HasNextPage)
+                                        {
+                                            <li class="page-item">
+                                                <a class="page-link" href="@Url.Action("Details", new {
+                                                    collectionId = Model.Collection.Id,
+                                                    page = Model.DocumentsPagination.CurrentPage + 1,
+                                                    pageSize = Model.DocumentsPagination.PageSize,
+                                                    sortBy = Model.DocumentsSearch.SortBy,
+                                                    sortDirection = Model.DocumentsSearch.SortDirection
+                                                })" aria-label="Next">
+                                                    <i class="material-symbols-rounded">chevron_right</i>
+                                                </a>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </nav>
+                        }
                     }
                     else
                     {
@@ -183,17 +344,51 @@
     </div>
 </div>
 
+@section Styles {
+    <style>
+        .sortable-header:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        .sort-indicator {
+            opacity: 0.6;
+            transition: opacity 0.2s ease;
+        }
+
+        .sortable-header:hover .sort-indicator {
+            opacity: 1;
+        }
+
+        .sort-indicator .fa-sort {
+            font-size: 0.8rem;
+        }
+
+        .sort-indicator .fa-sort-up,
+        .sort-indicator .fa-sort-down {
+            font-size: 0.8rem;
+        }
+    </style>
+}
+
 @section Scripts {
-    <script src="~/lib/signalr/signalr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <script>
         async function toggleFavorite(collectionId) {
             try {
-                const response = await fetch(`/api/collections/${collectionId}/favorite`, {
+                // Get anti-forgery token
+                const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (!tokenInput) {
+                    alert('Security token not found. Please refresh the page.');
+                    return;
+                }
+
+                // Use server-side endpoint for secure favorite toggle
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', tokenInput.value);
+
+                const response = await fetch(`/collections/${collectionId}/toggle-favorite`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                    }
+                    body: formData
                 });
 
                 if (response.ok) {
@@ -213,10 +408,12 @@
             }
 
             try {
-                const response = await fetch(`/api/collections/${collectionId}`, {
-                    method: 'DELETE',
+                // Use server-side endpoint for secure collection deletion
+                const response = await fetch(`/collections/${collectionId}/delete`, {
+                    method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
                     }
                 });
 
@@ -240,11 +437,9 @@
 
             async initializeSignalR() {
                 try {
-                    // Get JWT token from meta tag
+                    // Get JWT token from meta tag or cookie
                     const token = document.querySelector('meta[name="jwt-token"]')?.getAttribute('content') ||
-                                localStorage.getItem('authToken') ||
-                                sessionStorage.getItem('authToken') ||
-                                this.getCookieValue('authToken');
+                                this.getCookieValue('CleverDocs.AccessToken');
 
                     if (!token) {
                         console.warn('No JWT token found for SignalR connection');
@@ -270,6 +465,20 @@
                     this.connection.on("R2RProcessingUpdate", (queueItem) => {
                         console.log('R2R processing update:', queueItem);
                         if (queueItem.Status === 'Completed' || queueItem.Status === 'Failed') {
+                            this.refreshDocumentsList();
+                        }
+                    });
+
+                    // Add missing SignalR client methods to prevent warnings
+                    this.connection.on("initialuploadsessions", (data) => {
+                        console.log('Initial upload sessions:', data);
+                        // Handle initial upload sessions data if needed
+                    });
+
+                    this.connection.on("r2rprocessingstatus", (data) => {
+                        console.log('R2R processing status:', data);
+                        // Handle R2R processing status updates
+                        if (data.status === 'Completed') {
                             this.refreshDocumentsList();
                         }
                     });
@@ -312,27 +521,171 @@
             }
 
             try {
-                const response = await fetch(`/api/documents/${documentId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                    }
+                // Get anti-forgery token
+                const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (!tokenInput) {
+                    alert('Security token not found. Please refresh the page.');
+                    return;
+                }
+
+                // Show loading state
+                const deleteButton = document.querySelector(`button[onclick="deleteDocument('${documentId}')"]`);
+                const originalContent = deleteButton?.innerHTML;
+                if (deleteButton) {
+                    deleteButton.disabled = true;
+                    deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                }
+
+                // Use server-side endpoint for secure document deletion
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', tokenInput.value);
+
+                const response = await fetch(`/collections/@Model.Collection.Id/documents/${documentId}/delete`, {
+                    method: 'POST',
+                    body: formData
                 });
 
                 if (response.ok) {
-                    location.reload();
+                    const result = await response.json();
+                    if (result.success) {
+                        // Remove the document row from the table immediately
+                        const documentRow = document.querySelector(`tr[data-document-id="${documentId}"]`);
+                        if (documentRow) {
+                            documentRow.style.transition = 'opacity 0.3s ease';
+                            documentRow.style.opacity = '0';
+                            setTimeout(() => {
+                                documentRow.remove();
+                                // Update document count if visible
+                                updateDocumentCount();
+                            }, 300);
+                        } else {
+                            // Fallback: refresh the documents list
+                            await refreshDocumentsList();
+                        }
+                    } else {
+                        alert('Failed to delete document: ' + (result.message || 'Unknown error'));
+                        // Restore button state
+                        if (deleteButton && originalContent) {
+                            deleteButton.disabled = false;
+                            deleteButton.innerHTML = originalContent;
+                        }
+                    }
                 } else {
-                    alert('Failed to delete document');
+                    alert('Failed to delete document. Please try again.');
+                    // Restore button state
+                    if (deleteButton && originalContent) {
+                        deleteButton.disabled = false;
+                        deleteButton.innerHTML = originalContent;
+                    }
                 }
             } catch (error) {
                 console.error('Error deleting document:', error);
                 alert('An error occurred while deleting the document');
+                // Restore button state
+                const deleteButton = document.querySelector(`button[onclick="deleteDocument('${documentId}')"]`);
+                if (deleteButton) {
+                    deleteButton.disabled = false;
+                    deleteButton.innerHTML = '<i class="fas fa-trash"></i>';
+                }
+            }
+        }
+
+        function updateDocumentCount() {
+            // Update the document count in the collection header if visible
+            const countElement = document.querySelector('.document-count');
+            if (countElement) {
+                const currentCount = parseInt(countElement.textContent) || 0;
+                if (currentCount > 0) {
+                    countElement.textContent = currentCount - 1;
+                }
+            }
+        }
+
+        async function refreshDocumentsList() {
+            // Refresh the documents list without full page reload
+            try {
+                const currentUrl = new URL(window.location);
+                const response = await fetch(currentUrl.toString(), {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (response.ok) {
+                    const html = await response.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+
+                    // Update the documents table
+                    const newTable = doc.querySelector('.documents-table tbody');
+                    const currentTable = document.querySelector('.documents-table tbody');
+
+                    if (newTable && currentTable) {
+                        currentTable.innerHTML = newTable.innerHTML;
+                    }
+
+                    // Update pagination if present
+                    const newPagination = doc.querySelector('.pagination-container');
+                    const currentPagination = document.querySelector('.pagination-container');
+
+                    if (newPagination && currentPagination) {
+                        currentPagination.innerHTML = newPagination.innerHTML;
+                    }
+                }
+            } catch (error) {
+                console.error('Error refreshing documents list:', error);
+                // Fallback to full page reload
+                location.reload();
+            }
+        }
+
+        // Collection Documents Sorting Manager
+        class CollectionDocumentsSortManager {
+            constructor(collectionId) {
+                this.collectionId = collectionId;
+                this.currentSort = {
+                    sortBy: '@Model.DocumentsSearch.SortBy',
+                    sortDirection: '@Model.DocumentsSearch.SortDirection'
+                };
+                this.init();
+            }
+
+            init() {
+                this.setupColumnHeaders();
+            }
+
+            setupColumnHeaders() {
+                const headers = document.querySelectorAll('.sortable-header');
+                headers.forEach(header => {
+                    header.addEventListener('click', (e) => {
+                        const column = header.getAttribute('data-column');
+                        this.handleColumnClick(column);
+                    });
+                });
+            }
+
+            handleColumnClick(column) {
+                let newDirection = 'asc';
+
+                // Se stiamo già ordinando per questa colonna, inverti la direzione
+                if (this.currentSort.sortBy === column) {
+                    newDirection = this.currentSort.sortDirection === 'asc' ? 'desc' : 'asc';
+                }
+
+                // Naviga alla stessa pagina con i nuovi parametri di ordinamento
+                const url = new URL(window.location);
+                url.searchParams.set('sortBy', column);
+                url.searchParams.set('sortDirection', newDirection);
+                url.searchParams.set('page', '1'); // Reset alla prima pagina
+
+                window.location.href = url.toString();
             }
         }
 
         // Initialize when DOM is loaded
         document.addEventListener('DOMContentLoaded', () => {
             window.collectionDetailsManager = new CollectionDetailsManager();
+            window.collectionDocumentsSortManager = new CollectionDocumentsSortManager('@Model.Collection.Id');
         });
     </script>
 }

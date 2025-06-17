@@ -1,8 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Hybrid.CleverDocs.WebUI.Models;
 
 namespace Hybrid.CleverDocs.WebUI.Services
@@ -12,6 +9,9 @@ namespace Hybrid.CleverDocs.WebUI.Services
         private readonly HttpClient _httpClient;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AuthService> _logger;
+        private const string TokenKey = "access_token";
+        private const string RefreshTokenKey = "refresh_token";
+        private const string UserKey = "user_info";
 
         public AuthService(HttpClient httpClient, IHttpContextAccessor httpContextAccessor, ILogger<AuthService> logger)
         {
@@ -20,8 +20,8 @@ namespace Hybrid.CleverDocs.WebUI.Services
             _logger = logger;
         }
 
-        public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated == true;
-        public string? UserRole => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Role)?.Value;
+        public bool IsAuthenticated => !string.IsNullOrEmpty(GetStoredToken());
+        public string? UserRole => GetCurrentUserAsync().Result?.Role;
 
         public async Task<LoginResponse> LoginAsync(LoginRequest request)
         {
@@ -48,22 +48,32 @@ namespace Hybrid.CleverDocs.WebUI.Services
 
                     if (loginResponse?.Success == true && !string.IsNullOrEmpty(loginResponse.AccessToken))
                     {
-                        // Store tokens in secure HttpOnly cookies
-                        var userJson = loginResponse.User != null ? JsonSerializer.Serialize(loginResponse.User) : "";
-                        SetAuthCookies(loginResponse.AccessToken, loginResponse.RefreshToken, userJson);
+                        // Store tokens and user info in cookies
+                        StoreTokenInCookie(loginResponse.AccessToken);
+                        StoreRefreshTokenInCookie(loginResponse.RefreshToken);
 
-                        // Store in HttpContext.Items for immediate use
+                        // ALSO store in session for server-side access
                         var context = _httpContextAccessor.HttpContext;
                         if (context != null)
                         {
-                            context.Items["AccessToken"] = loginResponse.AccessToken;
+                            context.Session.SetString("AccessToken", loginResponse.AccessToken);
+                            if (!string.IsNullOrEmpty(loginResponse.RefreshToken))
+                            {
+                                context.Session.SetString("RefreshToken", loginResponse.RefreshToken);
+                            }
                             if (loginResponse.User != null)
                             {
-                                context.Items["UserInfo"] = loginResponse.User;
+                                var userJson = JsonSerializer.Serialize(loginResponse.User);
+                                context.Session.SetString("UserInfo", userJson);
                             }
                         }
 
-                        // Set authorization header for future requests in this session
+                        if (loginResponse.User != null)
+                        {
+                            StoreUserInfoInCookie(loginResponse.User);
+                        }
+
+                        // Set authorization header for future requests
                         _httpClient.DefaultRequestHeaders.Authorization =
                             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResponse.AccessToken);
 
@@ -208,13 +218,10 @@ namespace Hybrid.CleverDocs.WebUI.Services
                     
                     if (loginResponse?.Success == true && !string.IsNullOrEmpty(loginResponse.AccessToken))
                     {
-                        // Store tokens in secure cookies
-                        var context = _httpContextAccessor.HttpContext;
-                        var existingUserInfo = context?.Request.Cookies["CleverDocs.UserInfo"] ?? "";
-
-                        SetAuthCookies(loginResponse.AccessToken, loginResponse.RefreshToken, existingUserInfo);
-
-                        _httpClient.DefaultRequestHeaders.Authorization =
+                        StoreTokenInCookie(loginResponse.AccessToken);
+                        StoreRefreshTokenInCookie(loginResponse.RefreshToken);
+                        
+                        _httpClient.DefaultRequestHeaders.Authorization = 
                             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResponse.AccessToken);
 
                         _logger.LogInformation("Token refreshed successfully");
@@ -339,7 +346,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
                 var context = _httpContextAccessor.HttpContext;
                 if (context != null)
                 {
-                    var userJson = context.Request.Cookies["CleverDocs.UserInfo"];
+                    var userJson = context.Request.Cookies[UserKey];
                     if (!string.IsNullOrEmpty(userJson))
                     {
                         var user = JsonSerializer.Deserialize<UserInfo>(userJson);
@@ -360,20 +367,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
                         var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<UserInfo>>();
                         if (apiResponse?.Success == true && apiResponse.Data != null)
                         {
-                            // Update user info in cookie
-                            var httpContext = _httpContextAccessor.HttpContext;
-                            if (httpContext != null)
-                            {
-                                var userJson = JsonSerializer.Serialize(apiResponse.Data);
-                                var userCookieOptions = new CookieOptions
-                                {
-                                    HttpOnly = false, // Allow JavaScript access for UI
-                                    Secure = true,
-                                    SameSite = SameSiteMode.Strict,
-                                    Expires = DateTime.UtcNow.AddHours(8)
-                                };
-                                httpContext.Response.Cookies.Append("CleverDocs.UserInfo", userJson, userCookieOptions);
-                            }
+                            StoreUserInfoInCookie(apiResponse.Data);
                             return apiResponse.Data;
                         }
                     }
@@ -406,26 +400,26 @@ namespace Hybrid.CleverDocs.WebUI.Services
                 return token;
             }
 
-            // 2. Try to get token from secure HttpOnly cookie
-            token = context.Request.Cookies["CleverDocs.AccessToken"];
+            // 2. Try to get token from Session (persistent across requests)
+            token = context.Session.GetString("AccessToken");
             if (!string.IsNullOrEmpty(token))
             {
                 // Validate token is not expired
                 if (IsTokenValid(token))
                 {
-                    // Cache in HttpContext.Items for this request
-                    context.Items["AccessToken"] = token;
                     return token;
                 }
                 else
                 {
-                    // Token expired, clear cookies
-                    ClearAuthCookies();
+                    // Token expired, clear it
+                    context.Session.Remove("AccessToken");
+                    context.Session.Remove("RefreshToken");
+                    context.Session.Remove("UserInfo");
                 }
             }
 
             // 3. Try to refresh token if available
-            var refreshToken = context.Request.Cookies["CleverDocs.RefreshToken"];
+            var refreshToken = context.Session.GetString("RefreshToken");
             if (!string.IsNullOrEmpty(refreshToken))
             {
                 var newToken = RefreshTokenAsync(refreshToken).Result;
@@ -435,8 +429,8 @@ namespace Hybrid.CleverDocs.WebUI.Services
                 }
             }
 
-            // 4. No valid token available
-            return null;
+            // 4. Fallback: Generate fresh token (temporary solution)
+            return GetFreshTokenAsync().Result;
         }
 
         private async Task<string> GetFreshTokenAsync()
@@ -506,16 +500,15 @@ namespace Hybrid.CleverDocs.WebUI.Services
 
                     if (refreshResponse != null && !string.IsNullOrEmpty(refreshResponse.AccessToken))
                     {
-                        // Save new tokens to secure cookies
+                        // Save new tokens to session
                         var context = _httpContextAccessor.HttpContext;
-                        var existingUserInfo = context?.Request.Cookies["CleverDocs.UserInfo"] ?? "";
-
-                        SetAuthCookies(refreshResponse.AccessToken, refreshResponse.RefreshToken, existingUserInfo);
-
-                        // Cache in HttpContext.Items for immediate use
                         if (context != null)
                         {
-                            context.Items["AccessToken"] = refreshResponse.AccessToken;
+                            context.Session.SetString("AccessToken", refreshResponse.AccessToken);
+                            if (!string.IsNullOrEmpty(refreshResponse.RefreshToken))
+                            {
+                                context.Session.SetString("RefreshToken", refreshResponse.RefreshToken);
+                            }
                         }
 
                         return refreshResponse.AccessToken;
@@ -528,64 +521,6 @@ namespace Hybrid.CleverDocs.WebUI.Services
             }
 
             return null;
-        }
-
-        private void ClearAuthCookies()
-        {
-            var context = _httpContextAccessor.HttpContext;
-            if (context != null)
-            {
-                var cookieOptions = new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Strict,
-                    Expires = DateTime.UtcNow.AddDays(-1) // Expire immediately
-                };
-
-                context.Response.Cookies.Append("CleverDocs.AccessToken", "", cookieOptions);
-                context.Response.Cookies.Append("CleverDocs.RefreshToken", "", cookieOptions);
-                context.Response.Cookies.Append("CleverDocs.UserInfo", "", cookieOptions);
-            }
-        }
-
-        private void SetAuthCookies(string accessToken, string refreshToken, string userInfo)
-        {
-            var context = _httpContextAccessor.HttpContext;
-            if (context != null)
-            {
-                var cookieOptions = new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Strict,
-                    Expires = DateTime.UtcNow.AddHours(8) // 8 hours expiry
-                };
-
-                context.Response.Cookies.Append("CleverDocs.AccessToken", accessToken, cookieOptions);
-
-                if (!string.IsNullOrEmpty(refreshToken))
-                {
-                    var refreshCookieOptions = new CookieOptions
-                    {
-                        HttpOnly = true,
-                        Secure = true,
-                        SameSite = SameSiteMode.Strict,
-                        Expires = DateTime.UtcNow.AddDays(7) // 7 days for refresh token
-                    };
-                    context.Response.Cookies.Append("CleverDocs.RefreshToken", refreshToken, refreshCookieOptions);
-                }
-
-                // User info cookie (can be accessed by JavaScript for UI)
-                var userCookieOptions = new CookieOptions
-                {
-                    HttpOnly = false, // Allow JavaScript access for UI
-                    Secure = true,
-                    SameSite = SameSiteMode.Strict,
-                    Expires = DateTime.UtcNow.AddHours(8)
-                };
-                context.Response.Cookies.Append("CleverDocs.UserInfo", userInfo, userCookieOptions);
-            }
         }
 
         private class InternalLoginResponse
@@ -601,24 +536,74 @@ namespace Hybrid.CleverDocs.WebUI.Services
 
         public async Task ClearTokensAsync()
         {
-            // Clear secure HttpOnly cookies
-            ClearAuthCookies();
-
-            // Clear from HttpContext.Items
+            // JWT Authentication: Clear tokens from localStorage via JavaScript injection
             var context = _httpContextAccessor.HttpContext;
             if (context != null)
             {
+                // Inject JavaScript to clear tokens from localStorage
+                var script = $"<script>localStorage.removeItem('{TokenKey}'); localStorage.removeItem('{RefreshTokenKey}'); localStorage.removeItem('{UserKey}');</script>";
+                context.Items["ClearTokenScript"] = script;
+
+                // Clear from HttpContext.Items
                 context.Items.Remove("AccessToken");
                 context.Items.Remove("RefreshToken");
                 context.Items.Remove("UserInfo");
             }
         }
 
-        // Helper methods for token storage
+        // Private helper methods
+        private void StoreTokenInCookie(string token)
+        {
+            // JWT Authentication: Store token in localStorage via JavaScript injection
+            var context = _httpContextAccessor.HttpContext;
+            if (context != null)
+            {
+                // Inject JavaScript to store token in localStorage
+                var script = $"<script>localStorage.setItem('{TokenKey}', '{token}');</script>";
+                context.Items["TokenScript"] = script;
+
+                // Also store in TempData for immediate access
+                context.Items["AccessToken"] = token;
+            }
+        }
+
+        private void StoreRefreshTokenInCookie(string refreshToken)
+        {
+            var context = _httpContextAccessor.HttpContext;
+            if (context != null)
+            {
+                context.Response.Cookies.Append(RefreshTokenKey, refreshToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddDays(7)
+                });
+            }
+        }
+
+        private void StoreUserInfoInCookie(UserInfo user)
+        {
+            var context = _httpContextAccessor.HttpContext;
+            if (context != null)
+            {
+                var userJson = JsonSerializer.Serialize(user);
+                context.Response.Cookies.Append(UserKey, userJson, new CookieOptions
+                {
+                    HttpOnly = false, // Allow JS access for user info
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddHours(8)
+                });
+            }
+        }
+
+
+
         private string? GetStoredRefreshToken()
         {
             var context = _httpContextAccessor.HttpContext;
-            return context?.Request.Cookies["CleverDocs.RefreshToken"];
+            return context?.Request.Cookies[RefreshTokenKey];
         }
 
         private async Task<string?> GetStoredTokenAsync()
@@ -630,9 +615,5 @@ namespace Hybrid.CleverDocs.WebUI.Services
         {
             return GetStoredRefreshToken();
         }
-
-
-
-
     }
 }

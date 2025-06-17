@@ -445,6 +445,85 @@ public class UserDocumentsController : ControllerBase
     }
 
     /// <summary>
+    /// Get document download URL
+    /// </summary>
+    [HttpGet("{documentId:guid}/download-url")]
+    public async Task<IActionResult> GetDocumentDownloadUrl(Guid documentId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            _logger.LogInformation("Getting download URL for document {DocumentId}, user {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+
+            var downloadUrl = await _documentService.GetDocumentDownloadUrlAsync(documentId, userId);
+
+            if (string.IsNullOrEmpty(downloadUrl))
+            {
+                return this.NotFound<string>("Document not found or download not available");
+            }
+
+            return this.Success(downloadUrl, "Download URL generated successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting download URL for document {DocumentId}, user {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+
+            return this.Error("Failed to generate download URL", ex.Message, 500);
+        }
+    }
+
+    /// <summary>
+    /// Download document directly
+    /// </summary>
+    [HttpGet("{documentId:guid}/download-direct")]
+    public async Task<IActionResult> DownloadDocumentDirect(Guid documentId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            _logger.LogInformation("Direct download for document {DocumentId}, user {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+
+            var document = await _documentService.GetDocumentByIdAsync(documentId, userId);
+            if (document == null)
+            {
+                return NotFound("Document not found");
+            }
+
+            // Track download
+            await _documentService.TrackDocumentDownloadAsync(documentId, userId);
+
+            // Get file stream from R2R
+            if (string.IsNullOrEmpty(document.R2RDocumentId))
+            {
+                return BadRequest("Document not available for download");
+            }
+
+            // For now, redirect to a placeholder or return file info
+            // In a real implementation, you would stream the file content
+            return Ok(new {
+                message = "Download would start here",
+                documentId = documentId,
+                fileName = document.Name,
+                r2rId = document.R2RDocumentId
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading document {DocumentId}, user {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+
+            return StatusCode(500, "Failed to download document");
+        }
+    }
+
+    /// <summary>
     /// Track document view
     /// </summary>
     [HttpPost("{documentId:guid}/track-view")]

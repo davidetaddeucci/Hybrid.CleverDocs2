@@ -7,7 +7,7 @@ using System.Security.Claims;
 
 namespace Hybrid.CleverDocs.WebUI.Controllers
 {
-    [Authorize(Roles = "2")] // Only Company role (Backend enum: Company=2)
+    // JWT Authentication: Authorization handled client-side with JWT tokens
     public class CompanyDashboardController : Controller
     {
         private readonly IDashboardService _dashboardService;

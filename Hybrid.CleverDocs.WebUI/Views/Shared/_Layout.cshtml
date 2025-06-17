@@ -63,17 +63,11 @@
         </div>
 
         <div class="navbar-collapse w-auto" id="sidenav-collapse-main">
-            @{
-                var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-                var navigationPartial = userRole switch
-                {
-                    "0" => "_AdminNavigation",
-                    "1" => "_CompanyNavigation", 
-                    "2" => "_UserNavigation",
-                    _ => "_UserNavigation"
-                };
-            }
-            @await Html.PartialAsync(navigationPartial)
+            <!-- JWT Authentication: Navigation loaded dynamically based on JWT token -->
+            <div id="navigation-container">
+                <!-- Navigation will be loaded here by JavaScript -->
+                @await Html.PartialAsync("_UserNavigation")
+            </div>
         </div>
     </aside>
 
@@ -108,7 +102,7 @@
                         <li class="nav-item d-flex align-items-center">
                             <a href="#" class="nav-link text-body font-weight-bold px-0">
                                 <i class="material-symbols-rounded">account_circle</i>
-                                <span class="d-sm-inline d-none">@ViewBag.UserName</span>
+                                <span class="d-sm-inline d-none" id="user-name">User</span>
                             </a>
                         </li>
                     </ul>
@@ -142,6 +136,8 @@
     </main>
 
     <!-- Scripts -->
+    <!-- jQuery (required for legacy code) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- SignalR -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
@@ -160,5 +156,74 @@
     <script src="~/js/charts/chart-manager.js"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
+
+    <!-- Authentication Script -->
+    <script>
+        // Cookie-based authentication - no localStorage needed
+        $(document).ready(function() {
+            // Authentication is handled server-side via cookies
+            console.log('Cookie-based authentication initialized');
+        });
+
+        // Load user info from cookie (server-side rendered)
+        (function() {
+            try {
+                // Get user info from cookie (accessible to JavaScript)
+                const userInfoCookie = getCookieValue('CleverDocs.UserInfo');
+
+                if (userInfoCookie) {
+                    const userInfo = JSON.parse(decodeURIComponent(userInfoCookie));
+
+                    // Update user name in navbar
+                    const userNameElement = document.getElementById('user-name');
+                    if (userNameElement && userInfo.fullName) {
+                        userNameElement.textContent = userInfo.fullName;
+                    }
+
+                    // Load appropriate navigation based on role (default to 'user' if undefined)
+                    const userRole = userInfo.role || 'user';
+                    loadNavigationForRole(userRole);
+                } else {
+                    console.warn('No user info found in cookie - using default user role');
+                    // Default to user role if no cookie found
+                    loadNavigationForRole('user');
+                }
+            } catch (error) {
+                console.error('Error loading user data from cookie:', error);
+                // Default to user role on error
+                loadNavigationForRole('user');
+            }
+        })();
+
+        function getCookieValue(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+
+        function loadNavigationForRole(role) {
+            const navigationContainer = document.getElementById('navigation-container');
+            if (!navigationContainer) return;
+
+            let navigationUrl;
+            switch (role?.toLowerCase()) {
+                case 'admin':
+                    navigationUrl = '/Shared/_AdminNavigation';
+                    break;
+                case 'company':
+                    navigationUrl = '/Shared/_CompanyNavigation';
+                    break;
+                case 'user':
+                default:
+                    navigationUrl = '/Shared/_UserNavigation';
+                    break;
+            }
+
+            // Navigation is already loaded as default _UserNavigation
+            // For now, keep the default navigation
+            console.log('User role:', role, 'Navigation would be:', navigationUrl);
+        }
+    </script>
 </body>
 </html>

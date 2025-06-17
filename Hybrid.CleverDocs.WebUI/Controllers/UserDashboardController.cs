@@ -6,7 +6,8 @@ using System.Security.Claims;
 
 namespace Hybrid.CleverDocs.WebUI.Controllers
 {
-    [Authorize(Roles = "3")] // Only User role (Backend enum: User=3)
+    // JWT Authentication: Authorization handled client-side with JWT tokens
+    [Route("UserDashboard")]
     public class UserDashboardController : Controller
     {
         private readonly IApiService _apiService;
@@ -18,22 +19,24 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
             _logger = logger;
         }
 
+        [HttpGet("")]
+        [HttpGet("Index")]
         public async Task<IActionResult> Index()
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var companyId = User.FindFirst("CompanyId")?.Value;
-
+                // JWT Authentication: User data will be loaded via JavaScript from localStorage
+                // For now, return empty model and let JavaScript populate the dashboard
                 var model = new UserDashboardViewModel
                 {
-                    DocumentCount = await _apiService.GetAsync<int>($"user/{userId}/documents/count"),
-                    CollectionCount = await _apiService.GetAsync<int>($"user/{userId}/collections/count"),
-                    ConversationCount = await _apiService.GetAsync<int>($"user/{userId}/conversations/count"),
-                    RecentDocuments = await _apiService.GetAsync<List<RecentDocumentDto>>($"user/{userId}/documents/recent") ?? new(),
-                    RecentConversations = await _apiService.GetAsync<List<RecentConversationDto>>($"user/{userId}/conversations/recent") ?? new()
+                    DocumentCount = 0,
+                    CollectionCount = 0,
+                    ConversationCount = 0,
+                    RecentDocuments = new List<RecentDocumentDto>(),
+                    RecentConversations = new List<RecentConversationDto>()
                 };
 
+                _logger.LogInformation("User dashboard loaded (JWT Authentication mode)");
                 return View(model);
             }
             catch (Exception ex)

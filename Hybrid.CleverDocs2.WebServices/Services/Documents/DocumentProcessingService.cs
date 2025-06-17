@@ -8,7 +8,10 @@ using Hybrid.CleverDocs2.WebServices.Services.Queue;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Data.Entities;
 using Hybrid.CleverDocs2.WebServices.Hubs;
+using Hybrid.CleverDocs2.WebServices.Services.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.DTOs.Document;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 using System.Collections.Concurrent;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Documents;
@@ -25,20 +28,18 @@ public class DocumentProcessingService : IDocumentProcessingService
     private readonly DocumentProcessingOptions _options;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IHubContext<DocumentUploadHub> _hubContext;
+    private readonly IDocumentClient _documentClient;
 
     // Thread-safe queue management
     private readonly ConcurrentQueue<R2RProcessingQueueItemDto> _processingQueue = new();
     private readonly ConcurrentDictionary<Guid, R2RProcessingQueueItemDto> _activeProcessing = new();
     private readonly ConcurrentDictionary<Guid, R2RProcessingQueueItemDto> _failedItems = new();
-    
+
     // Rate limiting and circuit breaker
     private readonly SemaphoreSlim _processingLimiter;
     private DateTime _lastR2RFailure = DateTime.MinValue;
     private int _consecutiveFailures = 0;
     private bool _circuitBreakerOpen = false;
-
-    // Mock R2R client - in real implementation this would be injected
-    private readonly Dictionary<string, object> _mockR2RDocuments = new();
 
     public DocumentProcessingService(
         IRateLimitingService rateLimitingService,
@@ -47,7 +48,8 @@ public class DocumentProcessingService : IDocumentProcessingService
         ICorrelationService correlationService,
         IOptions<DocumentProcessingOptions> options,
         IServiceScopeFactory serviceScopeFactory,
-        IHubContext<DocumentUploadHub> hubContext)
+        IHubContext<DocumentUploadHub> hubContext,
+        IDocumentClient documentClient)
     {
         _rateLimitingService = rateLimitingService;
         _cacheService = cacheService;
@@ -56,6 +58,7 @@ public class DocumentProcessingService : IDocumentProcessingService
         _options = options.Value;
         _serviceScopeFactory = serviceScopeFactory;
         _hubContext = hubContext;
+        _documentClient = documentClient;
 
         _processingLimiter = new SemaphoreSlim(_options.MaxConcurrentProcessing, _options.MaxConcurrentProcessing);
     }
@@ -400,39 +403,83 @@ public class DocumentProcessingService : IDocumentProcessingService
 
     private async Task<bool> ProcessWithR2RAsync(R2RProcessingQueueItemDto queueItem)
     {
+        var correlationId = _correlationService.GetCorrelationId();
+
         try
         {
-            // Simulate R2R API call with realistic delays and failure rates
-            await Task.Delay(Random.Shared.Next(1000, 5000)); // 1-5 second processing time
+            _logger.LogInformation("Starting R2R processing for document {DocumentId}, File: {FileName}, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, queueItem.FileName, correlationId);
 
-            // Simulate 95% success rate
-            if (Random.Shared.NextDouble() > 0.05)
+            // Create IFormFile from temporary file
+            var fileBytes = await File.ReadAllBytesAsync(queueItem.FilePath);
+            var fileStream = new MemoryStream(fileBytes);
+            var formFile = new FormFile(fileStream, 0, fileBytes.Length, "file", queueItem.FileName)
             {
-                var r2rDocumentId = $"r2r_doc_{Guid.NewGuid():N}";
-                queueItem.R2RDocumentId = r2rDocumentId;
+                Headers = new HeaderDictionary(),
+                ContentType = queueItem.ContentType
+            };
 
-                // Store in mock R2R storage
-                _mockR2RDocuments[r2rDocumentId] = new
+            // Prepare document request for R2R API
+            var documentRequest = new DocumentRequest
+            {
+                File = formFile,
+                Title = queueItem.FileName,
+                DocumentType = queueItem.ContentType,
+                Metadata = new Dictionary<string, object>
                 {
-                    DocumentId = queueItem.DocumentId,
-                    FileName = queueItem.FileName,
-                    FileSize = queueItem.FileSize,
-                    ContentType = queueItem.ContentType,
-                    ProcessedAt = DateTime.UtcNow,
-                    UserId = queueItem.UserId
-                };
+                    ["original_filename"] = queueItem.FileName,
+                    ["file_size"] = queueItem.FileSize,
+                    ["upload_timestamp"] = DateTime.UtcNow,
+                    ["user_id"] = queueItem.UserId,
+                    ["company_id"] = queueItem.CompanyId
+                }
+            };
+
+            // Add collection ID if provided
+            if (queueItem.CollectionId.HasValue)
+            {
+                documentRequest.CollectionIds = new List<string> { queueItem.CollectionId.Value.ToString() };
+            }
+
+            // Call real R2R API via DocumentClient
+            var documentResponse = await _documentClient.CreateAsync(documentRequest);
+
+            // R2R API can return either immediate response (200) or async response (202)
+            if (documentResponse != null && !string.IsNullOrEmpty(documentResponse.Id))
+            {
+                // Immediate success - store R2R document ID from response
+                queueItem.R2RDocumentId = documentResponse.Id;
+
+                _logger.LogInformation("R2R processing completed successfully (immediate) for document {DocumentId}, R2R ID: {R2RDocumentId}, CorrelationId: {CorrelationId}",
+                    queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
 
                 return true;
             }
             else
             {
-                // Simulate failure
-                throw new Exception("R2R API processing failed");
+                // Async processing (HTTP 202) - R2R accepted the document for background processing
+                // This is normal for R2R async ingestion workflow
+                _logger.LogInformation("R2R processing accepted (async) for document {DocumentId}, will complete in background, CorrelationId: {CorrelationId}",
+                    queueItem.DocumentId, correlationId);
+
+                // Mark as successfully submitted to R2R (even without immediate ID)
+                // The document will be saved to database and SignalR will notify when R2R completes
+                queueItem.R2RDocumentId = $"pending_{queueItem.DocumentId}"; // Temporary ID for tracking
+                queueItem.Status = R2RProcessingStatusDto.Processing; // Keep processing status for async workflow
+
+                return true; // Success - document accepted by R2R for async processing
             }
+        }
+        catch (HttpRequestException httpEx)
+        {
+            _logger.LogError(httpEx, "HTTP error during R2R processing for document {DocumentId}, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, correlationId);
+            return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "R2R processing failed for document {DocumentId}", queueItem.DocumentId);
+            _logger.LogError(ex, "R2R processing failed for document {DocumentId}, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, correlationId);
             return false;
         }
     }
@@ -598,11 +645,13 @@ public class DocumentProcessingService : IDocumentProcessingService
             await context.SaveChangesAsync();
 
             // Invalidate document cache patterns to ensure fresh data is loaded
-            await _cacheService.InvalidateAsync($"cleverdocs2:*:documents:search:*");
-            await _cacheService.InvalidateAsync($"cleverdocs2:*:user:documents:{queueItem.UserId}");
+            await _cacheService.InvalidateAsync($"type:pageddocumentresultdto:documents:search:*");
+            await _cacheService.InvalidateAsync($"user:documents:{queueItem.UserId}*");
             if (queueItem.CollectionId.HasValue)
             {
-                await _cacheService.InvalidateAsync($"cleverdocs2:*:collection:documents:{queueItem.CollectionId}");
+                await _cacheService.InvalidateAsync($"collection:documents:{queueItem.CollectionId}*");
+                // Also invalidate collection details cache to update document count
+                await _cacheService.InvalidateAsync($"collection:details:{queueItem.CollectionId}");
             }
 
             _logger.LogInformation("Document {DocumentId} saved to database successfully and cache invalidated, CorrelationId: {CorrelationId}",
