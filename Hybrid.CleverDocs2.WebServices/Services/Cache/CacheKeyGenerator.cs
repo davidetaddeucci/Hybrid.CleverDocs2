@@ -39,9 +39,9 @@ public class CacheKeyGenerator : ICacheKeyGenerator
         {
             patternParts.Add(TenantPrefix);
             patternParts.Add(tenantId);
+            patternParts.Add("*");  // Only add wildcard when there's a tenant
         }
 
-        patternParts.Add("*");
         patternParts.Add(basePattern);
 
         return string.Join(KeySeparator, patternParts);

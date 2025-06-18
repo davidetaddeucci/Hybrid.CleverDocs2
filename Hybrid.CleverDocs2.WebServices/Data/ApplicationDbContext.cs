@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Hybrid.CleverDocs2.WebServices.Data.Entities;
+using Hybrid.CleverDocs2.WebServices.Models.Auth;
 
 namespace Hybrid.CleverDocs2.WebServices.Data
 {
     public class ApplicationDbContext : DbContext
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
+
+
 
         // Core entities
         public DbSet<Company> Companies { get; set; } = null!;
@@ -16,6 +19,10 @@ namespace Hybrid.CleverDocs2.WebServices.Data
         public DbSet<DocumentChunk> DocumentChunks { get; set; } = null!;
         public DbSet<IngestionJob> IngestionJobs { get; set; } = null!;
         public DbSet<AuditLog> AuditLogs { get; set; } = null!;
+
+        // Auth entities
+        public DbSet<TokenBlacklist> TokenBlacklists { get; set; } = null!;
+        public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
 
         // Dashboard widgets
         public DbSet<UserDashboardWidget> UserDashboardWidgets { get; set; } = null!;
@@ -32,6 +39,7 @@ namespace Hybrid.CleverDocs2.WebServices.Data
             ConfigureCollection(modelBuilder);
             ConfigureDocumentChunk(modelBuilder);
             ConfigureAuditLog(modelBuilder);
+            ConfigureAuth(modelBuilder);
         }
 
         private static void ConfigureCompany(ModelBuilder modelBuilder)
@@ -70,9 +78,22 @@ namespace Hybrid.CleverDocs2.WebServices.Data
                 entity.HasIndex(e => e.FileHash);
                 entity.HasIndex(e => new { e.CompanyId, e.UserId });
                 entity.HasIndex(e => e.R2RDocumentId);
-                
+
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                // Configure JSON properties for cross-database compatibility
+                entity.Property(e => e.Tags)
+                    .HasConversion(
+                        v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
+                        v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<string>())
+                    .HasColumnType("TEXT");
+
+                entity.Property(e => e.Metadata)
+                    .HasConversion(
+                        v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
+                        v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new Dictionary<string, object>())
+                    .HasColumnType("TEXT");
 
                 entity.HasOne(e => e.Company)
                     .WithMany(e => e.Documents)
@@ -161,6 +182,28 @@ namespace Hybrid.CleverDocs2.WebServices.Data
                     .WithMany(e => e.AuditLogs)
                     .HasForeignKey(e => e.UserId)
                     .OnDelete(DeleteBehavior.SetNull);
+            });
+        }
+
+        private static void ConfigureAuth(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<TokenBlacklist>(entity =>
+            {
+                entity.HasIndex(e => e.TokenHash).IsUnique();
+                entity.HasIndex(e => e.ExpiresAt);
+                entity.HasIndex(e => e.UserId);
+
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            });
+
+            modelBuilder.Entity<RefreshToken>(entity =>
+            {
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.Token).IsUnique();
+                entity.HasIndex(e => e.ExpiresAt);
+                entity.HasIndex(e => new { e.UserId, e.ExpiresAt });
+
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             });
         }
     }

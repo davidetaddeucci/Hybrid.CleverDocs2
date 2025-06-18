@@ -1,14 +1,20 @@
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 using Hybrid.CleverDocs2.WebServices.Models.Collections;
 using Hybrid.CleverDocs2.WebServices.Services.Queue;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Services.Cache;
+using Hybrid.CleverDocs2.WebServices.Services.Clients;
+using Hybrid.CleverDocs2.WebServices.Services.DTOs.Collection;
+using Hybrid.CleverDocs2.WebServices.Data;
+using Hybrid.CleverDocs2.WebServices.Data.Entities;
 using System.Text.Json;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Collections;
 
 /// <summary>
-/// Service for synchronizing collections with R2R API
+/// Service for bidirectional synchronization between Hybrid Collections and R2R Collections
+/// Enhanced with Quick Wins and real R2R integration
 /// </summary>
 public class CollectionSyncService : ICollectionSyncService
 {
@@ -18,21 +24,29 @@ public class CollectionSyncService : ICollectionSyncService
     private readonly ICorrelationService _correlationService;
     private readonly CollectionSyncOptions _options;
 
-    // Mock R2R client - in real implementation this would be injected
-    private readonly Dictionary<string, object> _mockR2RCollections = new();
+    // ✅ COLLECTIONS SYNC - Real R2R clients
+    private readonly ApplicationDbContext _context;
+    private readonly ICollectionClient _r2rCollectionClient;
+    private readonly IDocumentClient _r2rDocumentClient;
 
     public CollectionSyncService(
         IRateLimitingService rateLimitingService,
         IMultiLevelCacheService cacheService,
         ILogger<CollectionSyncService> logger,
         ICorrelationService correlationService,
-        IOptions<CollectionSyncOptions> options)
+        IOptions<CollectionSyncOptions> options,
+        ApplicationDbContext context,
+        ICollectionClient r2rCollectionClient,
+        IDocumentClient r2rDocumentClient)
     {
         _rateLimitingService = rateLimitingService;
         _cacheService = cacheService;
         _logger = logger;
         _correlationService = correlationService;
         _options = options.Value;
+        _context = context;
+        _r2rCollectionClient = r2rCollectionClient;
+        _r2rDocumentClient = r2rDocumentClient;
     }
 
     public async Task<string?> CreateR2RCollectionAsync(UserCollectionDto collection)
@@ -63,9 +77,16 @@ public class CollectionSyncService : ICollectionSyncService
             _logger.LogInformation("Creating R2R collection for {CollectionId}, CorrelationId: {CorrelationId}", 
                 collection.Id, correlationId);
 
-            // Simulate R2R API call
-            var r2rCollectionData = CreateR2RCollectionData(collection);
-            var r2rCollectionId = await SimulateR2RCreateCollectionAsync(r2rCollectionData);
+            // Real R2R API call
+            var r2rRequest = new CollectionRequest
+            {
+                Name = collection.Name,
+                Description = collection.Description ?? "",
+                Metadata = CreateR2RCollectionData(collection)
+            };
+
+            var r2rResponse = await _r2rCollectionClient.CreateCollectionAsync(r2rRequest);
+            var r2rCollectionId = r2rResponse?.Results?.CollectionId;
 
             if (!string.IsNullOrEmpty(r2rCollectionId))
             {
@@ -146,9 +167,16 @@ public class CollectionSyncService : ICollectionSyncService
             _logger.LogInformation("Updating R2R collection {R2RCollectionId} for {CollectionId}, CorrelationId: {CorrelationId}", 
                 collection.R2RCollectionId, collection.Id, correlationId);
 
-            // Simulate R2R API call
-            var r2rCollectionData = CreateR2RCollectionData(collection);
-            var success = await SimulateR2RUpdateCollectionAsync(collection.R2RCollectionId, r2rCollectionData);
+            // Real R2R API call
+            var r2rRequest = new CollectionUpdateRequest
+            {
+                Name = collection.Name,
+                Description = collection.Description ?? "",
+                Metadata = CreateR2RCollectionData(collection)
+            };
+
+            var r2rResponse = await _r2rCollectionClient.UpdateCollectionAsync(collection.R2RCollectionId, r2rRequest);
+            var success = r2rResponse != null;
 
             if (success)
             {
@@ -215,8 +243,9 @@ public class CollectionSyncService : ICollectionSyncService
             _logger.LogInformation("Deleting R2R collection {R2RCollectionId}, CorrelationId: {CorrelationId}", 
                 r2rCollectionId, correlationId);
 
-            // Simulate R2R API call
-            var success = await SimulateR2RDeleteCollectionAsync(r2rCollectionId);
+            // Real R2R API call
+            await _r2rCollectionClient.DeleteCollectionAsync(r2rCollectionId);
+            var success = true; // DeleteCollectionAsync doesn't return a value, assume success if no exception
 
             if (success)
             {
@@ -319,7 +348,7 @@ public class CollectionSyncService : ICollectionSyncService
     public async Task ProcessSyncQueueAsync()
     {
         var correlationId = _correlationService.GetCorrelationId();
-        
+
         try
         {
             _logger.LogDebug("Processing R2R collection sync queue, CorrelationId: {CorrelationId}", correlationId);
@@ -332,6 +361,340 @@ public class CollectionSyncService : ICollectionSyncService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing R2R collection sync queue, CorrelationId: {CorrelationId}", correlationId);
+        }
+    }
+
+    // ✅ COLLECTIONS SYNC - New bidirectional sync methods
+    public async Task<bool> SyncCollectionWithR2RAsync(Guid collectionId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
+        {
+            _logger.LogInformation("Starting bidirectional sync for collection {CollectionId}, CorrelationId: {CorrelationId}",
+                collectionId, correlationId);
+
+            var localCollection = await _context.Collections
+                .Include(c => c.Documents)
+                .FirstOrDefaultAsync(c => c.Id == collectionId);
+
+            if (localCollection == null)
+            {
+                _logger.LogWarning("Local collection {CollectionId} not found, CorrelationId: {CorrelationId}",
+                    collectionId, correlationId);
+                return false;
+            }
+
+            // If no R2R collection exists, create one
+            if (string.IsNullOrEmpty(localCollection.R2RCollectionId))
+            {
+                var r2rCollectionId = await CreateR2RCollectionAsync(collectionId);
+                if (string.IsNullOrEmpty(r2rCollectionId))
+                {
+                    return false;
+                }
+                localCollection.R2RCollectionId = r2rCollectionId;
+                await _context.SaveChangesAsync();
+            }
+
+            // Perform bidirectional sync
+            var pullSuccess = await PullFromR2RAsync(collectionId);
+            var pushSuccess = await PushToR2RAsync(collectionId);
+
+            // Update sync timestamp
+            localCollection.LastSyncedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            // Invalidate cache
+            await InvalidateCollectionCacheAsync(collectionId, localCollection.CompanyId);
+
+            _logger.LogInformation("Collection sync completed for {CollectionId}, Pull: {PullSuccess}, Push: {PushSuccess}, CorrelationId: {CorrelationId}",
+                collectionId, pullSuccess, pushSuccess, correlationId);
+
+            return pullSuccess && pushSuccess;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error syncing collection {CollectionId} with R2R, CorrelationId: {CorrelationId}",
+                collectionId, correlationId);
+            return false;
+        }
+    }
+
+    public async Task<string?> CreateR2RCollectionAsync(Guid localCollectionId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
+        {
+            var localCollection = await _context.Collections
+                .FirstOrDefaultAsync(c => c.Id == localCollectionId);
+
+            if (localCollection == null)
+            {
+                _logger.LogWarning("Local collection {CollectionId} not found for R2R creation, CorrelationId: {CorrelationId}",
+                    localCollectionId, correlationId);
+                return null;
+            }
+
+            // Create R2R collection request with enhanced metadata
+            var r2rRequest = new CollectionRequest
+            {
+                Name = localCollection.Name,
+                Description = localCollection.Description ?? "",
+                Metadata = new Dictionary<string, object>
+                {
+                    ["hybrid_collection_id"] = localCollectionId.ToString(),
+                    ["created_by"] = localCollection.CreatedBy ?? localCollection.UserId.ToString(),
+                    ["company_id"] = localCollection.CompanyId.ToString(),
+                    ["tags"] = localCollection.Tags ?? new List<string>(),
+                    ["color"] = localCollection.Color ?? "",
+                    ["icon"] = localCollection.Icon ?? "",
+                    ["sync_timestamp"] = DateTime.UtcNow,
+                    ["correlation_id"] = correlationId
+                }
+            };
+
+            var r2rCollectionResponse = await _r2rCollectionClient.CreateCollectionAsync(r2rRequest);
+            var r2rCollection = r2rCollectionResponse?.Results;
+
+            if (r2rCollection != null && !string.IsNullOrEmpty(r2rCollection.CollectionId))
+            {
+                _logger.LogInformation("Created R2R collection {R2RCollectionId} for local collection {LocalCollectionId}, CorrelationId: {CorrelationId}",
+                    r2rCollection.CollectionId, localCollectionId, correlationId);
+                return r2rCollection.CollectionId;
+            }
+
+            _logger.LogError("Failed to create R2R collection for local collection {LocalCollectionId}, CorrelationId: {CorrelationId}",
+                localCollectionId, correlationId);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating R2R collection for local collection {LocalCollectionId}, CorrelationId: {CorrelationId}",
+                localCollectionId, correlationId);
+            return null;
+        }
+    }
+
+    public async Task<int> SyncAllUserCollectionsAsync(string userId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
+        {
+            _logger.LogInformation("Starting sync for all collections of user {UserId}, CorrelationId: {CorrelationId}",
+                userId, correlationId);
+
+            if (!Guid.TryParse(userId, out var userGuid))
+            {
+                _logger.LogError("Invalid user ID format: {UserId}, CorrelationId: {CorrelationId}", userId, correlationId);
+                return 0;
+            }
+
+            var userCollections = await _context.Collections
+                .Where(c => c.UserId == userGuid)
+                .ToListAsync();
+
+            var syncedCount = 0;
+            foreach (var collection in userCollections)
+            {
+                var success = await SyncCollectionWithR2RAsync(collection.Id);
+                if (success)
+                {
+                    syncedCount++;
+                }
+            }
+
+            _logger.LogInformation("Synced {SyncedCount}/{TotalCount} collections for user {UserId}, CorrelationId: {CorrelationId}",
+                syncedCount, userCollections.Count, userId, correlationId);
+
+            return syncedCount;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error syncing all collections for user {UserId}, CorrelationId: {CorrelationId}",
+                userId, correlationId);
+            return 0;
+        }
+    }
+
+    public async Task<bool> PullFromR2RAsync(Guid collectionId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
+        {
+            var localCollection = await _context.Collections
+                .FirstOrDefaultAsync(c => c.Id == collectionId);
+
+            if (localCollection == null || string.IsNullOrEmpty(localCollection.R2RCollectionId))
+            {
+                _logger.LogWarning("Cannot pull from R2R - collection {CollectionId} not found or not linked, CorrelationId: {CorrelationId}",
+                    collectionId, correlationId);
+                return false;
+            }
+
+            // Get R2R collection data
+            var r2rCollection = await _r2rCollectionClient.GetCollectionAsync(localCollection.R2RCollectionId);
+            if (r2rCollection == null)
+            {
+                _logger.LogWarning("R2R collection {R2RCollectionId} not found, CorrelationId: {CorrelationId}",
+                    localCollection.R2RCollectionId, correlationId);
+                return false;
+            }
+
+            // Update local collection with R2R data
+            var hasChanges = false;
+
+            if (localCollection.Name != r2rCollection.Name)
+            {
+                localCollection.Name = r2rCollection.Name;
+                hasChanges = true;
+            }
+
+            if (localCollection.Description != r2rCollection.Description)
+            {
+                localCollection.Description = r2rCollection.Description;
+                hasChanges = true;
+            }
+
+            if (hasChanges)
+            {
+                localCollection.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+
+            _logger.LogInformation("Pulled updates from R2R for collection {CollectionId}, CorrelationId: {CorrelationId}",
+                collectionId, correlationId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error pulling from R2R for collection {CollectionId}, CorrelationId: {CorrelationId}",
+                collectionId, correlationId);
+            return false;
+        }
+    }
+
+    public async Task<bool> PushToR2RAsync(Guid collectionId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
+        {
+            var localCollection = await _context.Collections
+                .FirstOrDefaultAsync(c => c.Id == collectionId);
+
+            if (localCollection == null || string.IsNullOrEmpty(localCollection.R2RCollectionId))
+            {
+                _logger.LogWarning("Cannot push to R2R - collection {CollectionId} not found or not linked, CorrelationId: {CorrelationId}",
+                    collectionId, correlationId);
+                return false;
+            }
+
+            // Update R2R collection with local data
+            var updateRequest = new CollectionUpdateRequest
+            {
+                Name = localCollection.Name,
+                Description = localCollection.Description ?? "",
+                Metadata = new Dictionary<string, object>
+                {
+                    ["hybrid_collection_id"] = collectionId.ToString(),
+                    ["last_updated"] = localCollection.UpdatedAt,
+                    ["sync_timestamp"] = DateTime.UtcNow,
+                    ["correlation_id"] = correlationId
+                }
+            };
+
+            var updateResponse = await _r2rCollectionClient.UpdateCollectionAsync(localCollection.R2RCollectionId, updateRequest);
+            var success = updateResponse != null;
+
+            _logger.LogInformation("Pushed updates to R2R for collection {CollectionId}, Success: {Success}, CorrelationId: {CorrelationId}",
+                collectionId, success, correlationId);
+
+            return success;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error pushing to R2R for collection {CollectionId}, CorrelationId: {CorrelationId}",
+                collectionId, correlationId);
+            return false;
+        }
+    }
+
+    public async Task<CollectionSyncStatusDto> GetDetailedSyncStatusAsync(Guid collectionId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
+        {
+            var localCollection = await _context.Collections
+                .Include(c => c.Documents)
+                .FirstOrDefaultAsync(c => c.Id == collectionId);
+
+            if (localCollection == null)
+            {
+                return new CollectionSyncStatusDto
+                {
+                    CollectionId = collectionId,
+                    Status = SyncStatus.NotFound,
+                    Message = "Local collection not found"
+                };
+            }
+
+            if (string.IsNullOrEmpty(localCollection.R2RCollectionId))
+            {
+                return new CollectionSyncStatusDto
+                {
+                    CollectionId = collectionId,
+                    Status = SyncStatus.NotSynced,
+                    Message = "No R2R collection linked",
+                    LocalDocumentCount = localCollection.Documents?.Count ?? 0
+                };
+            }
+
+            // Check R2R collection status
+            var r2rCollection = await _r2rCollectionClient.GetCollectionAsync(localCollection.R2RCollectionId);
+            if (r2rCollection == null)
+            {
+                return new CollectionSyncStatusDto
+                {
+                    CollectionId = collectionId,
+                    R2RCollectionId = localCollection.R2RCollectionId,
+                    Status = SyncStatus.R2RNotFound,
+                    Message = "R2R collection not found",
+                    LocalDocumentCount = localCollection.Documents?.Count ?? 0
+                };
+            }
+
+            return new CollectionSyncStatusDto
+            {
+                CollectionId = collectionId,
+                R2RCollectionId = localCollection.R2RCollectionId,
+                Status = SyncStatus.Synced,
+                Message = "Collection is synced",
+                LastSyncedAt = localCollection.LastSyncedAt,
+                LocalDocumentCount = localCollection.Documents?.Count ?? 0,
+                R2RDocumentCount = r2rCollection.DocumentCount,
+                Metadata = new Dictionary<string, object>
+                {
+                    ["correlation_id"] = correlationId,
+                    ["last_checked"] = DateTime.UtcNow
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting sync status for collection {CollectionId}, CorrelationId: {CorrelationId}",
+                collectionId, correlationId);
+            return new CollectionSyncStatusDto
+            {
+                CollectionId = collectionId,
+                Status = SyncStatus.Error,
+                Message = ex.Message,
+                SyncErrors = new List<string> { ex.Message }
+            };
         }
     }
 
@@ -357,51 +720,7 @@ public class CollectionSyncService : ICollectionSyncService
         };
     }
 
-    private async Task<string> SimulateR2RCreateCollectionAsync(Dictionary<string, object> collectionData)
-    {
-        // Simulate API delay
-        await Task.Delay(Random.Shared.Next(100, 500));
 
-        // Simulate success/failure
-        if (Random.Shared.NextDouble() > 0.1) // 90% success rate
-        {
-            var r2rId = $"r2r_collection_{Guid.NewGuid():N}";
-            _mockR2RCollections[r2rId] = collectionData;
-            return r2rId;
-        }
-
-        return string.Empty;
-    }
-
-    private async Task<bool> SimulateR2RUpdateCollectionAsync(string r2rCollectionId, Dictionary<string, object> collectionData)
-    {
-        // Simulate API delay
-        await Task.Delay(Random.Shared.Next(50, 300));
-
-        // Simulate success/failure
-        if (Random.Shared.NextDouble() > 0.05) // 95% success rate
-        {
-            _mockR2RCollections[r2rCollectionId] = collectionData;
-            return true;
-        }
-
-        return false;
-    }
-
-    private async Task<bool> SimulateR2RDeleteCollectionAsync(string r2rCollectionId)
-    {
-        // Simulate API delay
-        await Task.Delay(Random.Shared.Next(50, 200));
-
-        // Simulate success/failure
-        if (Random.Shared.NextDouble() > 0.05) // 95% success rate
-        {
-            _mockR2RCollections.Remove(r2rCollectionId);
-            return true;
-        }
-
-        return false;
-    }
 
     private async Task<UserCollectionDto?> GetCollectionForSyncAsync(Guid collectionId)
     {
@@ -420,8 +739,29 @@ public class CollectionSyncService : ICollectionSyncService
             UseL3Cache = true 
         });
 
-        _logger.LogInformation("Queued R2R sync operation for collection {CollectionId}, Operation: {Operation}, CorrelationId: {CorrelationId}", 
+        _logger.LogInformation("Queued R2R sync operation for collection {CollectionId}, Operation: {Operation}, CorrelationId: {CorrelationId}",
             syncOperation.CollectionId, syncOperation.Operation, syncOperation.CorrelationId);
+    }
+
+    // ✅ COLLECTIONS SYNC - Additional helper methods
+    private async Task InvalidateCollectionCacheAsync(Guid collectionId, Guid companyId)
+    {
+        var tags = new List<string>
+        {
+            "collections",
+            $"collection:{collectionId}",
+            "collection-lists"
+        };
+
+        await _cacheService.InvalidateByTagsAsync(tags, companyId.ToString());
+    }
+
+    private async Task SyncCollectionDocumentsAsync(Collection localCollection, CollectionResponse r2rCollection)
+    {
+        // Placeholder for document synchronization
+        // In a full implementation, this would sync documents between local and R2R collections
+        _logger.LogDebug("Document sync for collection {CollectionId} - placeholder implementation", localCollection.Id);
+        await Task.CompletedTask;
     }
 }
 

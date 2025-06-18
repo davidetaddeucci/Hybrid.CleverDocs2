@@ -29,6 +29,7 @@ public class DocumentProcessingService : IDocumentProcessingService
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IHubContext<DocumentUploadHub> _hubContext;
     private readonly IDocumentClient _documentClient;
+    private readonly IR2RComplianceService _complianceService;
 
     // Thread-safe queue management
     private readonly ConcurrentQueue<R2RProcessingQueueItemDto> _processingQueue = new();
@@ -49,7 +50,8 @@ public class DocumentProcessingService : IDocumentProcessingService
         IOptions<DocumentProcessingOptions> options,
         IServiceScopeFactory serviceScopeFactory,
         IHubContext<DocumentUploadHub> hubContext,
-        IDocumentClient documentClient)
+        IDocumentClient documentClient,
+        IR2RComplianceService complianceService)
     {
         _rateLimitingService = rateLimitingService;
         _cacheService = cacheService;
@@ -59,6 +61,7 @@ public class DocumentProcessingService : IDocumentProcessingService
         _serviceScopeFactory = serviceScopeFactory;
         _hubContext = hubContext;
         _documentClient = documentClient;
+        _complianceService = complianceService;
 
         _processingLimiter = new SemaphoreSlim(_options.MaxConcurrentProcessing, _options.MaxConcurrentProcessing);
     }
@@ -83,12 +86,16 @@ public class DocumentProcessingService : IDocumentProcessingService
             await _cacheService.SetAsync($"r2r:queue:{queueItem.Id}", queueItem,
                 new CacheOptions
                 {
+                    UseL1Cache = true,  // ✅ ENABLED - Fast access for active processing
+                    UseL2Cache = true,  // ✅ ENABLED - Redis for R2R processing queue
+                    UseL3Cache = true,  // ✅ ENABLED - Persistent storage for processing state
+                    L1TTL = TimeSpan.FromMinutes(30),
                     L2TTL = TimeSpan.FromHours(24),
-                    UseL3Cache = true
+                    L3TTL = TimeSpan.FromDays(7)
                 });
 
-            // Broadcast queued status via SignalR
-            await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+            // Broadcast queued status via SignalR with cache invalidation
+            await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem, _cacheService);
 
             _logger.LogInformation("Document queued successfully: {DocumentId}, Queue position: {QueueSize}, CorrelationId: {CorrelationId}", 
                 queueItem.DocumentId, _processingQueue.Count, correlationId);
@@ -149,18 +156,33 @@ public class DocumentProcessingService : IDocumentProcessingService
 
             if (success)
             {
-                queueItem.Status = R2RProcessingStatusDto.Completed;
-                queueItem.CompletedAt = DateTime.UtcNow;
+                // Check if this is async processing (R2R returned HTTP 202)
+                if (queueItem.R2RDocumentId != null && queueItem.R2RDocumentId.StartsWith("pending_"))
+                {
+                    // Async processing - document stays in Processing state for worker to check
+                    queueItem.Status = R2RProcessingStatusDto.Processing;
+                    // Keep in _activeProcessing for worker to monitor
+
+                    _logger.LogInformation("R2R async processing started for document: {DocumentId}, R2RDocumentId: {R2RDocumentId}, CorrelationId: {CorrelationId}",
+                        queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
+                }
+                else
+                {
+                    // Synchronous processing completed
+                    queueItem.Status = R2RProcessingStatusDto.Completed;
+                    queueItem.CompletedAt = DateTime.UtcNow;
+
+                    // Broadcast completion status via SignalR
+                    await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+
+                    _logger.LogInformation("R2R processing completed successfully for document: {DocumentId}, R2RDocumentId: {R2RDocumentId}, CorrelationId: {CorrelationId}",
+                        queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
+                }
+
                 _consecutiveFailures = 0;
 
-                // Save document to database
+                // Save document to database (with correct status)
                 await SaveDocumentToDatabaseAsync(queueItem);
-
-                // Broadcast completion status via SignalR
-                await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
-
-                _logger.LogInformation("R2R processing completed successfully for document: {DocumentId}, R2RDocumentId: {R2RDocumentId}, CorrelationId: {CorrelationId}",
-                    queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
             }
             else
             {
@@ -410,28 +432,56 @@ public class DocumentProcessingService : IDocumentProcessingService
             _logger.LogInformation("Starting R2R processing for document {DocumentId}, File: {FileName}, CorrelationId: {CorrelationId}",
                 queueItem.DocumentId, queueItem.FileName, correlationId);
 
-            // Create IFormFile from temporary file
+            // ✅ QUICK WIN 1 - Validate file for R2R compliance
+            var (isValid, validationErrors) = await _complianceService.ValidateFileForR2RAsync(queueItem.FilePath, queueItem.ContentType);
+            if (!isValid)
+            {
+                var errorMessage = $"File validation failed: {string.Join(", ", validationErrors)}";
+                _logger.LogWarning("R2R validation failed for document {DocumentId}: {ErrorMessage}, CorrelationId: {CorrelationId}",
+                    queueItem.DocumentId, errorMessage, correlationId);
+
+                queueItem.ErrorCategory = ErrorCategory.Validation;
+                queueItem.ErrorMessage = errorMessage;
+                return false;
+            }
+
+            // ✅ QUICK WIN 2 - Generate R2R compliant filename and checksum
             var fileBytes = await File.ReadAllBytesAsync(queueItem.FilePath);
+            var r2rCompliantFilename = _complianceService.GenerateR2RCompliantFilename(queueItem.FileName, queueItem.DocumentId);
+            var checksum = _complianceService.ComputeChecksum(fileBytes);
+
+            // Store enhanced metadata
+            queueItem.OriginalFileName = queueItem.FileName;
+            queueItem.FileName = r2rCompliantFilename;
+            queueItem.Checksum = checksum;
+            queueItem.UploadTimestamp = DateTime.UtcNow;
+
             var fileStream = new MemoryStream(fileBytes);
-            var formFile = new FormFile(fileStream, 0, fileBytes.Length, "file", queueItem.FileName)
+            var formFile = new FormFile(fileStream, 0, fileBytes.Length, "file", r2rCompliantFilename)
             {
                 Headers = new HeaderDictionary(),
                 ContentType = queueItem.ContentType
             };
 
-            // Prepare document request for R2R API
+            // ✅ QUICK WIN 3 - Enhanced metadata for R2R compliance
             var documentRequest = new DocumentRequest
             {
                 File = formFile,
-                Title = queueItem.FileName,
+                Title = queueItem.OriginalFileName ?? queueItem.FileName,
                 DocumentType = queueItem.ContentType,
                 Metadata = new Dictionary<string, object>
                 {
-                    ["original_filename"] = queueItem.FileName,
+                    ["original_filename"] = queueItem.OriginalFileName ?? queueItem.FileName,
+                    ["r2r_compliant_filename"] = queueItem.FileName,
                     ["file_size"] = queueItem.FileSize,
-                    ["upload_timestamp"] = DateTime.UtcNow,
+                    ["checksum"] = queueItem.Checksum ?? "",
+                    ["upload_timestamp"] = queueItem.UploadTimestamp,
                     ["user_id"] = queueItem.UserId,
-                    ["company_id"] = queueItem.CompanyId
+                    ["company_id"] = queueItem.CompanyId,
+                    ["document_id"] = queueItem.DocumentId,
+                    ["file_id"] = queueItem.FileId,
+                    ["content_type"] = queueItem.ContentType,
+                    ["processing_priority"] = queueItem.Priority.ToString()
                 }
             };
 
@@ -456,42 +506,69 @@ public class DocumentProcessingService : IDocumentProcessingService
             // Call real R2R API via DocumentClient
             var documentResponse = await _documentClient.CreateAsync(documentRequest);
 
-            // R2R API can return either immediate response (200) or async response (202)
-            if (documentResponse != null && !string.IsNullOrEmpty(documentResponse.Id))
+            // ✅ QUICK WIN 4 - Enhanced R2R response handling with TaskId support
+            if (documentResponse != null)
             {
-                // Immediate success - store R2R document ID from response
-                queueItem.R2RDocumentId = documentResponse.Id;
+                if (!string.IsNullOrEmpty(documentResponse.Id))
+                {
+                    // Immediate success (HTTP 200) - store R2R document ID from response
+                    queueItem.R2RDocumentId = documentResponse.Id;
+                    queueItem.TaskId = null; // No task ID for immediate processing
 
-                _logger.LogInformation("R2R processing completed successfully (immediate) for document {DocumentId}, R2R ID: {R2RDocumentId}, CorrelationId: {CorrelationId}",
-                    queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
+                    _logger.LogInformation("R2R processing completed successfully (immediate) for document {DocumentId}, R2R ID: {R2RDocumentId}, CorrelationId: {CorrelationId}",
+                        queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
 
-                return true;
+                    return true;
+                }
+                else if (!string.IsNullOrEmpty(documentResponse.TaskId))
+                {
+                    // Async processing (HTTP 202) with TaskId - R2R standard approach
+                    queueItem.TaskId = documentResponse.TaskId;
+                    queueItem.R2RDocumentId = null; // Will be populated when task completes
+                    queueItem.Status = R2RProcessingStatusDto.Processing;
+
+                    _logger.LogInformation("R2R processing accepted (async) for document {DocumentId}, TaskId: {TaskId}, CorrelationId: {CorrelationId}",
+                        queueItem.DocumentId, queueItem.TaskId, correlationId);
+
+                    return true;
+                }
+                else
+                {
+                    // Fallback for older R2R versions without TaskId
+                    queueItem.TaskId = $"legacy_{queueItem.DocumentId}";
+                    queueItem.R2RDocumentId = null;
+                    queueItem.Status = R2RProcessingStatusDto.Processing;
+
+                    _logger.LogInformation("R2R processing accepted (legacy async) for document {DocumentId}, Legacy TaskId: {TaskId}, CorrelationId: {CorrelationId}",
+                        queueItem.DocumentId, queueItem.TaskId, correlationId);
+
+                    return true;
+                }
             }
             else
             {
-                // Async processing (HTTP 202) - R2R accepted the document for background processing
-                // This is normal for R2R async ingestion workflow
-                _logger.LogInformation("R2R processing accepted (async) for document {DocumentId}, will complete in background, CorrelationId: {CorrelationId}",
+                _logger.LogError("R2R API returned null response for document {DocumentId}, CorrelationId: {CorrelationId}",
                     queueItem.DocumentId, correlationId);
-
-                // Mark as successfully submitted to R2R (even without immediate ID)
-                // The document will be saved to database and SignalR will notify when R2R completes
-                queueItem.R2RDocumentId = $"pending_{queueItem.DocumentId}"; // Temporary ID for tracking
-                queueItem.Status = R2RProcessingStatusDto.Processing; // Keep processing status for async workflow
-
-                return true; // Success - document accepted by R2R for async processing
+                return false;
             }
         }
         catch (HttpRequestException httpEx)
         {
-            _logger.LogError(httpEx, "HTTP error during R2R processing for document {DocumentId}, CorrelationId: {CorrelationId}",
-                queueItem.DocumentId, correlationId);
+            // ✅ QUICK WIN 5 - Enhanced error categorization
+            queueItem.ErrorCategory = _complianceService.CategorizeError(httpEx.Message, httpEx);
+            queueItem.ErrorMessage = httpEx.Message;
+
+            _logger.LogError(httpEx, "HTTP error during R2R processing for document {DocumentId}, Category: {ErrorCategory}, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, queueItem.ErrorCategory, correlationId);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "R2R processing failed for document {DocumentId}, CorrelationId: {CorrelationId}",
-                queueItem.DocumentId, correlationId);
+            queueItem.ErrorCategory = _complianceService.CategorizeError(ex.Message, ex);
+            queueItem.ErrorMessage = ex.Message;
+
+            _logger.LogError(ex, "R2R processing failed for document {DocumentId}, Category: {ErrorCategory}, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, queueItem.ErrorCategory, correlationId);
             return false;
         }
     }
@@ -502,11 +579,17 @@ public class DocumentProcessingService : IDocumentProcessingService
         queueItem.ErrorMessage = errorMessage;
         queueItem.RetryCount++;
 
+        // ✅ QUICK WIN 6 - Enhanced error categorization for intelligent retry
+        if (queueItem.ErrorCategory == ErrorCategory.None)
+        {
+            queueItem.ErrorCategory = _complianceService.CategorizeError(errorMessage);
+        }
+
         _consecutiveFailures++;
         _lastR2RFailure = DateTime.UtcNow;
 
-        // Broadcast failure status via SignalR
-        await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+        // Broadcast failure status via SignalR with cache invalidation
+        await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem, _cacheService);
 
         // Check if we should open circuit breaker
         if (_consecutiveFailures >= _options.CircuitBreakerThreshold)
@@ -515,32 +598,34 @@ public class DocumentProcessingService : IDocumentProcessingService
             _logger.LogWarning("Circuit breaker opened due to {ConsecutiveFailures} consecutive failures", _consecutiveFailures);
         }
 
-        // Determine if we should retry
-        if (queueItem.RetryCount < queueItem.MaxRetries)
+        // ✅ QUICK WIN 7 - Intelligent retry based on error category
+        var shouldRetry = ShouldRetryBasedOnErrorCategory(queueItem);
+
+        if (shouldRetry && queueItem.RetryCount < queueItem.MaxRetries)
         {
-            var delay = CalculateRetryDelay(queueItem.RetryCount);
+            var delay = CalculateRetryDelayBasedOnCategory(queueItem);
             queueItem.NextRetryAt = DateTime.UtcNow.Add(delay);
             queueItem.Status = R2RProcessingStatusDto.Retrying;
 
             // Broadcast retry status via SignalR
             await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
 
-            _logger.LogInformation("Scheduling retry {RetryCount}/{MaxRetries} for document {DocumentId} in {Delay}",
-                queueItem.RetryCount, queueItem.MaxRetries, queueItem.DocumentId, delay);
+            _logger.LogInformation("Scheduling retry {RetryCount}/{MaxRetries} for document {DocumentId} in {Delay}, Category: {ErrorCategory}",
+                queueItem.RetryCount, queueItem.MaxRetries, queueItem.DocumentId, delay, queueItem.ErrorCategory);
 
             // Re-queue for retry
             _processingQueue.Enqueue(queueItem);
         }
         else
         {
-            // Max retries reached, move to failed items
+            // Max retries reached or permanent error, move to failed items
             _failedItems[queueItem.Id] = queueItem;
 
             // Broadcast final failure status via SignalR
             await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
 
-            _logger.LogError("Document processing failed permanently after {MaxRetries} retries: {DocumentId}, Error: {ErrorMessage}",
-                queueItem.MaxRetries, queueItem.DocumentId, errorMessage);
+            _logger.LogError("Document processing failed permanently: {DocumentId}, Category: {ErrorCategory}, Error: {ErrorMessage}",
+                queueItem.DocumentId, queueItem.ErrorCategory, errorMessage);
         }
     }
 
@@ -569,6 +654,35 @@ public class DocumentProcessingService : IDocumentProcessingService
         var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000));
 
         return exponentialDelay.Add(jitter);
+    }
+
+    // ✅ QUICK WIN 8 - Intelligent retry logic based on error category
+    private bool ShouldRetryBasedOnErrorCategory(R2RProcessingQueueItemDto queueItem)
+    {
+        return queueItem.ErrorCategory switch
+        {
+            ErrorCategory.Transient => true,        // Always retry transient errors
+            ErrorCategory.RateLimit => true,        // Retry rate limit errors with longer delay
+            ErrorCategory.Authentication => false,   // Don't retry auth errors
+            ErrorCategory.Validation => false,      // Don't retry validation errors
+            ErrorCategory.FileFormat => false,      // Don't retry format errors
+            ErrorCategory.FileSize => false,        // Don't retry size errors
+            ErrorCategory.Permanent => false,       // Don't retry permanent errors
+            ErrorCategory.None => true,             // Default to retry for unknown errors
+            _ => true
+        };
+    }
+
+    private TimeSpan CalculateRetryDelayBasedOnCategory(R2RProcessingQueueItemDto queueItem)
+    {
+        var baseDelay = CalculateRetryDelay(queueItem.RetryCount);
+
+        return queueItem.ErrorCategory switch
+        {
+            ErrorCategory.RateLimit => TimeSpan.FromMinutes(2 * queueItem.RetryCount), // Longer delay for rate limits
+            ErrorCategory.Transient => baseDelay,                                      // Standard exponential backoff
+            _ => baseDelay
+        };
     }
 
     private async Task<string?> GetR2RCollectionIdAsync(Guid collectionId)
@@ -631,7 +745,21 @@ public class DocumentProcessingService : IDocumentProcessingService
                 // Update existing document with R2R information
                 existingDocument.R2RDocumentId = queueItem.R2RDocumentId;
                 existingDocument.R2RProcessedAt = DateTime.UtcNow;
-                existingDocument.Status = (int)Data.Entities.DocumentStatus.Ready;
+
+                // Set correct status based on R2R processing state
+                if (queueItem.Status == R2RProcessingStatusDto.Completed)
+                {
+                    existingDocument.Status = (int)Data.Entities.DocumentStatus.Ready;
+                }
+                else if (queueItem.Status == R2RProcessingStatusDto.Processing)
+                {
+                    existingDocument.Status = (int)Data.Entities.DocumentStatus.Processing;
+                }
+                else if (queueItem.Status == R2RProcessingStatusDto.Failed)
+                {
+                    existingDocument.Status = (int)Data.Entities.DocumentStatus.Error;
+                }
+
                 existingDocument.UpdatedAt = DateTime.UtcNow;
 
                 _logger.LogInformation("Updated existing document {DocumentId} with R2R data, CorrelationId: {CorrelationId}",
@@ -664,16 +792,34 @@ public class DocumentProcessingService : IDocumentProcessingService
                     return;
                 }
 
+                // Determine correct status based on R2R processing state
+                int documentStatus;
+                if (queueItem.Status == R2RProcessingStatusDto.Completed)
+                {
+                    documentStatus = (int)Data.Entities.DocumentStatus.Ready;
+                }
+                else if (queueItem.Status == R2RProcessingStatusDto.Processing)
+                {
+                    documentStatus = (int)Data.Entities.DocumentStatus.Processing;
+                }
+                else if (queueItem.Status == R2RProcessingStatusDto.Failed)
+                {
+                    documentStatus = (int)Data.Entities.DocumentStatus.Error;
+                }
+                else
+                {
+                    documentStatus = (int)Data.Entities.DocumentStatus.Draft; // Default for new documents
+                }
+
                 var document = new Document
                 {
                     Id = queueItem.DocumentId,
                     Name = queueItem.FileName,
                     FileName = queueItem.FileName,
                     OriginalFileName = queueItem.FileName,
-                    SizeBytes = queueItem.FileSize,
-                    Size = queueItem.FileSize,
+                    SizeInBytes = queueItem.FileSize,
                     ContentType = queueItem.ContentType,
-                    Status = (int)Data.Entities.DocumentStatus.Ready,
+                    Status = documentStatus,
                     R2RDocumentId = queueItem.R2RDocumentId,
                     R2RProcessedAt = DateTime.UtcNow,
                     UserId = userGuid,
@@ -695,15 +841,16 @@ public class DocumentProcessingService : IDocumentProcessingService
             // Save changes to database
             await context.SaveChangesAsync();
 
-            // Invalidate document cache patterns to ensure fresh data is loaded
-            await _cacheService.InvalidateAsync($"*type:pageddocumentresultdto:documents:search:*");
-            await _cacheService.InvalidateAsync($"*user:documents:{queueItem.UserId}*");
+            // CRITICAL: Invalidate document caches BEFORE SignalR broadcast using ONLY tag-based invalidation
+            var tags = new List<string> { "documents", "document-lists", $"user:{queueItem.UserId}" };
             if (queueItem.CollectionId.HasValue)
             {
-                await _cacheService.InvalidateAsync($"*collection:documents:{queueItem.CollectionId}*");
-                // Also invalidate collection details cache to update document count
-                await _cacheService.InvalidateAsync($"*collection:details:{queueItem.CollectionId}*");
+                tags.Add($"collection:{queueItem.CollectionId}");
             }
+            // CRITICAL FIX: Pass tenantId to ensure tag transformation matches SET operation
+            // Use CompanyId as TenantId (they are the same in our multi-tenant architecture)
+            var tenantId = queueItem.CompanyId?.ToString();
+            await _cacheService.InvalidateByTagsAsync(tags, tenantId);
 
             _logger.LogInformation("Document {DocumentId} saved to database successfully and cache invalidated, CorrelationId: {CorrelationId}",
                 queueItem.DocumentId, correlationId);
@@ -724,6 +871,79 @@ public class DocumentProcessingService : IDocumentProcessingService
             throw;
         }
     }
+
+    public async Task<bool> CheckR2RStatusAndUpdateAsync(R2RProcessingQueueItemDto queueItem)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
+        {
+            _logger.LogDebug("Checking R2R status for document {DocumentId}, R2RDocumentId: {R2RDocumentId}, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
+
+            // For documents with pending R2R IDs, we need to check if R2R has completed processing
+            if (queueItem.R2RDocumentId != null && queueItem.R2RDocumentId.StartsWith("pending_"))
+            {
+                // Extract the actual document ID from the pending ID
+                var actualDocumentId = queueItem.R2RDocumentId.Replace("pending_", "");
+
+                // Try to get the document from R2R API to see if it's been processed
+                try
+                {
+                    var r2rDocument = await _documentClient.GetAsync(actualDocumentId);
+
+                    if (r2rDocument != null && !string.IsNullOrEmpty(r2rDocument.Id))
+                    {
+                        // Document found in R2R - processing completed successfully
+                        _logger.LogInformation("R2R processing completed for document {DocumentId}, R2R ID: {R2RDocumentId}, CorrelationId: {CorrelationId}",
+                            queueItem.DocumentId, r2rDocument.Id, correlationId);
+
+                        // Update queue item with actual R2R document ID
+                        queueItem.R2RDocumentId = r2rDocument.Id;
+                        queueItem.Status = R2RProcessingStatusDto.Completed;
+                        queueItem.CompletedAt = DateTime.UtcNow;
+
+                        // Save document to database with completed status
+                        await SaveDocumentToDatabaseAsync(queueItem);
+
+                        // Broadcast completion status via SignalR
+                        await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+
+                        // Remove from active processing
+                        _activeProcessing.TryRemove(queueItem.Id, out _);
+
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // If we get a 404 or other error, the document might still be processing
+                    _logger.LogDebug("R2R document {DocumentId} not yet available (still processing), CorrelationId: {CorrelationId}",
+                        actualDocumentId, correlationId);
+                }
+            }
+
+            // Check if document has been processing for too long (timeout)
+            var processingDuration = DateTime.UtcNow - queueItem.StartedAt;
+            if (processingDuration > TimeSpan.FromMinutes(10)) // 10 minute timeout
+            {
+                _logger.LogWarning("R2R processing timeout for document {DocumentId} after {Duration}, marking as failed, CorrelationId: {CorrelationId}",
+                    queueItem.DocumentId, processingDuration, correlationId);
+
+                await HandleProcessingFailure(queueItem, $"R2R processing timeout after {processingDuration}");
+                return false;
+            }
+
+            // Document is still processing, no action needed
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking R2R status for document {DocumentId}, CorrelationId: {CorrelationId}",
+                queueItem.DocumentId, correlationId);
+            return false;
+        }
+    }
 }
 
 /// <summary>
@@ -740,4 +960,8 @@ public class DocumentProcessingOptions
     public TimeSpan ProcessingTimeout { get; set; } = TimeSpan.FromMinutes(10);
     public bool EnableOptimization { get; set; } = true;
     public TimeSpan OptimizationInterval { get; set; } = TimeSpan.FromMinutes(5);
+
+    // Background worker configuration
+    public int ProcessingIntervalMs { get; set; } = 5000; // 5 seconds when queue has items
+    public int IdleIntervalMs { get; set; } = 30000; // 30 seconds when queue is empty
 }

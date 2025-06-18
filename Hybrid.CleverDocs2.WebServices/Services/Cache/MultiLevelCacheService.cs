@@ -271,15 +271,39 @@ public class MultiLevelCacheService : IMultiLevelCacheService, IDisposable
     {
         var fullPattern = _keyGenerator.GeneratePattern(pattern, tenantId);
         var correlationId = _correlationService.GetCorrelationId();
-        
+
         await Task.WhenAll(
             _l1Cache.InvalidatePatternAsync(fullPattern),
             _l2Cache.InvalidatePatternAsync(fullPattern),
             _l3Cache.InvalidatePatternAsync(fullPattern)
         );
 
-        _logger.LogInformation("Invalidated cache pattern {Pattern} across all levels, CorrelationId: {CorrelationId}", 
+        _logger.LogInformation("Invalidated cache pattern {Pattern} across all levels, CorrelationId: {CorrelationId}",
             fullPattern, correlationId);
+    }
+
+    public async Task InvalidateByTagsAsync(IEnumerable<string> tags, string? tenantId = null)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+        var tagList = tags.ToList();
+
+        // Add tenant prefix to tags if specified
+        var processedTags = tagList.AsEnumerable();
+        if (!string.IsNullOrEmpty(tenantId))
+        {
+            processedTags = tagList.Select(tag => $"tenant:{tenantId}:{tag}");
+        }
+
+        var finalTags = processedTags.ToList();
+
+        await Task.WhenAll(
+            _l1Cache.InvalidateByTagsAsync(finalTags),
+            _l2Cache.InvalidateByTagsAsync(finalTags),
+            _l3Cache.InvalidateByTagsAsync(finalTags)
+        );
+
+        _logger.LogInformation("Invalidated cache by tags {Tags} across all levels, CorrelationId: {CorrelationId}",
+            string.Join(", ", finalTags), correlationId);
     }
 
     public async Task<Dictionary<string, T?>> GetManyAsync<T>(IEnumerable<string> keys, CacheOptions? options = null) where T : class
@@ -402,26 +426,43 @@ public class MultiLevelCacheService : IMultiLevelCacheService, IDisposable
     {
         var tasks = new List<Task>();
 
+        // Process tags with tenant prefix if needed
+        var processedTags = options.Tags.AsEnumerable();
+        if (!string.IsNullOrEmpty(options.TenantId))
+        {
+            processedTags = options.Tags.Select(tag => $"tenant:{options.TenantId}:{tag}");
+        }
+        var finalTags = processedTags.ToList();
+
         if (options.UseL1Cache)
         {
-            tasks.Add(_l1Cache.SetAsync(fullKey, value, options.L1TTL));
+            if (finalTags.Any())
+                tasks.Add(_l1Cache.SetAsync(fullKey, value, options.L1TTL, finalTags));
+            else
+                tasks.Add(_l1Cache.SetAsync(fullKey, value, options.L1TTL));
         }
 
         if (options.UseL2Cache)
         {
-            tasks.Add(_l2Cache.SetAsync(fullKey, value, options.L2TTL));
+            if (finalTags.Any())
+                tasks.Add(_l2Cache.SetAsync(fullKey, value, options.L2TTL, finalTags));
+            else
+                tasks.Add(_l2Cache.SetAsync(fullKey, value, options.L2TTL));
         }
 
         if (options.UseL3Cache)
         {
-            tasks.Add(_l3Cache.SetAsync(fullKey, value, options.L3TTL));
+            if (finalTags.Any())
+                tasks.Add(_l3Cache.SetAsync(fullKey, value, options.L3TTL, finalTags));
+            else
+                tasks.Add(_l3Cache.SetAsync(fullKey, value, options.L3TTL));
         }
 
         if (tasks.Any())
         {
             await Task.WhenAll(tasks);
-            _logger.LogDebug("Stored value in cache levels for key {Key}, CorrelationId: {CorrelationId}", 
-                fullKey, correlationId);
+            _logger.LogDebug("Stored value in cache levels for key {Key} with tags {Tags}, CorrelationId: {CorrelationId}",
+                fullKey, string.Join(", ", finalTags), correlationId);
         }
     }
 

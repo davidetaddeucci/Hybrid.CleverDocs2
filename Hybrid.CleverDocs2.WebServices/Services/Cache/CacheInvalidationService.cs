@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 using Hybrid.CleverDocs2.WebServices.Services.Queue;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Models.Queue;
+using Hybrid.CleverDocs2.WebServices.Data;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Cache;
 
@@ -55,6 +57,7 @@ public class CacheInvalidationService : ICacheInvalidationService
     private readonly IRateLimitingService _rateLimitingService;
     private readonly ILogger<CacheInvalidationService> _logger;
     private readonly ICorrelationService _correlationService;
+    private readonly IServiceProvider _serviceProvider;
     private readonly CacheInvalidationOptions _options;
 
     public CacheInvalidationService(
@@ -62,12 +65,14 @@ public class CacheInvalidationService : ICacheInvalidationService
         IRateLimitingService rateLimitingService,
         ILogger<CacheInvalidationService> logger,
         ICorrelationService correlationService,
+        IServiceProvider serviceProvider,
         IOptions<CacheInvalidationOptions> options)
     {
         _cacheService = cacheService;
         _rateLimitingService = rateLimitingService;
         _logger = logger;
         _correlationService = correlationService;
+        _serviceProvider = serviceProvider;
         _options = options.Value;
     }
 
@@ -80,22 +85,16 @@ public class CacheInvalidationService : ICacheInvalidationService
             _logger.LogInformation("Starting document cache invalidation for DocumentId: {DocumentId}, TenantId: {TenantId}, CorrelationId: {CorrelationId}", 
                 documentId, tenantId, correlationId);
 
+            // Use tag-based invalidation for reliable cache clearing
+            var tags = new List<string> { "documents", "document-lists" };
+
+            // Add document-specific tag if we have a user context
+            // Note: In a full implementation, we'd get the user ID from the document
+
             var invalidationTasks = new List<Task>
             {
-                // Document-specific caches
-                _cacheService.InvalidateAsync($"*document*{documentId}*", tenantId),
-                
-                // Search caches that might include this document
-                _cacheService.InvalidateAsync("*search*", tenantId),
-                
-                // RAG caches that might use this document
-                _cacheService.InvalidateAsync("*rag*", tenantId),
-                
-                // Embedding caches for this document
-                _cacheService.InvalidateAsync($"*embedding*{documentId}*", tenantId),
-                
-                // Analytics caches that might include this document
-                _cacheService.InvalidateAsync("*analytics*", tenantId)
+                // Tag-based invalidation for document lists and searches
+                _cacheService.InvalidateByTagsAsync(tags, tenantId)
             };
 
             // Invalidate collection caches if document belongs to collections
@@ -135,12 +134,9 @@ public class CacheInvalidationService : ICacheInvalidationService
             _logger.LogInformation("Starting collection cache invalidation for CollectionId: {CollectionId}, TenantId: {TenantId}, CorrelationId: {CorrelationId}", 
                 collectionId, tenantId, correlationId);
 
-            await Task.WhenAll(
-                _cacheService.InvalidateAsync($"*collection*{collectionId}*", tenantId),
-                _cacheService.InvalidateAsync($"*search*collection*{collectionId}*", tenantId),
-                _cacheService.InvalidateAsync($"*rag*collection*{collectionId}*", tenantId),
-                _cacheService.InvalidateAsync("*analytics*", tenantId) // Analytics might aggregate collection data
-            );
+            // Use tag-based invalidation for collections
+            var tags = new List<string> { "documents", "document-lists", $"collection:{collectionId}" };
+            await _cacheService.InvalidateByTagsAsync(tags, tenantId);
 
             await PublishInvalidationEventAsync(new CacheInvalidationEvent
             {
@@ -234,10 +230,11 @@ public class CacheInvalidationService : ICacheInvalidationService
         
         try
         {
-            var pattern = string.IsNullOrEmpty(query) ? "*search*" : $"*search*{query}*";
-            await _cacheService.InvalidateAsync(pattern, tenantId);
+            // Use tag-based invalidation for search caches
+            var tags = new List<string> { "documents", "document-lists" };
+            await _cacheService.InvalidateByTagsAsync(tags, tenantId);
 
-            _logger.LogInformation("Search cache invalidation completed for Query: {Query}, TenantId: {TenantId}, CorrelationId: {CorrelationId}", 
+            _logger.LogInformation("Search cache invalidation completed for Query: {Query}, TenantId: {TenantId}, CorrelationId: {CorrelationId}",
                 query ?? "ALL", tenantId ?? "ALL", correlationId);
         }
         catch (Exception ex)
@@ -316,18 +313,43 @@ public class CacheInvalidationService : ICacheInvalidationService
     {
         try
         {
-            // In a full implementation, this would query the database to find collections
-            // that contain this document and invalidate their caches
-            
-            // For now, we'll invalidate all collection caches as a safe approach
-            await _cacheService.InvalidateAsync("*collection*", tenantId);
-            
-            _logger.LogDebug("Invalidated collection caches for document {DocumentId} in tenant {TenantId}", 
-                documentId, tenantId);
+            // Query database to find collections that contain this document and invalidate their specific caches
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var document = await context.Documents
+                .Where(d => d.Id.ToString() == documentId)
+                .Select(d => new { d.CollectionId, d.UserId })
+                .FirstOrDefaultAsync();
+
+            if (document != null)
+            {
+                // Use tag-based invalidation for document-specific caches
+                var tags = new List<string> { "documents", "document-lists", $"user:{document.UserId}" };
+
+                if (document.CollectionId.HasValue)
+                {
+                    tags.Add($"collection:{document.CollectionId}");
+                }
+
+                await _cacheService.InvalidateByTagsAsync(tags, tenantId);
+
+                _logger.LogDebug("Invalidated collection caches for document {DocumentId} in collection {CollectionId}, tenant {TenantId}",
+                    documentId, document.CollectionId, tenantId);
+            }
+            else
+            {
+                // Fallback: invalidate general document caches
+                var tags = new List<string> { "documents", "document-lists" };
+                await _cacheService.InvalidateByTagsAsync(tags, tenantId);
+
+                _logger.LogDebug("Document {DocumentId} not found, invalidated general document caches in tenant {TenantId}",
+                    documentId, tenantId);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error invalidating collection caches for document {DocumentId} in tenant {TenantId}", 
+            _logger.LogError(ex, "Error invalidating collection caches for document {DocumentId} in tenant {TenantId}",
                 documentId, tenantId);
         }
     }

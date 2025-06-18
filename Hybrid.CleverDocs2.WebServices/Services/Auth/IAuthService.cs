@@ -15,6 +15,8 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
         Task<bool> ConfirmPasswordResetAsync(string token, string newPassword);
         Task<bool> VerifyEmailAsync(string token);
         Task<bool> ResendEmailVerificationAsync(string email);
+        Task<bool> UpdateUserProfileAsync(Guid userId, string? name = null, string? bio = null,
+            string? profilePicture = null, string? firstName = null, string? lastName = null);
         Task<User?> GetUserByIdAsync(Guid userId);
         Task<User?> GetUserByEmailAsync(string email);
         Task<bool> IsEmailAvailableAsync(string email, Guid? excludeUserId = null);

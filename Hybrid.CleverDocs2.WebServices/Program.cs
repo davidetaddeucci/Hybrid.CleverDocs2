@@ -18,16 +18,18 @@ using Hybrid.CleverDocs2.WebServices.Services.Queue;
 using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Collections;
 using Hybrid.CleverDocs2.WebServices.Services.Documents;
+using Hybrid.CleverDocs2.WebServices.Services.Users;
+using Hybrid.CleverDocs2.WebServices.Services.Companies;
 using Hybrid.CleverDocs2.WebServices.Hubs;
 using Hybrid.CleverDocs2.WebServices.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// PostgreSQL Database - Optimized Configuration (192.168.1.4:5433)
-// Configure Npgsql data source with dynamic JSON support
+// Database Configuration - SOLO PostgreSQL
 var connectionString = builder.Configuration.GetConnectionString("Postgres")
-    ?? throw new InvalidOperationException("PostgreSQL connection string 'Postgres' not found in configuration");
+    ?? throw new InvalidOperationException("Database connection string 'Postgres' not found in configuration");
 
+// PostgreSQL configuration
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
 dataSourceBuilder.EnableDynamicJson(); // Enable dynamic JSON serialization for Dictionary<string, object>
 var dataSource = dataSourceBuilder.Build();
@@ -60,26 +62,45 @@ builder.Services.AddDbContext<ApplicationDbContext>(opts => {
 // Memory Cache - Required for L1 cache
 builder.Services.AddMemoryCache();
 
-// Redis Cache - Dynamically configured
-builder.Services.AddStackExchangeRedisCache(opts => {
-    var redisConfig = builder.Configuration.GetSection("Redis");
-    opts.Configuration = redisConfig["Configuration"]
-        ?? throw new InvalidOperationException("Redis configuration not found");
-    opts.InstanceName = redisConfig["InstanceName"] ?? "CleverDocs2";
+// Redis Cache - Conditionally configured based on settings
+var redisConfig = builder.Configuration.GetSection("Redis");
+var redisEnabled = redisConfig.GetValue<bool>("Enabled", true);
 
-    // Additional Redis options from configuration
-    if (int.TryParse(redisConfig["ConnectTimeout"], out var connectTimeout))
-        opts.ConfigurationOptions = StackExchange.Redis.ConfigurationOptions.Parse(opts.Configuration);
-});
-
-// Redis Connection Multiplexer - Required for L2 cache
-builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(provider =>
+if (redisEnabled)
 {
-    var redisConfig = builder.Configuration.GetSection("Redis");
-    var connectionString = redisConfig["Configuration"]
-        ?? throw new InvalidOperationException("Redis configuration not found");
-    return StackExchange.Redis.ConnectionMultiplexer.Connect(connectionString);
-});
+    builder.Services.AddStackExchangeRedisCache(opts => {
+        opts.Configuration = redisConfig["Configuration"]
+            ?? throw new InvalidOperationException("Redis configuration not found");
+        opts.InstanceName = redisConfig["InstanceName"] ?? "CleverDocs2";
+
+        // Additional Redis options from configuration
+        if (int.TryParse(redisConfig["ConnectTimeout"], out var connectTimeout))
+            opts.ConfigurationOptions = StackExchange.Redis.ConfigurationOptions.Parse(opts.Configuration);
+    });
+
+    // Redis Connection Multiplexer - Required for L2 cache
+    builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(provider =>
+    {
+        var connectionString = redisConfig["Configuration"]
+            ?? throw new InvalidOperationException("Redis configuration not found");
+
+        // Parse connection string and create ConfigurationOptions for better control
+        var configOptions = StackExchange.Redis.ConfigurationOptions.Parse(connectionString);
+        configOptions.AbortOnConnectFail = false;
+        configOptions.ConnectTimeout = 5000;
+        configOptions.SyncTimeout = 5000;
+
+        return StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions);
+    });
+}
+else
+{
+    // Use in-memory distributed cache when Redis is disabled
+    builder.Services.AddDistributedMemoryCache();
+
+    // Mock Redis services for local development
+    builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(provider => null!);
+}
 
 // MassTransit / RabbitMQ - Temporarily disabled for testing
 /*
@@ -113,7 +134,7 @@ builder.Services.AddMassTransit(x => {
 // Health Checks - Dynamically configured
 var healthChecksBuilder = builder.Services.AddHealthChecks();
 
-// PostgreSQL Health Check - Enhanced Configuration
+// PostgreSQL Health Check
 var postgresConnection = builder.Configuration.GetConnectionString("Postgres");
 if (!string.IsNullOrEmpty(postgresConnection))
 {
@@ -129,9 +150,10 @@ if (!string.IsNullOrEmpty(postgresConnection))
         timeout: dbHealthCheckTimeout);
 }
 
-// Redis Health Check
+// Redis Health Check - Only if enabled
 var redisConnection = builder.Configuration["Redis:Configuration"];
-if (!string.IsNullOrEmpty(redisConnection))
+var redisHealthEnabled = redisConfig.GetValue<bool>("Enabled", true);
+if (redisHealthEnabled && !string.IsNullOrEmpty(redisConnection))
 {
     healthChecksBuilder.AddRedis(redisConnection, name: "redis");
 }
@@ -221,6 +243,10 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// User and Company Sync Services
+builder.Services.AddScoped<IUserSyncService, UserSyncService>();
+builder.Services.AddScoped<ICompanySyncService, CompanySyncService>();
+
 // Correlation and Logging Services
 builder.Services.AddCorrelationServices();
 
@@ -273,6 +299,9 @@ builder.Services.AddScoped<IDocumentUploadService, DocumentUploadService>();
 builder.Services.AddScoped<IChunkedUploadService, ChunkedUploadService>();
 builder.Services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
 
+// ✅ QUICK WINS - R2R Compliance Service
+builder.Services.AddScoped<IR2RComplianceService, R2RComplianceService>();
+
 // Upload support services (placeholder implementations)
 builder.Services.AddScoped<IUploadProgressService, UploadProgressService>();
 builder.Services.AddScoped<IUploadValidationService, UploadValidationService>();
@@ -282,8 +311,9 @@ builder.Services.AddScoped<IUploadMetricsService, UploadMetricsService>();
 // Document Management Services
 builder.Services.AddScoped<IUserDocumentService, UserDocumentService>();
 
-// Background Workers - Temporarily disabled for testing
-// builder.Services.AddHostedService<IngestionWorker>();
+// Background Workers - R2R Document Processing
+// builder.Services.AddHostedService<IngestionWorker>(); // Old MassTransit worker - disabled
+builder.Services.AddHostedService<R2RDocumentProcessingWorker>(); // ✅ Re-enabled with Redis working
 
 // CORS - Enhanced configuration
 var corsSection = builder.Configuration.GetSection("Cors");

@@ -35,8 +35,16 @@ public class UserCollectionDto
     public bool IsShared { get; set; }
     
     public bool IsFavorite { get; set; }
-    
+
+    public Guid UserId { get; set; } // Owner of the collection
+
+    // R2R Compatibility fields
     public string? R2RCollectionId { get; set; }
+    public string? GraphClusterStatus { get; set; }
+    public string? GraphSyncStatus { get; set; }
+    public DateTime? LastSyncedAt { get; set; }
+    public Guid OwnerId => UserId; // R2R compatible field
+    public List<Guid> UserIds => new() { UserId }; // R2R compatible field
     
     public string CreatedBy { get; set; } = string.Empty;
     
@@ -203,6 +211,36 @@ public class R2RCollectionSyncDto
     public DateTime ScheduledAt { get; set; } = DateTime.UtcNow;
     public int RetryCount { get; set; } = 0;
     public string? ErrorMessage { get; set; }
+}
+
+/// <summary>
+/// DTO for detailed collection sync status
+/// </summary>
+public class CollectionSyncStatusDto
+{
+    public Guid CollectionId { get; set; }
+    public string? R2RCollectionId { get; set; }
+    public SyncStatus Status { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public DateTime? LastSyncedAt { get; set; }
+    public int LocalDocumentCount { get; set; }
+    public int R2RDocumentCount { get; set; }
+    public List<string> SyncErrors { get; set; } = new();
+    public Dictionary<string, object> Metadata { get; set; } = new();
+}
+
+/// <summary>
+/// Enumeration for sync status
+/// </summary>
+public enum SyncStatus
+{
+    NotFound = 0,
+    NotSynced = 1,
+    Synced = 2,
+    Syncing = 3,
+    Error = 4,
+    R2RNotFound = 5,
+    Conflict = 6
 }
 
 /// <summary>

@@ -2,16 +2,18 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Data.Entities;
+using Hybrid.CleverDocs2.WebServices.Models.Auth;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Auth
 {
     public class JwtService : IJwtService
     {
         private readonly IConfiguration _configuration;
-        private readonly IDistributedCache _cache;
+        private readonly ApplicationDbContext _context;
         private readonly ILogger<JwtService> _logger;
         private readonly string _secretKey;
         private readonly string _issuer;
@@ -21,11 +23,11 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
 
         public JwtService(
             IConfiguration configuration,
-            IDistributedCache cache,
+            ApplicationDbContext context,
             ILogger<JwtService> logger)
         {
             _configuration = configuration;
-            _cache = cache;
+            _context = context;
             _logger = logger;
 
             var jwtSection = _configuration.GetSection("Jwt");
@@ -124,9 +126,10 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
         {
             try
             {
-                var key = $"blacklist:token:{GetTokenHash(token)}";
-                var result = await _cache.GetStringAsync(key);
-                return !string.IsNullOrEmpty(result);
+                var tokenHash = GetTokenHash(token);
+                var blacklistedToken = await _context.TokenBlacklists
+                    .FirstOrDefaultAsync(t => t.TokenHash == tokenHash && t.ExpiresAt > DateTime.UtcNow);
+                return blacklistedToken != null;
             }
             catch (Exception ex)
             {
@@ -139,12 +142,12 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
         {
             try
             {
-                var key = $"blacklist:token:{GetTokenHash(token)}";
-                var options = new DistributedCacheEntryOptions();
-                
+                var tokenHash = GetTokenHash(token);
+                var expiresAt = DateTime.UtcNow.AddDays(1); // Default 1 day
+
                 if (expiry.HasValue)
                 {
-                    options.SetAbsoluteExpiration(expiry.Value);
+                    expiresAt = DateTime.UtcNow.Add(expiry.Value);
                 }
                 else
                 {
@@ -155,13 +158,24 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
                         var jwtToken = tokenHandler.ReadJwtToken(token);
                         if (jwtToken.ValidTo > DateTime.UtcNow)
                         {
-                            options.SetAbsoluteExpiration(jwtToken.ValidTo);
+                            expiresAt = jwtToken.ValidTo;
                         }
                     }
                 }
 
-                await _cache.SetStringAsync(key, "blacklisted", options);
-                _logger.LogDebug("Token blacklisted with key {Key}", key);
+                var blacklistEntry = new TokenBlacklist
+                {
+                    Id = Guid.NewGuid(),
+                    TokenHash = tokenHash,
+                    ExpiresAt = expiresAt,
+                    CreatedAt = DateTime.UtcNow,
+                    Reason = "Manual blacklist"
+                };
+
+                _context.TokenBlacklists.Add(blacklistEntry);
+                await _context.SaveChangesAsync();
+
+                _logger.LogDebug("Token blacklisted with hash {TokenHash}", tokenHash);
             }
             catch (Exception ex)
             {
@@ -173,8 +187,12 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
         {
             try
             {
-                var key = $"refresh:token:{userId}";
-                return await _cache.GetStringAsync(key);
+                var refreshToken = await _context.RefreshTokens
+                    .Where(rt => rt.UserId == userId && rt.IsActive)
+                    .OrderByDescending(rt => rt.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+                return refreshToken?.Token;
             }
             catch (Exception ex)
             {
@@ -187,13 +205,30 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
         {
             try
             {
-                var key = $"refresh:token:{userId}";
-                var options = new DistributedCacheEntryOptions
+                // Revoke existing refresh tokens for this user
+                var existingTokens = await _context.RefreshTokens
+                    .Where(rt => rt.UserId == userId && rt.IsActive)
+                    .ToListAsync();
+
+                foreach (var token in existingTokens)
                 {
-                    AbsoluteExpirationRelativeToNow = expiry
+                    token.RevokedAt = DateTime.UtcNow;
+                    token.RevokedReason = "New token issued";
+                }
+
+                // Create new refresh token
+                var newRefreshToken = new RefreshToken
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Token = refreshToken,
+                    ExpiresAt = DateTime.UtcNow.Add(expiry),
+                    CreatedAt = DateTime.UtcNow
                 };
 
-                await _cache.SetStringAsync(key, refreshToken, options);
+                _context.RefreshTokens.Add(newRefreshToken);
+                await _context.SaveChangesAsync();
+
                 _logger.LogDebug("Refresh token saved for user {UserId} with expiry {Expiry}", userId, expiry);
             }
             catch (Exception ex)
@@ -206,8 +241,17 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
         {
             try
             {
-                var key = $"refresh:token:{userId}";
-                await _cache.RemoveAsync(key);
+                var activeTokens = await _context.RefreshTokens
+                    .Where(rt => rt.UserId == userId && rt.IsActive)
+                    .ToListAsync();
+
+                foreach (var token in activeTokens)
+                {
+                    token.RevokedAt = DateTime.UtcNow;
+                    token.RevokedReason = "Manual revocation";
+                }
+
+                await _context.SaveChangesAsync();
                 _logger.LogDebug("Refresh token revoked for user {UserId}", userId);
             }
             catch (Exception ex)
@@ -220,17 +264,23 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
         {
             try
             {
-                // Revoke refresh token
+                // Revoke all refresh tokens
                 await RevokeRefreshTokenAsync(userId);
 
-                // Add user to global blacklist (all tokens issued before this time are invalid)
-                var key = $"user:blacklist:{userId}";
-                var options = new DistributedCacheEntryOptions
+                // Add a global blacklist entry for this user (all tokens issued before this time are invalid)
+                var blacklistEntry = new TokenBlacklist
                 {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(_refreshTokenExpirationDays)
+                    Id = Guid.NewGuid(),
+                    TokenHash = $"user_global_{userId}_{DateTime.UtcNow:yyyyMMddHHmmss}",
+                    ExpiresAt = DateTime.UtcNow.AddDays(_refreshTokenExpirationDays),
+                    CreatedAt = DateTime.UtcNow,
+                    UserId = userId,
+                    Reason = "All tokens revoked"
                 };
 
-                await _cache.SetStringAsync(key, DateTime.UtcNow.ToString("O"), options);
+                _context.TokenBlacklists.Add(blacklistEntry);
+                await _context.SaveChangesAsync();
+
                 _logger.LogDebug("All tokens revoked for user {UserId}", userId);
             }
             catch (Exception ex)

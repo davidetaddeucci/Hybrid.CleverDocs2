@@ -168,6 +168,11 @@ public interface IDocumentProcessingService
     /// Optimizes processing queue based on R2R rate limits
     /// </summary>
     Task OptimizeProcessingQueueAsync();
+
+    /// <summary>
+    /// Checks R2R status for a document in Processing state and updates if completed
+    /// </summary>
+    Task<bool> CheckR2RStatusAndUpdateAsync(R2RProcessingQueueItemDto queueItem);
 }
 
 /// <summary>

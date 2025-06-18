@@ -66,8 +66,9 @@ public class UserDocumentService : IUserDocumentService
             // Build cache key
             var cacheKey = $"documents:search:{GenerateQueryHash(query)}";
             
-            // Try cache first
-            var cachedResult = await _cacheService.GetAsync<PagedDocumentResultDto>(cacheKey);
+            // Try cache first with ForSearch options (DISABLED for debugging)
+            var searchCacheOptions = CacheOptions.ForSearch();
+            var cachedResult = await _cacheService.GetAsync<PagedDocumentResultDto>(cacheKey, searchCacheOptions);
             if (cachedResult != null)
             {
                 _logger.LogDebug("Returning cached search results, CorrelationId: {CorrelationId}", correlationId);
@@ -215,13 +216,9 @@ public class UserDocumentService : IUserDocumentService
                 Aggregations = await BuildAggregations(documentsQuery, cancellationToken)
             };
 
-            // Cache result
-            await _cacheService.SetAsync(cacheKey, result, new CacheOptions
-            {
-                L1TTL = TimeSpan.FromMinutes(5),
-                L2TTL = TimeSpan.FromMinutes(15),
-                UseL3Cache = true
-            });
+            // Cache result with ForSearch options (DISABLED for debugging)
+            var cacheOptions = CacheOptions.ForSearch();
+            await _cacheService.SetAsync(cacheKey, result, cacheOptions);
 
             _logger.LogInformation("Document search completed: {TotalCount} results, CorrelationId: {CorrelationId}", 
                 totalCount, correlationId);
@@ -300,11 +297,7 @@ public class UserDocumentService : IUserDocumentService
                     document.CollectionName = collection;
                 }
 
-                await _cacheService.SetAsync(cacheKey, document, new CacheOptions
-                {
-                    L1TTL = TimeSpan.FromMinutes(10),
-                    L2TTL = TimeSpan.FromMinutes(30)
-                });
+                await _cacheService.SetAsync(cacheKey, document, CacheOptions.ForDocumentMetadata());
             }
 
             return document;
@@ -614,8 +607,9 @@ public class UserDocumentService : IUserDocumentService
             await _hubContext.BroadcastDocumentDeletionProgress(userIdString, documentId.ToString(),
                 "invalidating_cache", "Invalidazione cache...");
 
-            // Invalidate document search cache (CRITICAL for frontend refresh)
-            await _cacheService.InvalidateAsync($"cleverdocs2:type:pageddocumentresultdto:documents:search:*");
+            // CRITICAL: Fix cache invalidation patterns to match actual cache keys
+            // Actual cache keys: cleverdocs2:type:pageddocumentresultdto:documents:search:hash
+            await _cacheService.InvalidateAsync($"cleverdocs2:type:pageddocumentresultdto:documents:search:*", tenantId: null);
 
             // Invalidate document-specific caches
             await _cacheService.InvalidateAsync($"*document*{documentId}*");
@@ -626,6 +620,10 @@ public class UserDocumentService : IUserDocumentService
                 // Also invalidate collection details cache to update document count
                 await _cacheService.InvalidateAsync($"collection:details:{document.CollectionId}");
             }
+
+            // CRITICAL: Add delay to ensure cache invalidation propagates before frontend requests
+            // This prevents race condition where frontend requests cached data before invalidation completes
+            await Task.Delay(150); // 150ms delay to ensure cache invalidation completes
 
             // Step 6: Determine overall success and notify completion
             var overallSuccess = r2rCollectionRemovalSuccess && r2rDatasetRemovalSuccess;

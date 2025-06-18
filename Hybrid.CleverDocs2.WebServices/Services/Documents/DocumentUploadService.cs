@@ -119,12 +119,8 @@ public class DocumentUploadService : IDocumentUploadService
             session.Statistics.PendingUploads = session.Files.Count;
             session.Statistics.StartTime = DateTime.UtcNow;
 
-            // Store session
+            // Store session in memory only (Redis removed for performance)
             _activeSessions[session.SessionId] = session;
-
-            // Cache session for quick access
-            await _cacheService.SetAsync($"upload:session:{session.SessionId}", session, 
-                new CacheOptions { L1TTL = TimeSpan.FromHours(1), L2TTL = TimeSpan.FromHours(6) });
 
             // Initialize progress tracking
             await _progressService.UpdateProgressAsync(new UploadProgressDto
@@ -135,7 +131,7 @@ public class DocumentUploadService : IDocumentUploadService
                 Message = "Upload session initialized"
             });
 
-            _logger.LogInformation("Upload session {SessionId} initialized successfully, CorrelationId: {CorrelationId}", 
+            _logger.LogInformation("Upload session {SessionId} initialized successfully (memory-only, Redis optimized), CorrelationId: {CorrelationId}",
                 session.SessionId, correlationId);
 
             return session;
@@ -312,7 +308,7 @@ public class DocumentUploadService : IDocumentUploadService
             session.Statistics.SuccessfulUploads = results.Count(r => r.Success);
             session.Statistics.FailedUploads = results.Count(r => !r.Success);
 
-            await UpdateSessionInCache(session);
+            UpdateSessionInMemory(session);
 
             _logger.LogInformation("Batch upload completed: {SuccessCount}/{TotalCount} files successful for session {SessionId}, CorrelationId: {CorrelationId}", 
                 response.Files.Count(f => f.Status == FileUploadStatusDto.Completed), request.Files.Count, session.SessionId, correlationId);
@@ -517,7 +513,7 @@ public class DocumentUploadService : IDocumentUploadService
             file.Status = FileUploadStatusDto.Cancelled;
         }
 
-        await UpdateSessionInCache(session);
+        UpdateSessionInMemory(session);
         await _storageService.CleanupSessionFilesAsync(sessionId);
 
         return true;
@@ -540,7 +536,7 @@ public class DocumentUploadService : IDocumentUploadService
             file.ErrorMessage = null;
         }
 
-        await UpdateSessionInCache(session);
+        UpdateSessionInMemory(session);
 
         return new UploadResponseDto
         {
@@ -576,7 +572,7 @@ public class DocumentUploadService : IDocumentUploadService
         {
             _activeSessions.TryRemove(session.SessionId, out _);
             await _storageService.CleanupSessionFilesAsync(session.SessionId);
-            await _cacheService.InvalidateAsync($"upload:session:{session.SessionId}");
+            // Cache invalidation removed - using memory-only storage
         }
     }
 
@@ -708,11 +704,10 @@ public class DocumentUploadService : IDocumentUploadService
         }
     }
 
-    private async Task UpdateSessionInCache(DocumentUploadSessionDto session)
+    private void UpdateSessionInMemory(DocumentUploadSessionDto session)
     {
+        // Store only in memory for better performance (Redis removed)
         _activeSessions[session.SessionId] = session;
-        await _cacheService.SetAsync($"upload:session:{session.SessionId}", session,
-            new CacheOptions { L1TTL = TimeSpan.FromHours(1), L2TTL = TimeSpan.FromHours(6) });
     }
 
     private async Task SaveDocumentToDatabaseImmediatelyAsync(R2RProcessingQueueItemDto queueItem)
@@ -744,8 +739,7 @@ public class DocumentUploadService : IDocumentUploadService
                 Name = queueItem.FileName,
                 FileName = queueItem.FileName,
                 OriginalFileName = queueItem.FileName,
-                SizeBytes = queueItem.FileSize,
-                Size = queueItem.FileSize,
+                SizeInBytes = queueItem.FileSize,
                 ContentType = queueItem.ContentType,
                 Status = (int)Data.Entities.DocumentStatus.Processing, // Processing status
                 R2RDocumentId = null, // Will be set when R2R completes
@@ -764,15 +758,16 @@ public class DocumentUploadService : IDocumentUploadService
             context.Documents.Add(document);
             await context.SaveChangesAsync();
 
-            // Invalidate cache so frontend sees the new document immediately
-            await _cacheService.InvalidateAsync($"*type:pageddocumentresultdto:documents:search:*");
-            await _cacheService.InvalidateAsync($"*user:documents:{queueItem.UserId}*");
+            // CRITICAL: Invalidate cache using ONLY tag-based invalidation so frontend sees the new document immediately
+            var tags = new List<string> { "documents", "document-lists", $"user:{queueItem.UserId}" };
             if (queueItem.CollectionId.HasValue)
             {
-                await _cacheService.InvalidateAsync($"*collection:documents:{queueItem.CollectionId}*");
-                // Also invalidate collection details cache to update document count
-                await _cacheService.InvalidateAsync($"*collection:details:{queueItem.CollectionId}*");
+                tags.Add($"collection:{queueItem.CollectionId}");
             }
+            // CRITICAL FIX: Pass tenantId to ensure tag transformation matches SET operation
+            // Use CompanyId as TenantId (they are the same in our multi-tenant architecture)
+            var tenantId = queueItem.CompanyId?.ToString();
+            await _cacheService.InvalidateByTagsAsync(tags, tenantId);
 
             _logger.LogInformation("Document {DocumentId} saved to database immediately with Processing status and cache invalidated, CorrelationId: {CorrelationId}",
                 queueItem.DocumentId, correlationId);

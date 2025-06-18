@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 using Hybrid.CleverDocs2.WebServices.Models.Documents;
+using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Documents;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 
@@ -367,7 +368,7 @@ public class DocumentUploadHub : Hub
 }
 
 /// <summary>
-/// Extension methods for DocumentUploadHub
+/// Extension methods for DocumentUploadHub with cache invalidation
 /// </summary>
 public static class DocumentUploadHubExtensions
 {
@@ -415,13 +416,21 @@ public static class DocumentUploadHubExtensions
     }
 
     /// <summary>
-    /// Broadcasts R2R processing update
+    /// Broadcasts R2R processing update with cache invalidation
     /// </summary>
-    public static async Task BroadcastR2RProcessingUpdate(this IHubContext<DocumentUploadHub> hubContext, 
-        string userId, R2RProcessingQueueItemDto queueItem)
+    public static async Task BroadcastR2RProcessingUpdate(this IHubContext<DocumentUploadHub> hubContext,
+        string userId, R2RProcessingQueueItemDto queueItem, IMultiLevelCacheService? cacheService = null)
     {
         await hubContext.Clients.Group($"user_{userId}")
             .SendAsync("R2RProcessingUpdate", queueItem);
+
+        // Cache invalidation optimized - only for expensive data
+        if (cacheService != null && queueItem.CollectionId.HasValue)
+        {
+            // Only invalidate collection metadata (expensive data)
+            var tags = new List<string> { $"collection:{queueItem.CollectionId.Value}" };
+            await cacheService.InvalidateByTagsAsync(tags);
+        }
     }
 
     /// <summary>
@@ -445,13 +454,26 @@ public static class DocumentUploadHubExtensions
     }
 
     /// <summary>
-    /// Broadcasts document deletion completed
+    /// Broadcasts document deletion completed with cache invalidation
     /// </summary>
     public static async Task BroadcastDocumentDeletionCompleted(this IHubContext<DocumentUploadHub> hubContext,
-        string userId, string documentId, bool success, string? message = null)
+        string userId, string documentId, bool success, string? message = null,
+        string? collectionId = null, IMultiLevelCacheService? cacheService = null)
     {
         await hubContext.Clients.Group($"user_{userId}")
             .SendAsync("DocumentDeletionCompleted", new { documentId, success, message, timestamp = DateTime.UtcNow });
+
+        // Invalidate document caches when deletion is completed successfully
+        if (success && cacheService != null)
+        {
+            var tags = new List<string> { "documents", "document-lists", $"user:{userId}" };
+            if (!string.IsNullOrEmpty(collectionId))
+            {
+                tags.Add($"collection:{collectionId}");
+            }
+
+            await cacheService.InvalidateByTagsAsync(tags);
+        }
     }
 
     /// <summary>

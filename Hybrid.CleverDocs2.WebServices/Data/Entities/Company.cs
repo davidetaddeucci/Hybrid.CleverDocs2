@@ -7,6 +7,13 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         [Key]
         public Guid Id { get; set; } = Guid.NewGuid();
 
+        /// <summary>
+        /// TenantId for multi-tenant architecture. Each company is a separate tenant.
+        /// This should match the Company.Id for consistency.
+        /// </summary>
+        [Required]
+        public Guid TenantId { get; set; }
+
         [Required]
         [MaxLength(255)]
         public string Name { get; set; } = string.Empty;
@@ -37,6 +44,12 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         // R2R Configuration
         public string? R2RApiKey { get; set; }
         public string? R2RConfiguration { get; set; }
+
+        /// <summary>
+        /// R2R Tenant ID for direct reference to R2R tenant entity
+        /// </summary>
+        [MaxLength(255)]
+        public string? R2RTenantId { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

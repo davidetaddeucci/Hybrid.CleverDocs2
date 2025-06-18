@@ -14,8 +14,8 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Cache;
 public class L2RedisCache : IL2RedisCache, IDisposable
 {
     private readonly IDistributedCache _distributedCache;
-    private readonly IConnectionMultiplexer _connectionMultiplexer;
-    private readonly IDatabase _database;
+    private readonly IConnectionMultiplexer? _connectionMultiplexer;
+    private readonly IDatabase? _database;
     private readonly ILogger<L2RedisCache> _logger;
     private readonly L2CacheOptions _options;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -34,7 +34,7 @@ public class L2RedisCache : IL2RedisCache, IDisposable
     {
         _distributedCache = distributedCache;
         _connectionMultiplexer = connectionMultiplexer;
-        _database = _connectionMultiplexer.GetDatabase();
+        _database = _connectionMultiplexer?.GetDatabase();
         _logger = logger;
         _options = options.Value;
         
@@ -45,6 +45,8 @@ public class L2RedisCache : IL2RedisCache, IDisposable
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         };
     }
+
+    private bool IsRedisAvailable => _database != null && _connectionMultiplexer?.IsConnected == true;
 
     public async Task<T?> GetAsync<T>(string key) where T : class
     {
@@ -85,23 +87,46 @@ public class L2RedisCache : IL2RedisCache, IDisposable
 
     public async Task SetAsync<T>(string key, T value, TimeSpan expiration) where T : class
     {
+        await SetAsync(key, value, expiration, Enumerable.Empty<string>());
+    }
+
+    public async Task SetAsync<T>(string key, T value, TimeSpan expiration, IEnumerable<string> tags) where T : class
+    {
         var stopwatch = Stopwatch.StartNew();
-        
+
         try
         {
             var serializedValue = await SerializeAsync(value);
-            
+
             var options = new DistributedCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = expiration
             };
 
             await _distributedCache.SetStringAsync(key, serializedValue, options);
-            
+
+            // Handle tags using Redis sets (only if Redis is available)
+            var tagList = tags.ToList();
+            if (tagList.Any() && IsRedisAvailable)
+            {
+                var batch = _database!.CreateBatch();
+                var tagTasks = new List<Task>();
+
+                foreach (var tag in tagList)
+                {
+                    var tagKey = $"tag:{tag}";
+                    tagTasks.Add(batch.SetAddAsync(tagKey, key));
+                    tagTasks.Add(batch.KeyExpireAsync(tagKey, expiration.Add(TimeSpan.FromMinutes(5)))); // Tag expires slightly after data
+                }
+
+                batch.Execute();
+                await Task.WhenAll(tagTasks);
+            }
+
             RecordNetworkOperation(stopwatch.ElapsedTicks);
-            
-            _logger.LogDebug("L2 Cache SET: {Key} (Type: {Type}, Size: {Size} bytes, Expiration: {Expiration})", 
-                key, typeof(T).Name, serializedValue.Length, expiration);
+
+            _logger.LogDebug("L2 Cache SET: {Key} (Type: {Type}, Size: {Size} bytes, Expiration: {Expiration}, Tags: {Tags})",
+                key, typeof(T).Name, serializedValue.Length, expiration, string.Join(", ", tagList));
         }
         catch (Exception ex)
         {
@@ -128,17 +153,35 @@ public class L2RedisCache : IL2RedisCache, IDisposable
 
     public async Task InvalidatePatternAsync(string pattern)
     {
+        if (!IsRedisAvailable)
+        {
+            _logger.LogWarning("L2 Cache PATTERN INVALIDATION skipped - Redis not available: {Pattern}", pattern);
+            return;
+        }
+
         try
         {
-            var server = _connectionMultiplexer.GetServer(_connectionMultiplexer.GetEndPoints().First());
-            var keys = server.Keys(pattern: pattern, pageSize: _options.ScanPageSize);
-            
+            var server = _connectionMultiplexer!.GetServer(_connectionMultiplexer.GetEndPoints().First());
+
+            // Convert pattern to Redis glob format if needed
+            // Redis KEYS command expects glob patterns (*, ?, [abc])
+            // Our patterns already use * for wildcards, so they should work as-is
+            var redisPattern = pattern;
+
+            _logger.LogDebug("L2 Cache PATTERN INVALIDATION starting: {Pattern}", redisPattern);
+
+            var keys = server.Keys(pattern: redisPattern, pageSize: _options.ScanPageSize);
+
             var keyArray = keys.ToArray();
             if (keyArray.Length > 0)
             {
-                await _database.KeyDeleteAsync(keyArray);
-                _logger.LogInformation("L2 Cache PATTERN INVALIDATION: {Pattern} ({Count} keys removed)", 
+                await _database!.KeyDeleteAsync(keyArray);
+                _logger.LogInformation("L2 Cache PATTERN INVALIDATION: {Pattern} ({Count} keys removed)",
                     pattern, keyArray.Length);
+            }
+            else
+            {
+                _logger.LogInformation("L2 Cache PATTERN INVALIDATION: {Pattern} (0 keys removed)", pattern);
             }
         }
         catch (Exception ex)
@@ -147,18 +190,71 @@ public class L2RedisCache : IL2RedisCache, IDisposable
         }
     }
 
+    public async Task InvalidateByTagsAsync(IEnumerable<string> tags)
+    {
+        if (!IsRedisAvailable)
+        {
+            _logger.LogWarning("L2 Cache TAG INVALIDATION skipped - Redis not available: {Tags}", string.Join(", ", tags));
+            return;
+        }
+
+        try
+        {
+            var tagList = tags.ToList();
+            var allKeysToRemove = new HashSet<RedisKey>();
+
+            // Get all keys for each tag
+            foreach (var tag in tagList)
+            {
+                var tagKey = $"tag:{tag}";
+                var keys = await _database!.SetMembersAsync(tagKey);
+
+                foreach (var key in keys)
+                {
+                    allKeysToRemove.Add((RedisKey)key.ToString());
+                }
+
+                // Remove the tag set itself
+                await _database.KeyDeleteAsync(tagKey);
+            }
+
+            // Remove all the cached data keys
+            if (allKeysToRemove.Any())
+            {
+                await _database.KeyDeleteAsync(allKeysToRemove.ToArray());
+            }
+
+            _logger.LogInformation("L2 Cache TAG INVALIDATION: {Tags} ({Count} keys removed)",
+                string.Join(", ", tagList), allKeysToRemove.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error invalidating L2 cache by tags: {Tags}", string.Join(", ", tags));
+        }
+    }
+
     public async Task<Dictionary<string, T?>> GetManyAsync<T>(IEnumerable<string> keys) where T : class
     {
         var result = new Dictionary<string, T?>();
         var keyArray = keys.ToArray();
-        
+
         if (!keyArray.Any())
             return result;
+
+        if (!IsRedisAvailable)
+        {
+            // Fallback to individual gets using distributed cache
+            foreach (var key in keyArray)
+            {
+                result[key] = await GetAsync<T>(key);
+            }
+            return result;
+        }
 
         try
         {
             var redisKeys = keyArray.Select(k => (RedisKey)k).ToArray();
-            var values = await _database.StringGetAsync(redisKeys);
+            var values = await _database!.StringGetAsync(redisKeys);
             
             for (int i = 0; i < keyArray.Length; i++)
             {
@@ -206,24 +302,52 @@ public class L2RedisCache : IL2RedisCache, IDisposable
 
     public async Task SetManyAsync<T>(Dictionary<string, T> keyValuePairs, TimeSpan expiration) where T : class
     {
+        await SetManyAsync(keyValuePairs, expiration, Enumerable.Empty<string>());
+    }
+
+    public async Task SetManyAsync<T>(Dictionary<string, T> keyValuePairs, TimeSpan expiration, IEnumerable<string> tags) where T : class
+    {
         if (!keyValuePairs.Any())
             return;
 
+        if (!IsRedisAvailable)
+        {
+            // Fallback to individual sets using distributed cache
+            foreach (var kvp in keyValuePairs)
+            {
+                await SetAsync(kvp.Key, kvp.Value, expiration, tags);
+            }
+            return;
+        }
+
         try
         {
-            var batch = _database.CreateBatch();
+            var batch = _database!.CreateBatch();
             var tasks = new List<Task>();
+            var tagList = tags.ToList();
 
             foreach (var kvp in keyValuePairs)
             {
                 var serializedValue = await SerializeAsync(kvp.Value);
                 tasks.Add(batch.StringSetAsync(kvp.Key, serializedValue, expiration));
+
+                // Handle tags for each key
+                if (tagList.Any())
+                {
+                    foreach (var tag in tagList)
+                    {
+                        var tagKey = $"tag:{tag}";
+                        tasks.Add(batch.SetAddAsync(tagKey, kvp.Key));
+                        tasks.Add(batch.KeyExpireAsync(tagKey, expiration.Add(TimeSpan.FromMinutes(5))));
+                    }
+                }
             }
 
             batch.Execute();
             await Task.WhenAll(tasks);
-            
-            _logger.LogDebug("L2 Cache SET_MANY: {Count} keys set", keyValuePairs.Count);
+
+            _logger.LogDebug("L2 Cache SET_MANY: {Count} keys set with tags {Tags}",
+                keyValuePairs.Count, string.Join(", ", tagList));
         }
         catch (Exception ex)
         {
@@ -233,9 +357,16 @@ public class L2RedisCache : IL2RedisCache, IDisposable
 
     public async Task<bool> ExistsAsync(string key)
     {
+        if (!IsRedisAvailable)
+        {
+            // Fallback: try to get the value to check existence
+            var value = await GetAsync<object>(key);
+            return value != null;
+        }
+
         try
         {
-            return await _database.KeyExistsAsync(key);
+            return await _database!.KeyExistsAsync(key);
         }
         catch (Exception ex)
         {
@@ -246,43 +377,60 @@ public class L2RedisCache : IL2RedisCache, IDisposable
 
     public async Task<CacheLevel2Statistics> GetStatisticsAsync()
     {
+        long averageNetworkLatency;
+        long hitCount, missCount;
+
+        lock (_statsLock)
+        {
+            averageNetworkLatency = _networkOperationCount > 0
+                ? (long)(_totalNetworkTime / _networkOperationCount / TimeSpan.TicksPerMillisecond)
+                : 0;
+            hitCount = _hitCount;
+            missCount = _missCount;
+        }
+
+        if (!IsRedisAvailable)
+        {
+            return new CacheLevel2Statistics
+            {
+                HitCount = hitCount,
+                MissCount = missCount,
+                NetworkLatencyMs = averageNetworkLatency,
+                IsConnected = false,
+                DatabaseIndex = 0,
+                MemoryUsageBytes = 0,
+                KeyCount = 0
+            };
+        }
+
         try
         {
-            var info = await _database.ExecuteAsync("INFO", "memory");
+            var info = await _database!.ExecuteAsync("INFO", "memory");
             var keyspaceInfo = await _database.ExecuteAsync("INFO", "keyspace");
-            
-            lock (_statsLock)
-            {
-                var averageNetworkLatency = _networkOperationCount > 0 
-                    ? _totalNetworkTime / _networkOperationCount / TimeSpan.TicksPerMillisecond
-                    : 0;
 
-                return new CacheLevel2Statistics
-                {
-                    HitCount = _hitCount,
-                    MissCount = _missCount,
-                    NetworkLatencyMs = averageNetworkLatency,
-                    IsConnected = _connectionMultiplexer.IsConnected,
-                    DatabaseIndex = _database.Database,
-                    MemoryUsageBytes = ParseMemoryUsage(info.ToString()),
-                    KeyCount = ParseKeyCount(keyspaceInfo.ToString())
-                };
-            }
+            return new CacheLevel2Statistics
+            {
+                HitCount = hitCount,
+                MissCount = missCount,
+                NetworkLatencyMs = averageNetworkLatency,
+                IsConnected = _connectionMultiplexer!.IsConnected,
+                DatabaseIndex = _database.Database,
+                MemoryUsageBytes = ParseMemoryUsage(info.ToString()),
+                KeyCount = ParseKeyCount(keyspaceInfo.ToString())
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting L2 cache statistics");
-            
-            lock (_statsLock)
+
+            return new CacheLevel2Statistics
             {
-                return new CacheLevel2Statistics
-                {
-                    HitCount = _hitCount,
-                    MissCount = _missCount,
-                    IsConnected = _connectionMultiplexer.IsConnected,
-                    DatabaseIndex = _database.Database
-                };
-            }
+                HitCount = hitCount,
+                MissCount = missCount,
+                NetworkLatencyMs = averageNetworkLatency,
+                IsConnected = _connectionMultiplexer?.IsConnected ?? false,
+                DatabaseIndex = _database?.Database ?? 0
+            };
         }
     }
 
@@ -371,6 +519,8 @@ public class L2RedisCache : IL2RedisCache, IDisposable
 
     private int ParseKeyCount(string keyspaceInfo)
     {
+        if (_database == null) return 0;
+
         // Parse Redis INFO keyspace output
         var lines = keyspaceInfo.Split('\n');
         var dbLine = lines.FirstOrDefault(l => l.StartsWith($"db{_database.Database}:"));

@@ -145,7 +145,7 @@ public class UploadProgressDto
 }
 
 /// <summary>
-/// DTO for R2R processing queue item
+/// DTO for R2R processing queue item - Enhanced with Quick Wins
 /// </summary>
 public class R2RProcessingQueueItemDto
 {
@@ -161,6 +161,16 @@ public class R2RProcessingQueueItemDto
     public string ContentType { get; set; } = string.Empty;
     public R2RProcessingPriorityDto Priority { get; set; } = R2RProcessingPriorityDto.Normal;
     public R2RProcessingStatusDto Status { get; set; } = R2RProcessingStatusDto.Queued;
+
+    // ✅ QUICK WIN 1 - R2R Task ID tracking corretto
+    public string? TaskId { get; set; }           // R2R task ID per async tracking
+    public string? R2RDocumentId { get; set; }    // Popolato quando task completa
+
+    // ✅ QUICK WIN 2 - Enhanced metadata per R2R compliance
+    public string? Checksum { get; set; }         // MD5/SHA256 per integrità file
+    public string? OriginalFileName { get; set; } // Nome file originale senza timestamp
+    public DateTime UploadTimestamp { get; set; } = DateTime.UtcNow;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
@@ -169,7 +179,10 @@ public class R2RProcessingQueueItemDto
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(5);
     public DateTime? NextRetryAt { get; set; }
     public string? ErrorMessage { get; set; }
-    public string? R2RDocumentId { get; set; }
+
+    // ✅ QUICK WIN 3 - Error categorization
+    public ErrorCategory ErrorCategory { get; set; } = ErrorCategory.None;
+
     public Dictionary<string, object> Metadata { get; set; } = new();
     public UploadOptionsDto ProcessingOptions { get; set; } = new();
 }
@@ -332,6 +345,21 @@ public enum R2RProcessingStatusDto
     Failed = 3,
     Retrying = 4,
     Cancelled = 5
+}
+
+/// <summary>
+/// Error category enumeration for enhanced error handling
+/// </summary>
+public enum ErrorCategory
+{
+    None = 0,
+    Transient = 1,      // Temporary errors (network, timeout)
+    RateLimit = 2,      // Rate limiting errors
+    Validation = 3,     // Input validation errors
+    Authentication = 4, // Auth/permission errors
+    FileFormat = 5,     // Unsupported file format
+    FileSize = 6,       // File too large
+    Permanent = 7       // Permanent errors (corrupted file, etc.)
 }
 
 /// <summary>

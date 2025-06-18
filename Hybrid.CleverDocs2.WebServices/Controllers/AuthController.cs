@@ -5,7 +5,11 @@ using System.Security.Claims;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Data.Entities;
 using Hybrid.CleverDocs2.WebServices.Services.Auth;
+using Hybrid.CleverDocs2.WebServices.Services.Companies;
 using Hybrid.CleverDocs2.WebServices.Middleware;
+using Hybrid.CleverDocs2.WebServices.Models.Common;
+using Hybrid.CleverDocs2.WebServices.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Hybrid.CleverDocs2.WebServices.Controllers
 {
@@ -16,17 +20,23 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
         private readonly IAuthService _authService;
         private readonly IJwtService _jwtService;
         private readonly ApplicationDbContext _context;
+        private readonly ICompanySyncService _companySyncService;
+        private readonly IHubContext<CollectionHub> _hubContext;
         private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             IAuthService authService,
             IJwtService jwtService,
             ApplicationDbContext context,
+            ICompanySyncService companySyncService,
+            IHubContext<CollectionHub> hubContext,
             ILogger<AuthController> logger)
         {
             _authService = authService;
             _jwtService = jwtService;
             _context = context;
+            _companySyncService = companySyncService;
+            _hubContext = hubContext;
             _logger = logger;
         }
 
@@ -38,12 +48,11 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
             {
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest(new ApiResponseDto 
-                    { 
-                        Success = false, 
-                        Message = "Invalid request data",
-                        Errors = ModelState.Values.SelectMany(v => v.Errors.Select(e => e.ErrorMessage)).ToList()
-                    });
+                    return BadRequest(ApiResponse.ErrorResponse(
+                        "Invalid request data",
+                        ModelState.Values.SelectMany(v => v.Errors.Select(e => e.ErrorMessage)).ToList(),
+                        400
+                    ));
                 }
 
                 var result = await _authService.LoginAsync(request.Email, request.Password, 
@@ -67,7 +76,14 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                         CompanyName = result.User.Company?.Name,
                         IsEmailVerified = result.User.IsEmailVerified,
                         CreatedAt = result.User.CreatedAt,
-                        LastLoginAt = result.User.LastLoginAt
+                        LastLoginAt = result.User.LastLoginAt,
+                        // R2R Compatibility fields
+                        Name = result.User.Name,
+                        Bio = result.User.Bio,
+                        ProfilePicture = result.User.ProfilePicture,
+                        IsVerified = result.User.IsVerified,
+                        R2RUserId = result.User.R2RUserId,
+                        R2RTenantId = result.User.Company?.R2RTenantId
                     };
 
                     return Ok(new LoginResponseDto
@@ -80,11 +96,11 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                     });
                 }
 
-                return Unauthorized(new ApiResponseDto 
-                { 
-                    Success = false, 
-                    Message = result.ErrorMessage ?? "Login failed" 
-                });
+                return Unauthorized(ApiResponse.ErrorResponse(
+                    result.ErrorMessage ?? "Login failed",
+                    null,
+                    401
+                ));
             }
             catch (Exception ex)
             {
@@ -214,9 +230,11 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                 if (!string.IsNullOrEmpty(request.CompanyName))
                 {
                     // Create new company
+                    var companyGuid = Guid.NewGuid();
                     var company = new Company
                     {
-                        Id = Guid.NewGuid(),
+                        Id = companyGuid,
+                        TenantId = companyGuid, // TenantId = Company.Id for consistency
                         Name = request.CompanyName,
                         CreatedAt = DateTime.UtcNow,
                         IsActive = true
@@ -224,6 +242,35 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                     _context.Companies.Add(company);
                     await _context.SaveChangesAsync();
                     companyId = company.Id;
+
+                    // Create in R2R asynchronously
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var r2rTenantId = await _companySyncService.CreateR2RTenantAsync(company);
+                            if (!string.IsNullOrEmpty(r2rTenantId))
+                            {
+                                // Update database with R2R tenant ID
+                                company.R2RTenantId = r2rTenantId;
+                                await _context.SaveChangesAsync();
+
+                                _logger.LogInformation("R2R tenant ID {R2RTenantId} saved to database for company {CompanyId}",
+                                    r2rTenantId, company.Id);
+
+                                // Notify via SignalR
+                                await _hubContext.Clients.All.SendAsync("CompanyCreated", new {
+                                    CompanyId = company.Id,
+                                    R2RTenantId = r2rTenantId,
+                                    Name = company.Name
+                                });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to create R2R tenant for company {CompanyId}", company.Id);
+                        }
+                    });
                 }
                 else
                 {
@@ -231,15 +278,36 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                     var defaultCompany = await _context.Companies.FirstOrDefaultAsync(c => c.Name == "Default Company");
                     if (defaultCompany == null)
                     {
+                        var defaultCompanyGuid = Guid.NewGuid();
                         defaultCompany = new Company
                         {
-                            Id = Guid.NewGuid(),
+                            Id = defaultCompanyGuid,
+                            TenantId = defaultCompanyGuid, // TenantId = Company.Id for consistency
                             Name = "Default Company",
                             CreatedAt = DateTime.UtcNow,
                             IsActive = true
                         };
                         _context.Companies.Add(defaultCompany);
                         await _context.SaveChangesAsync();
+
+                        // Create in R2R asynchronously for default company too
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                var r2rTenantId = await _companySyncService.CreateR2RTenantAsync(defaultCompany);
+                                if (!string.IsNullOrEmpty(r2rTenantId))
+                                {
+                                    defaultCompany.R2RTenantId = r2rTenantId;
+                                    await _context.SaveChangesAsync();
+                                    _logger.LogInformation("R2R tenant ID {R2RTenantId} saved for default company", r2rTenantId);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Failed to create R2R tenant for default company");
+                            }
+                        });
                     }
                     companyId = defaultCompany.Id;
                 }
@@ -308,7 +376,14 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                     CompanyName = user.Company?.Name,
                     IsEmailVerified = user.IsEmailVerified,
                     CreatedAt = user.CreatedAt,
-                    LastLoginAt = user.LastLoginAt
+                    LastLoginAt = user.LastLoginAt,
+                    // R2R Compatibility fields
+                    Name = user.Name,
+                    Bio = user.Bio,
+                    ProfilePicture = user.ProfilePicture,
+                    IsVerified = user.IsVerified,
+                    R2RUserId = user.R2RUserId,
+                    R2RTenantId = user.Company?.R2RTenantId
                 };
 
                 return Ok(new ApiResponseDto<UserInfoDto> 
@@ -469,7 +544,17 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
         public DateTime CreatedAt { get; set; }
         public DateTime? LastLoginAt { get; set; }
 
-        public string FullName => $"{FirstName} {LastName}".Trim();
+        // R2R Compatibility fields
+        public string? Name { get; set; }
+        public string? Bio { get; set; }
+        public string? ProfilePicture { get; set; }
+        public bool IsVerified { get; set; }
+        public string? R2RUserId { get; set; }
+
+        // Company R2R fields
+        public string? R2RTenantId { get; set; }
+
+        public string FullName => Name ?? $"{FirstName} {LastName}".Trim();
         public bool IsAdmin => Role == "Admin";
         public bool IsCompanyUser => Role == "Company";
         public bool IsRegularUser => Role == "User";
@@ -503,4 +588,6 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
     public class ApiResponseDto : ApiResponseDto<object>
     {
     }
+
+
 }

@@ -75,17 +75,8 @@ public class ChunkedUploadService : IChunkedUploadService
                 });
             }
 
-            // Store chunk session
+            // Store chunk session in memory only (Redis removed for performance)
             _chunkSessions[chunkKey] = chunkInfo;
-
-            // Cache for persistence
-            await _cacheService.SetAsync($"chunk:session:{chunkKey}", chunkInfo, 
-                new CacheOptions 
-                { 
-                    L1TTL = TimeSpan.FromHours(1), 
-                    L2TTL = TimeSpan.FromHours(24),
-                    UseL3Cache = true 
-                });
 
             // Create chunk lock
             _chunkLocks[chunkKey] = new SemaphoreSlim(1, 1);
@@ -170,14 +161,8 @@ public class ChunkedUploadService : IChunkedUploadService
                 chunkSession.CompletedChunks++;
                 chunkSession.LastChunkTime = DateTime.UtcNow;
 
-                // Update cache
-                await _cacheService.SetAsync($"chunk:session:{chunkKey}", chunkSession, 
-                    new CacheOptions 
-                    { 
-                        L1TTL = TimeSpan.FromHours(1), 
-                        L2TTL = TimeSpan.FromHours(24),
-                        UseL3Cache = true 
-                    });
+                // Update in-memory session (Redis removed for performance)
+                _chunkSessions[chunkKey] = chunkSession;
 
                 _logger.LogDebug("Chunk {ChunkNumber} uploaded successfully for session {SessionId}, progress: {CompletedChunks}/{TotalChunks}, CorrelationId: {CorrelationId}", 
                     chunkNumber, sessionId, chunkSession.CompletedChunks, chunkSession.TotalChunks, correlationId);

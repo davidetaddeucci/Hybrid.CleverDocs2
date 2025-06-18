@@ -132,9 +132,11 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                 return existingCompany;
             }
 
+            var companyId = Guid.NewGuid();
             var company = new Company
             {
-                Id = Guid.NewGuid(),
+                Id = companyId,
+                TenantId = companyId, // TenantId = Company.Id for consistency
                 Name = name,
                 ContactEmail = contactEmail,
                 ContactPhone = contactPhone,
@@ -172,7 +174,7 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                 email, password, firstName, lastName, companyId, role, "SeedData");
 
             // Mark email as verified for test users
-            user.IsEmailVerified = true;
+            user.IsVerified = true;
             user.EmailVerificationToken = null;
             user.EmailVerificationTokenExpiry = null;
             user.UpdatedAt = DateTime.UtcNow;
@@ -206,6 +208,41 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
             }
 
             return Ok(results);
+        }
+
+        [HttpPost("update-tenant-ids")]
+        public async Task<IActionResult> UpdateTenantIds()
+        {
+            try
+            {
+                var companies = await _context.Companies.ToListAsync();
+                var updated = 0;
+
+                foreach (var company in companies)
+                {
+                    if (company.TenantId == Guid.Empty)
+                    {
+                        company.TenantId = company.Id;
+                        updated++;
+                    }
+                }
+
+                if (updated > 0)
+                {
+                    await _context.SaveChangesAsync();
+                }
+
+                return Ok(new {
+                    Message = $"Updated {updated} companies with TenantId",
+                    TotalCompanies = companies.Count,
+                    UpdatedCompanies = updated
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating TenantIds");
+                return StatusCode(500, new { Error = ex.Message });
+            }
         }
     }
 }

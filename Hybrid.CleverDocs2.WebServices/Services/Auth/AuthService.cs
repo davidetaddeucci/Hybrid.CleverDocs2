@@ -4,6 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Data.Entities;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.Auth;
+using Hybrid.CleverDocs2.WebServices.Services.Users;
+using Hybrid.CleverDocs2.WebServices.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Auth
 {
@@ -13,18 +16,24 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
         private readonly IJwtService _jwtService;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthService> _logger;
+        private readonly IUserSyncService _userSyncService;
+        private readonly IHubContext<CollectionHub> _hubContext;
         private readonly int _refreshTokenExpirationDays;
 
         public AuthService(
             ApplicationDbContext context,
             IJwtService jwtService,
             IConfiguration configuration,
-            ILogger<AuthService> logger)
+            ILogger<AuthService> logger,
+            IUserSyncService userSyncService,
+            IHubContext<CollectionHub> hubContext)
         {
             _context = context;
             _jwtService = jwtService;
             _configuration = configuration;
             _logger = logger;
+            _userSyncService = userSyncService;
+            _hubContext = hubContext;
             _refreshTokenExpirationDays = _configuration.GetSection("Jwt").GetValue<int>("RefreshTokenExpirationDays");
         }
 
@@ -145,10 +154,11 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
                     PasswordHash = passwordHash,
                     FirstName = firstName,
                     LastName = lastName,
+                    Name = $"{firstName} {lastName}".Trim(), // R2R compatibility
                     CompanyId = companyId,
                     Role = role,
                     IsActive = true,
-                    IsEmailVerified = false,
+                    IsVerified = false,
                     EmailVerificationToken = emailVerificationToken,
                     EmailVerificationTokenExpiry = DateTime.UtcNow.AddDays(7),
                     CreatedBy = createdBy
@@ -157,8 +167,120 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
 
+                // Create in R2R asynchronously
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var r2rUserId = await _userSyncService.CreateR2RUserAsync(user);
+                        if (!string.IsNullOrEmpty(r2rUserId))
+                        {
+                            // Update database with R2R user ID
+                            user.R2RUserId = r2rUserId;
+                            await _context.SaveChangesAsync();
+
+                            _logger.LogInformation("R2R user ID {R2RUserId} saved to database for user {UserId}",
+                                r2rUserId, user.Id);
+
+                            // Notify via SignalR
+                            await _hubContext.Clients.All.SendAsync("UserCreated", new {
+                                UserId = user.Id,
+                                R2RUserId = r2rUserId,
+                                Email = user.Email,
+                                Name = user.Name
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to create R2R user for {UserId}", user.Id);
+                    }
+                });
+
                 // Log user creation
-                await LogAuditAsync(companyId, null, "Create", "User", user.Id, 
+                await LogAuditAsync(companyId, null, "Create", "User", user.Id,
+                    null, $"User registered: {email}", null, null, createdBy);
+
+                _logger.LogInformation("User registered successfully: {UserId} - {Email}", user.Id, email);
+                return user;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error registering user: {Email}", email);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Register user with R2R compatibility fields
+        /// </summary>
+        public async Task<User> RegisterUserAsync(string email, string password, string firstName, string lastName,
+            Guid companyId, UserRole role = UserRole.User, string? name = null, string? bio = null,
+            string? profilePicture = null, string? createdBy = null)
+        {
+            try
+            {
+                if (!await IsEmailAvailableAsync(email))
+                {
+                    throw new InvalidOperationException("Email is already in use");
+                }
+
+                var passwordHash = await HashPasswordAsync(password);
+                var emailVerificationToken = GenerateSecureToken();
+
+                var user = new User
+                {
+                    Email = email.ToLowerInvariant(),
+                    PasswordHash = passwordHash,
+                    FirstName = firstName,
+                    LastName = lastName,
+                    Name = name ?? $"{firstName} {lastName}".Trim(), // R2R compatibility
+                    Bio = bio, // R2R compatibility
+                    ProfilePicture = profilePicture, // R2R compatibility
+                    CompanyId = companyId,
+                    Role = role,
+                    IsActive = true,
+                    IsVerified = false,
+                    EmailVerificationToken = emailVerificationToken,
+                    EmailVerificationTokenExpiry = DateTime.UtcNow.AddDays(7),
+                    CreatedBy = createdBy
+                };
+
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
+
+                // Create in R2R asynchronously
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var r2rUserId = await _userSyncService.CreateR2RUserAsync(user);
+                        if (!string.IsNullOrEmpty(r2rUserId))
+                        {
+                            // Update database with R2R user ID
+                            user.R2RUserId = r2rUserId;
+                            await _context.SaveChangesAsync();
+
+                            _logger.LogInformation("R2R user ID {R2RUserId} saved to database for user {UserId}",
+                                r2rUserId, user.Id);
+
+                            // Notify via SignalR
+                            await _hubContext.Clients.All.SendAsync("UserCreated", new {
+                                UserId = user.Id,
+                                R2RUserId = r2rUserId,
+                                Email = user.Email,
+                                Name = user.Name
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to create R2R user for {UserId}", user.Id);
+                    }
+                });
+
+                // Log user creation
+                await LogAuditAsync(companyId, null, "Create", "User", user.Id,
                     null, $"User registered: {email}", null, null, createdBy);
 
                 _logger.LogInformation("User registered successfully: {UserId} - {Email}", user.Id, email);
@@ -291,7 +413,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
                     return false;
                 }
 
-                user.IsEmailVerified = true;
+                user.IsVerified = true;
                 user.EmailVerificationToken = null;
                 user.EmailVerificationTokenExpiry = null;
                 user.UpdatedAt = DateTime.UtcNow;
@@ -335,6 +457,73 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error resending email verification for: {Email}", email);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Update user profile with R2R compatibility fields
+        /// </summary>
+        public async Task<bool> UpdateUserProfileAsync(Guid userId, string? name = null, string? bio = null,
+            string? profilePicture = null, string? firstName = null, string? lastName = null)
+        {
+            try
+            {
+                var user = await GetUserByIdAsync(userId);
+                if (user == null)
+                {
+                    return false;
+                }
+
+                // Update fields if provided
+                if (firstName != null) user.FirstName = firstName;
+                if (lastName != null) user.LastName = lastName;
+                if (name != null) user.Name = name;
+                if (bio != null) user.Bio = bio;
+                if (profilePicture != null) user.ProfilePicture = profilePicture;
+
+                // Auto-update Name if FirstName or LastName changed but Name wasn't explicitly set
+                if ((firstName != null || lastName != null) && name == null)
+                {
+                    user.Name = $"{user.FirstName} {user.LastName}".Trim();
+                }
+
+                user.UpdatedAt = DateTime.UtcNow;
+                user.UpdatedBy = userId.ToString();
+
+                await _context.SaveChangesAsync();
+
+                // Update in R2R asynchronously
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _userSyncService.UpdateR2RUserAsync(user);
+
+                        // Notify via SignalR
+                        await _hubContext.Clients.All.SendAsync("UserUpdated", new {
+                            UserId = user.Id,
+                            R2RUserId = user.R2RUserId,
+                            Email = user.Email,
+                            Name = user.Name
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to update R2R user for {UserId}", user.Id);
+                    }
+                });
+
+                // Log profile update
+                await LogAuditAsync(user.CompanyId, userId, "ProfileUpdate", "User", userId,
+                    null, "User profile updated");
+
+                _logger.LogInformation("Profile updated for user: {UserId}", userId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating user profile: {UserId}", userId);
                 return false;
             }
         }

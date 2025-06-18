@@ -57,6 +57,7 @@ public class UserCollectionService : IUserCollectionService
 
         try
         {
+            var cacheOptions = CacheOptions.ForSearch(userId); // Collections are searched frequently
             return await _cacheService.GetAsync(cacheKey, async () =>
             {
                 _logger.LogDebug("Loading collections for user {UserId}, CorrelationId: {CorrelationId}",
@@ -80,7 +81,7 @@ public class UserCollectionService : IUserCollectionService
                 }
 
                 return collections;
-            }, CacheOptions.ForCollectionData(GetTenantIdForUser(userId))) ?? new List<UserCollectionDto>();
+            }, cacheOptions) ?? new List<UserCollectionDto>();
         }
         catch (Exception ex)
         {

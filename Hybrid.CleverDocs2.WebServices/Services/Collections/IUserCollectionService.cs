@@ -125,7 +125,8 @@ public interface IUserCollectionService
 }
 
 /// <summary>
-/// Interface for collection synchronization with R2R API
+/// Interface for bidirectional collection synchronization with R2R API
+/// Enhanced with Quick Wins and real R2R integration
 /// </summary>
 public interface ICollectionSyncService
 {
@@ -145,12 +146,12 @@ public interface ICollectionSyncService
     Task<bool> DeleteR2RCollectionAsync(string r2rCollectionId);
 
     /// <summary>
-    /// Synchronizes collection with R2R API
+    /// Synchronizes collection with R2R API (legacy method)
     /// </summary>
     Task<bool> SyncCollectionAsync(Guid collectionId);
 
     /// <summary>
-    /// Gets R2R collection status
+    /// Gets R2R collection status (legacy method)
     /// </summary>
     Task<R2RCollectionSyncDto> GetSyncStatusAsync(Guid collectionId);
 
@@ -163,6 +164,37 @@ public interface ICollectionSyncService
     /// Processes sync queue
     /// </summary>
     Task ProcessSyncQueueAsync();
+
+    // ✅ NEW BIDIRECTIONAL SYNC METHODS
+    /// <summary>
+    /// Performs bidirectional synchronization between local and R2R collection
+    /// </summary>
+    Task<bool> SyncCollectionWithR2RAsync(Guid collectionId);
+
+    /// <summary>
+    /// Creates a new collection in R2R and links it to local collection
+    /// </summary>
+    Task<string?> CreateR2RCollectionAsync(Guid localCollectionId);
+
+    /// <summary>
+    /// Synchronizes all collections for a user
+    /// </summary>
+    Task<int> SyncAllUserCollectionsAsync(string userId);
+
+    /// <summary>
+    /// Pulls updates from R2R collection to local collection
+    /// </summary>
+    Task<bool> PullFromR2RAsync(Guid collectionId);
+
+    /// <summary>
+    /// Pushes local collection changes to R2R
+    /// </summary>
+    Task<bool> PushToR2RAsync(Guid collectionId);
+
+    /// <summary>
+    /// Gets detailed collection sync status
+    /// </summary>
+    Task<CollectionSyncStatusDto> GetDetailedSyncStatusAsync(Guid collectionId);
 }
 
 /// <summary>

@@ -7,6 +7,10 @@ public class DocumentResponse
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
 
+    // ✅ QUICK WIN - TaskId for async ingestion tracking
+    [JsonPropertyName("task_id")]
+    public string? TaskId { get; set; }
+
     [JsonPropertyName("collection_ids")]
     public List<string> CollectionIds { get; set; } = new();
 

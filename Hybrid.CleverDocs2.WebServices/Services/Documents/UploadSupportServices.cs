@@ -35,12 +35,17 @@ public class UploadProgressService : IUploadProgressService
     {
         try
         {
-            // Update in-memory cache
+            // Update in-memory cache for fast access
             _progressCache[progress.SessionId] = progress;
 
-            // Cache for persistence
-            await _cacheService.SetAsync($"upload:progress:{progress.SessionId}", progress, 
-                new CacheOptions { L1TTL = TimeSpan.FromMinutes(30) });
+            // Cache in Redis ONLY for SignalR consistency across instances
+            await _cacheService.SetAsync($"upload:progress:{progress.SessionId}", progress,
+                new CacheOptions
+                {
+                    UseL1Cache = false, // Skip L1 - already in _progressCache
+                    UseL2Cache = true,  // Redis needed for SignalR consistency
+                    L2TTL = TimeSpan.FromMinutes(30)
+                });
 
             // Broadcast to subscribers
             await BroadcastProgressAsync(progress);

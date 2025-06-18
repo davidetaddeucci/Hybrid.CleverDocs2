@@ -33,6 +33,15 @@ public class UserDocumentDto
     public string? Version { get; set; }
     public bool HasVersions { get; set; }
     public DocumentPermissions Permissions { get; set; } = new();
+
+    // R2R Compatibility fields
+    public string? DocumentType { get; set; }
+    public string IngestionStatus { get; set; } = "pending";
+    public string ExtractionStatus { get; set; } = "pending";
+    public long SizeInBytes => Size; // R2R compatible field
+    public Guid OwnerId => UserId; // R2R compatible field
+    public List<Guid> CollectionIds => CollectionId.HasValue ? new List<Guid> { CollectionId.Value } : new List<Guid>();
+    public string Title => Name; // R2R compatible field
 }
 
 /// <summary>

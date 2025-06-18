@@ -20,7 +20,8 @@ public class L3PersistentCache : IL3PersistentCache, IDisposable
     private readonly Timer _cleanupTimer;
     private readonly SemaphoreSlim _fileLock;
     private readonly object _statsLock = new();
-    
+    private volatile bool _disposed = false;
+
     private long _hitCount;
     private long _missCount;
     private long _totalAccessTime;
@@ -120,20 +121,33 @@ public class L3PersistentCache : IL3PersistentCache, IDisposable
 
     public async Task SetAsync<T>(string key, T value, TimeSpan expiration) where T : class
     {
+        await SetAsync(key, value, expiration, Enumerable.Empty<string>());
+    }
+
+    public async Task SetAsync<T>(string key, T value, TimeSpan expiration, IEnumerable<string> tags) where T : class
+    {
+        if (_disposed)
+        {
+            _logger.LogDebug("L3 Cache SET skipped (disposed): {Key}", key);
+            return;
+        }
+
         try
         {
             var json = JsonSerializer.Serialize(value, _jsonOptions);
             var shouldCompress = json.Length > _options.CompressionThreshold;
             var shouldEncrypt = _options.EnableEncryption;
-            
+
             var data = await CompressAndEncryptAsync(json, shouldCompress, shouldEncrypt);
-            
+
             await _fileLock.WaitAsync();
             try
             {
+                if (_disposed) return; // Double-check after acquiring lock
+
                 var filePath = GetFilePath(key);
                 await File.WriteAllBytesAsync(filePath, data);
-                
+
                 var entry = new CacheEntry
                 {
                     Key = key,
@@ -143,19 +157,27 @@ public class L3PersistentCache : IL3PersistentCache, IDisposable
                     Size = data.Length,
                     IsCompressed = shouldCompress,
                     IsEncrypted = shouldEncrypt,
-                    AccessCount = 0
+                    AccessCount = 0,
+                    Tags = tags.ToList() // Store tags in cache entry
                 };
-                
+
                 _index[key] = entry;
                 await SaveIndexAsync();
-                
-                _logger.LogDebug("L3 Cache SET: {Key} (Type: {Type}, Size: {Size} bytes, Compressed: {Compressed}, Expiration: {Expiration})", 
-                    key, typeof(T).Name, data.Length, shouldCompress, expiration);
+
+                _logger.LogDebug("L3 Cache SET: {Key} (Type: {Type}, Size: {Size} bytes, Compressed: {Compressed}, Expiration: {Expiration}, Tags: {Tags})",
+                    key, typeof(T).Name, data.Length, shouldCompress, expiration, string.Join(", ", tags));
             }
             finally
             {
-                _fileLock.Release();
+                if (!_disposed)
+                {
+                    _fileLock.Release();
+                }
             }
+        }
+        catch (ObjectDisposedException)
+        {
+            _logger.LogDebug("L3 Cache SET skipped (disposed during operation): {Key}", key);
         }
         catch (Exception ex)
         {
@@ -165,26 +187,41 @@ public class L3PersistentCache : IL3PersistentCache, IDisposable
 
     public async Task RemoveAsync(string key)
     {
+        if (_disposed)
+        {
+            _logger.LogDebug("L3 Cache REMOVE skipped (disposed): {Key}", key);
+            return;
+        }
+
         try
         {
             await _fileLock.WaitAsync();
             try
             {
+                if (_disposed) return; // Double-check after acquiring lock
+
                 var filePath = GetFilePath(key);
                 if (File.Exists(filePath))
                 {
                     File.Delete(filePath);
                 }
-                
+
                 _index.TryRemove(key, out _);
                 await SaveIndexAsync();
-                
+
                 _logger.LogDebug("L3 Cache REMOVE: {Key}", key);
             }
             finally
             {
-                _fileLock.Release();
+                if (!_disposed)
+                {
+                    _fileLock.Release();
+                }
             }
+        }
+        catch (ObjectDisposedException)
+        {
+            _logger.LogDebug("L3 Cache REMOVE skipped (disposed during operation): {Key}", key);
         }
         catch (Exception ex)
         {
@@ -213,6 +250,38 @@ public class L3PersistentCache : IL3PersistentCache, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error invalidating L3 cache pattern: {Pattern}", pattern);
+        }
+    }
+
+    public async Task InvalidateByTagsAsync(IEnumerable<string> tags)
+    {
+        try
+        {
+            var tagList = tags.ToList();
+            var keysToRemove = new List<string>();
+
+            // Find all keys that have any of the specified tags
+            foreach (var kvp in _index)
+            {
+                var entry = kvp.Value;
+                if (entry.Tags != null && entry.Tags.Any(tag => tagList.Contains(tag)))
+                {
+                    keysToRemove.Add(kvp.Key);
+                }
+            }
+
+            // Remove all matching keys
+            foreach (var key in keysToRemove)
+            {
+                await RemoveAsync(key);
+            }
+
+            _logger.LogInformation("L3 Cache TAG INVALIDATION: {Tags} ({Count} keys removed)",
+                string.Join(", ", tagList), keysToRemove.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error invalidating L3 cache by tags: {Tags}", string.Join(", ", tags));
         }
     }
 
@@ -423,9 +492,12 @@ public class L3PersistentCache : IL3PersistentCache, IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+
+        _disposed = true;
+
         _cleanupTimer?.Dispose();
-        _fileLock?.Dispose();
-        
+
         // Save index on disposal
         try
         {
@@ -435,6 +507,8 @@ public class L3PersistentCache : IL3PersistentCache, IDisposable
         {
             _logger.LogError(ex, "Error saving index during disposal");
         }
+
+        _fileLock?.Dispose();
     }
 }
 
@@ -451,6 +525,7 @@ public class CacheEntry
     public bool IsCompressed { get; set; }
     public bool IsEncrypted { get; set; }
     public long AccessCount { get; set; }
+    public List<string> Tags { get; set; } = new();
 }
 
 /// <summary>

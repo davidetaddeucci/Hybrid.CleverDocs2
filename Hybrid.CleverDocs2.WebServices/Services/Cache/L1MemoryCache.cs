@@ -18,6 +18,11 @@ public class L1MemoryCache : IL1MemoryCache, IDisposable
     private readonly ConcurrentDictionary<string, long> _accessCounts;
     private readonly Timer _cleanupTimer;
     private readonly object _statsLock = new();
+
+    // Tag-to-keys mapping for efficient tag-based invalidation
+    private readonly ConcurrentDictionary<string, HashSet<string>> _tagToKeys = new();
+    private readonly ConcurrentDictionary<string, HashSet<string>> _keyToTags = new();
+    private readonly object _tagLock = new();
     
     private long _hitCount;
     private long _missCount;
@@ -73,6 +78,11 @@ public class L1MemoryCache : IL1MemoryCache, IDisposable
 
     public async Task SetAsync<T>(string key, T value, TimeSpan expiration) where T : class
     {
+        await SetAsync(key, value, expiration, Enumerable.Empty<string>());
+    }
+
+    public async Task SetAsync<T>(string key, T value, TimeSpan expiration, IEnumerable<string> tags) where T : class
+    {
         try
         {
             var cacheEntryOptions = new MemoryCacheEntryOptions
@@ -85,17 +95,26 @@ public class L1MemoryCache : IL1MemoryCache, IDisposable
             // Add eviction callback to track removals
             cacheEntryOptions.RegisterPostEvictionCallback((evictedKey, evictedValue, reason, state) =>
             {
-                _keyTracker.TryRemove(evictedKey.ToString()!, out _);
-                _accessCounts.TryRemove(evictedKey.ToString()!, out _);
-                
+                var keyStr = evictedKey.ToString()!;
+                _keyTracker.TryRemove(keyStr, out _);
+                _accessCounts.TryRemove(keyStr, out _);
+                RemoveKeyFromTags(keyStr);
+
                 _logger.LogDebug("L1 Cache EVICTED: {Key} (Reason: {Reason})", evictedKey, reason);
             });
 
             _memoryCache.Set(key, value, cacheEntryOptions);
             _keyTracker[key] = DateTime.UtcNow.Add(expiration);
-            
-            _logger.LogDebug("L1 Cache SET: {Key} (Type: {Type}, Expiration: {Expiration})", 
-                key, typeof(T).Name, expiration);
+
+            // Handle tags
+            var tagList = tags.ToList();
+            if (tagList.Any())
+            {
+                AddKeyToTags(key, tagList);
+            }
+
+            _logger.LogDebug("L1 Cache SET: {Key} (Type: {Type}, Expiration: {Expiration}, Tags: {Tags})",
+                key, typeof(T).Name, expiration, string.Join(", ", tagList));
         }
         catch (Exception ex)
         {
@@ -110,7 +129,8 @@ public class L1MemoryCache : IL1MemoryCache, IDisposable
             _memoryCache.Remove(key);
             _keyTracker.TryRemove(key, out _);
             _accessCounts.TryRemove(key, out _);
-            
+            RemoveKeyFromTags(key);
+
             _logger.LogDebug("L1 Cache REMOVE: {Key}", key);
         }
         catch (Exception ex)
@@ -123,20 +143,69 @@ public class L1MemoryCache : IL1MemoryCache, IDisposable
     {
         try
         {
-            var regex = new Regex(pattern.Replace("*", ".*"), RegexOptions.Compiled | RegexOptions.IgnoreCase);
-            var keysToRemove = _keyTracker.Keys.Where(key => regex.IsMatch(key)).ToList();
-            
+            // Escape special regex characters in the pattern except for *
+            var escapedPattern = Regex.Escape(pattern).Replace("\\*", ".*");
+            var regex = new Regex($"^{escapedPattern}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+            var allKeys = _keyTracker.Keys.ToList();
+            var keysToRemove = allKeys.Where(key => regex.IsMatch(key)).ToList();
+
+            _logger.LogDebug("L1 Cache pattern matching: Pattern='{Pattern}', Regex='{Regex}', TotalKeys={TotalKeys}, MatchingKeys={MatchingKeys}",
+                pattern, escapedPattern, allKeys.Count, keysToRemove.Count);
+
+            // Log first few keys for debugging
+            if (allKeys.Count > 0)
+            {
+                var sampleKeys = allKeys.Take(3).ToList();
+                _logger.LogDebug("L1 Cache sample keys: {SampleKeys}", string.Join(", ", sampleKeys.Select(k => $"'{k}'")));
+            }
+
             foreach (var key in keysToRemove)
             {
                 await RemoveAsync(key);
             }
-            
-            _logger.LogInformation("L1 Cache PATTERN INVALIDATION: {Pattern} ({Count} keys removed)", 
+
+            _logger.LogInformation("L1 Cache PATTERN INVALIDATION: {Pattern} ({Count} keys removed)",
                 pattern, keysToRemove.Count);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error invalidating L1 cache pattern: {Pattern}", pattern);
+        }
+    }
+
+    public async Task InvalidateByTagsAsync(IEnumerable<string> tags)
+    {
+        try
+        {
+            var tagList = tags.ToList();
+            var keysToRemove = new HashSet<string>();
+
+            lock (_tagLock)
+            {
+                foreach (var tag in tagList)
+                {
+                    if (_tagToKeys.TryGetValue(tag, out var keys))
+                    {
+                        foreach (var key in keys)
+                        {
+                            keysToRemove.Add(key);
+                        }
+                    }
+                }
+            }
+
+            foreach (var key in keysToRemove)
+            {
+                await RemoveAsync(key);
+            }
+
+            _logger.LogInformation("L1 Cache TAG INVALIDATION: {Tags} ({Count} keys removed)",
+                string.Join(", ", tagList), keysToRemove.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error invalidating L1 cache by tags: {Tags}", string.Join(", ", tags));
         }
     }
 
@@ -255,11 +324,60 @@ public class L1MemoryCache : IL1MemoryCache, IDisposable
         _logger.LogInformation("L1 Cache preloaded {Count} entries", keyValuePairs.Count);
     }
 
+    private void AddKeyToTags(string key, IEnumerable<string> tags)
+    {
+        lock (_tagLock)
+        {
+            // Remove key from old tags first
+            RemoveKeyFromTagsInternal(key);
+
+            var tagSet = new HashSet<string>(tags);
+            _keyToTags[key] = tagSet;
+
+            foreach (var tag in tagSet)
+            {
+                if (!_tagToKeys.ContainsKey(tag))
+                {
+                    _tagToKeys[tag] = new HashSet<string>();
+                }
+                _tagToKeys[tag].Add(key);
+            }
+        }
+    }
+
+    private void RemoveKeyFromTags(string key)
+    {
+        lock (_tagLock)
+        {
+            RemoveKeyFromTagsInternal(key);
+        }
+    }
+
+    private void RemoveKeyFromTagsInternal(string key)
+    {
+        if (_keyToTags.TryRemove(key, out var tags))
+        {
+            foreach (var tag in tags)
+            {
+                if (_tagToKeys.TryGetValue(tag, out var keys))
+                {
+                    keys.Remove(key);
+                    if (keys.Count == 0)
+                    {
+                        _tagToKeys.TryRemove(tag, out _);
+                    }
+                }
+            }
+        }
+    }
+
     public void Dispose()
     {
         _cleanupTimer?.Dispose();
         _keyTracker.Clear();
         _accessCounts.Clear();
+        _tagToKeys.Clear();
+        _keyToTags.Clear();
     }
 }
 

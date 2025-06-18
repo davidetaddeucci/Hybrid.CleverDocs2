@@ -33,6 +33,21 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         // R2R Integration
         public string? R2RCollectionId { get; set; }
 
+        // ✅ COLLECTIONS SYNC - Sync tracking
+        public DateTime? LastSyncedAt { get; set; }
+
+        /// <summary>
+        /// R2R Graph cluster status for knowledge graph integration
+        /// </summary>
+        [MaxLength(50)]
+        public string? GraphClusterStatus { get; set; }
+
+        /// <summary>
+        /// R2R Graph sync status for knowledge graph synchronization
+        /// </summary>
+        [MaxLength(50)]
+        public string? GraphSyncStatus { get; set; }
+
         // Tenant isolation
         [Required]
         public Guid CompanyId { get; set; }
@@ -65,6 +80,20 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
 
         // Navigation properties
         public ICollection<CollectionDocument> CollectionDocuments { get; set; } = new List<CollectionDocument>();
+
+        // ✅ COLLECTIONS SYNC - Helper navigation property for documents
+        [NotMapped]
+        public ICollection<Document> Documents => CollectionDocuments.Select(cd => cd.Document).ToList();
+
+        // R2R Compatibility properties
+        [NotMapped]
+        public Guid OwnerId => UserId;
+
+        [NotMapped]
+        public int DocumentCount => CollectionDocuments.Count;
+
+        [NotMapped]
+        public List<Guid> UserIds => new() { UserId }; // In our system, each collection has one owner
     }
 
     public class CollectionDocument

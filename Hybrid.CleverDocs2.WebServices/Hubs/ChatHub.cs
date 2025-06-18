@@ -288,10 +288,12 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                     // Cache the new conversation
                     await _cacheService.SetAsync($"conversation_{response.Results.ConversationId}", response, new Services.Cache.CacheOptions
                     {
+                        UseL1Cache = true,  // ✅ ENABLED - Fast access for active conversations
+                        UseL2Cache = true,  // ✅ ENABLED - Redis for intensive chat sessions
+                        UseL3Cache = false, // ❌ DISABLED - Conversations change frequently
                         L1TTL = TimeSpan.FromMinutes(10),
                         L2TTL = TimeSpan.FromMinutes(30),
-                        L3TTL = TimeSpan.FromHours(1),
-                        UseL3Cache = false
+                        L3TTL = TimeSpan.FromHours(1)
                     });
 
                     // Notify user about new conversation

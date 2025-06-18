@@ -24,11 +24,11 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         [MaxLength(100)]
         public string ContentType { get; set; } = string.Empty;
 
+        /// <summary>
+        /// File size in bytes - R2R compatible field
+        /// </summary>
         [Required]
-        public long Size { get; set; }
-
-        [Required]
-        public long SizeBytes { get; set; }
+        public long SizeInBytes { get; set; }
 
         [Required]
         [MaxLength(500)]
@@ -45,6 +45,24 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
 
         [MaxLength(500)]
         public string? StatusMessage { get; set; }
+
+        /// <summary>
+        /// R2R compatible document type (file extension based)
+        /// </summary>
+        [MaxLength(10)]
+        public string? DocumentType { get; set; }
+
+        /// <summary>
+        /// R2R compatible ingestion status
+        /// </summary>
+        [MaxLength(50)]
+        public string IngestionStatus { get; set; } = "pending";
+
+        /// <summary>
+        /// R2R compatible extraction status for knowledge graphs
+        /// </summary>
+        [MaxLength(50)]
+        public string ExtractionStatus { get; set; } = "pending";
 
         // Document Management Features
         public bool IsFavorite { get; set; } = false;
@@ -92,6 +110,19 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public string? CreatedBy { get; set; }
         public string? UpdatedBy { get; set; }
+
+        // R2R Compatibility properties
+        [NotMapped]
+        public Guid OwnerId => UserId;
+
+        [NotMapped]
+        public List<Guid> CollectionIds => CollectionDocuments.Select(cd => cd.CollectionId).ToList();
+
+        [NotMapped]
+        public string Title => Name;
+
+        [NotMapped]
+        public long Size => SizeInBytes; // Backward compatibility
 
         // Navigation properties
         public ICollection<DocumentChunk> Chunks { get; set; } = new List<DocumentChunk>();

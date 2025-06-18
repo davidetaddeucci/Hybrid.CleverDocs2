@@ -36,6 +36,9 @@ namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Auth
 
         [JsonPropertyName("collection_ids")]
         public List<string> CollectionIds { get; set; } = new();
+
+        [JsonPropertyName("hashed_password")]
+        public string? HashedPassword { get; set; }
     }
 
     public class UserListResponse

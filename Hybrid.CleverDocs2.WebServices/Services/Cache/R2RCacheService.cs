@@ -126,7 +126,7 @@ public class R2RCacheService : IR2RCacheService
         var tenantId = ExtractTenantFromCollectionId(collectionId);
         var cacheKey = _keyGenerator.GenerateCollectionKey(collectionId, tenantId);
 
-        var options = CacheOptions.ForCollectionData(tenantId);
+        var options = CacheOptions.ForExpensiveData(tenantId); // Collection metadata is expensive to fetch
         
         _logger.LogDebug("Getting collection metadata from cache, CollectionId: {CollectionId}, Key: {CacheKey}, CorrelationId: {CorrelationId}", 
             collectionId, cacheKey, correlationId);
@@ -142,10 +142,12 @@ public class R2RCacheService : IR2RCacheService
 
         var options = new CacheOptions
         {
+            UseL1Cache = true,  // ✅ ENABLED - Fast access for active conversations
+            UseL2Cache = true,  // ✅ ENABLED - Redis for intensive chat sessions
+            UseL3Cache = false, // ❌ DISABLED - Conversation context changes frequently
             L1TTL = TimeSpan.FromMinutes(10),
             L2TTL = TimeSpan.FromMinutes(30),
             L3TTL = TimeSpan.FromHours(2),
-            UseL3Cache = false, // Conversation context changes frequently
             TenantId = tenantId,
             Priority = CachePriority.High
         };
@@ -161,15 +163,7 @@ public class R2RCacheService : IR2RCacheService
         var correlationId = _correlationService.GetCorrelationId();
         var cacheKey = _keyGenerator.GenerateEmbeddingKey(text, model, null); // Embeddings are not tenant-specific
 
-        var options = new CacheOptions
-        {
-            L1TTL = TimeSpan.FromHours(1),
-            L2TTL = TimeSpan.FromDays(1),
-            L3TTL = TimeSpan.FromDays(30),
-            UseL3Cache = true, // Embeddings are expensive to compute
-            Priority = CachePriority.High,
-            CompressData = true // Embedding vectors can be large
-        };
+        var options = CacheOptions.ForExpensiveData(null); // Use optimized config for expensive computations
         
         _logger.LogDebug("Getting embedding vector from cache, Model: {Model}, Key: {CacheKey}, CorrelationId: {CorrelationId}", 
             model, cacheKey, correlationId);
