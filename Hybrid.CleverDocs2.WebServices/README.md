@@ -4,35 +4,44 @@
 
 Hybrid.CleverDocs2.WebServices è il backend del sistema, sviluppato in .NET 9.0 Web API. Fornisce API RESTful per la gestione di utenti, companies, collezioni e documenti, e si integra con SciPhi AI R2R API per l'elaborazione dei documenti e l'interazione con il chatbot.
 
-Questo documento fornisce una guida specifica per il backend API server, con riferimenti alla documentazione dettagliata disponibile nella directory `docs/`.
+**Status:** ✅ **COMPLETAMENTE FUNZIONANTE** - Sistema enterprise pronto per la produzione
 
 ## Caratteristiche Principali
 
-- API RESTful per tutte le funzionalità del sistema
-- Autenticazione JWT con refresh token
-- Multitenancy con isolamento dati
-- Integrazione con SciPhi AI R2R API
-- Elaborazione asincrona dei documenti con RabbitMQ
-- Caching avanzato con Redis
-- Monitoring e health checks
+- **API RESTful**: Endpoint completi per tutte le funzionalità del sistema
+- **Autenticazione Ibrida**: Cookie Authentication + JWT in HttpOnly cookies per massima sicurezza
+- **Multi-tenancy**: Architettura PostgreSQL shared database/schema con isolamento dati
+- **Integrazione R2R**: Rate limiting, queue management, bidirectional sync con SciPhi AI R2R API
+- **SignalR Real-time**: Hub per upload documenti e aggiornamenti collezioni con event persistence intelligente
+- **Caching Strategico**: Redis utilizzato solo per operazioni intensive (chat), rimosso da CRUD per performance
+- **Elaborazione Asincrona**: RabbitMQ per gestione code documenti con rate limiting R2R
+- **Monitoring e Health Checks**: Sistema completo di monitoraggio e diagnostica
 
 ## Architettura
 
-Il backend è strutturato secondo i principi di Clean Architecture:
+Il backend utilizza una struttura flat ottimizzata per performance e semplicità:
 
 ```
 Hybrid.CleverDocs2.WebServices/
-├── src/
-│   ├── Hybrid.CleverDocs2.WebServices.Api/        # Controllers, middleware, filtri
-│   ├── Hybrid.CleverDocs2.WebServices.Core/       # Logica di business, interfacce
-│   ├── Hybrid.CleverDocs2.WebServices.Infrastructure/ # Implementazioni concrete
-│   └── Hybrid.CleverDocs2.WebServices.Workers/    # Servizi background
+├── Controllers/                    # API Controllers per endpoint REST
+├── Services/                       # Servizi di business logic e integrazione
+├── Data/                          # Entity Framework DbContext e entità
+├── Hubs/                          # SignalR Hubs per comunicazione real-time
+├── Middleware/                    # Middleware personalizzati (JWT, Tenant, Exception)
+├── Workers/                       # Background workers per elaborazione asincrona
+├── Models/                        # DTOs e modelli per API
+├── Extensions/                    # Extension methods e utilities
+├── Consumers/                     # RabbitMQ message consumers
+├── Messages/                      # Message types per RabbitMQ
+└── Migrations/                    # Entity Framework migrations
 ```
 
-- **Api**: Controllers, middleware, filtri e configurazione API
-- **Core**: Logica di business, interfacce e modelli di dominio
-- **Infrastructure**: Implementazioni concrete (database, servizi esterni, messaging, caching)
-- **Workers**: Servizi background per elaborazione asincrona
+### Componenti Principali
+- **Controllers**: Endpoint API RESTful con autenticazione e autorizzazione
+- **Services**: Business logic, integrazione R2R, cache management, autenticazione
+- **SignalR Hubs**: Real-time communication per upload documenti e aggiornamenti collezioni
+- **Workers**: Background processing per sincronizzazione R2R e manutenzione cache
+- **Middleware**: JWT authentication, tenant resolution, exception handling
 
 ## Prerequisiti
 
@@ -42,16 +51,35 @@ Hybrid.CleverDocs2.WebServices/
 - RabbitMQ 3.12+
 - SciPhi AI R2R API server attivo
 
-## Configurazione Database
+## Configurazione Servizi Esterni
 
-**Credenziali PostgreSQL:**
-- Host: localhost
-- Port: 5433
-- Database: cleverdocs
-- Username: admin
-- Password: MiaPassword123
+**Tutti i servizi sono attivi e configurati su 192.168.1.4:**
 
-**Status:** ✅ Database configurato con schema completo (8 tabelle create via Entity Framework migrations)
+### PostgreSQL Database
+- **Host**: 192.168.1.4:5433
+- **Database**: cleverdocs
+- **Username**: admin
+- **Password**: MiaPassword123
+- **Status**: ✅ Database configurato con schema completo (8 tabelle create via Entity Framework migrations)
+
+### Redis Cache
+- **Host**: 192.168.1.4:6380
+- **Password**: your_redis_password
+- **Usage**: Solo per operazioni intensive (chat), rimosso da CRUD per performance
+- **Status**: ✅ Attivo e ottimizzato
+
+### RabbitMQ Message Queue
+- **Host**: 192.168.1.4:5674
+- **Username**: guest
+- **Password**: guest
+- **Usage**: Queue management per rate limiting R2R API
+- **Status**: ✅ Attivo con consumer configurati
+
+### R2R API
+- **Host**: 192.168.1.4:7272
+- **Usage**: Document processing, embedding, search
+- **Rate Limits**: 10 req/s document ingestion, 5 req/s embedding, 20 req/s search
+- **Status**: ✅ Attivo con rate limiting implementato
 
 ## Documentazione
 

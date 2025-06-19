@@ -1,0 +1,270 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.Users.CreateCompanyUserViewModel
+@{
+    ViewData["Title"] = $"Create User - {Model.CompanyName}";
+    Layout = "_Layout";
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <i class="material-symbols-rounded text-primary me-2">person_add</i>Create New User
+                    </h1>
+                    <p class="text-muted mb-0">Add a new user to @Model.CompanyName</p>
+                </div>
+                <div>
+                    <a href="@Url.Action("Index")" class="btn btn-outline-secondary">
+                        <i class="material-symbols-rounded me-2">arrow_back</i>Back to Users
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Company Info -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info d-flex align-items-center">
+                <i class="material-symbols-rounded me-2">business</i>
+                <div>
+                    <strong>Company:</strong> @Model.CompanyName<br>
+                    <small>User will be automatically assigned to your company</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Form -->
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <form asp-action="Create" method="post" id="createUserForm">
+                        @Html.AntiForgeryToken()
+                        <input asp-for="CompanyId" type="hidden" />
+                        <input asp-for="CompanyName" type="hidden" />
+                        
+                        <!-- Basic Information -->
+                        <div class="mb-4">
+                            <h5 class="card-title mb-3">
+                                <i class="material-symbols-rounded me-2">person</i>Basic Information
+                            </h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="FirstName" class="form-label">First Name *</label>
+                                    <input asp-for="FirstName" class="form-control" placeholder="Enter first name" />
+                                    <span asp-validation-for="FirstName" class="text-danger"></span>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="LastName" class="form-label">Last Name *</label>
+                                    <input asp-for="LastName" class="form-control" placeholder="Enter last name" />
+                                    <span asp-validation-for="LastName" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="Email" class="form-label">Email Address *</label>
+                                    <input asp-for="Email" class="form-control" type="email" placeholder="user@company.com" />
+                                    <span asp-validation-for="Email" class="text-danger"></span>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="Password" class="form-label">Password *</label>
+                                    <div class="input-group">
+                                        <input asp-for="Password" class="form-control" type="password" placeholder="Enter secure password" />
+                                        <button type="button" class="btn btn-outline-secondary" onclick="togglePassword()">
+                                            <i class="material-symbols-rounded" id="passwordToggleIcon">visibility</i>
+                                        </button>
+                                    </div>
+                                    <span asp-validation-for="Password" class="text-danger"></span>
+                                    <div class="form-text">Minimum 8 characters required</div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="Name" class="form-label">Display Name</label>
+                                <input asp-for="Name" class="form-control" placeholder="Optional display name" />
+                                <span asp-validation-for="Name" class="text-danger"></span>
+                                <div class="form-text">If empty, will use "First Last" format</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="Bio" class="form-label">Bio</label>
+                                <textarea asp-for="Bio" class="form-control" rows="3" 
+                                          placeholder="Brief description about the user"></textarea>
+                                <span asp-validation-for="Bio" class="text-danger"></span>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="ProfilePicture" class="form-label">Profile Picture URL</label>
+                                <input asp-for="ProfilePicture" class="form-control" type="url" 
+                                       placeholder="https://example.com/avatar.jpg" />
+                                <span asp-validation-for="ProfilePicture" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Role Assignment -->
+                        <div class="mb-4">
+                            <h5 class="card-title mb-3">
+                                <i class="material-symbols-rounded me-2">admin_panel_settings</i>Role Assignment
+                            </h5>
+                            
+                            <div class="mb-3">
+                                <label asp-for="Role" class="form-label">Role *</label>
+                                <select asp-for="Role" class="form-select">
+                                    @foreach (var role in Hybrid.CleverDocs.WebUI.ViewModels.Users.UserRoles.GetCompanyRoles())
+                                    {
+                                        <option value="@role.Value">@role.Display</option>
+                                    }
+                                </select>
+                                <span asp-validation-for="Role" class="text-danger"></span>
+                            </div>
+
+                            <!-- Role Descriptions -->
+                            <div class="alert alert-info">
+                                <h6 class="alert-heading">Role Descriptions:</h6>
+                                <ul class="mb-0 small">
+                                    <li><strong>Company Manager:</strong> Can manage users within the company</li>
+                                    <li><strong>Standard User:</strong> Basic access to documents and collections</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- R2R Integration Info -->
+                        <div class="mb-4">
+                            <div class="alert alert-primary d-flex align-items-center">
+                                <i class="material-symbols-rounded me-2">integration_instructions</i>
+                                <div>
+                                    <strong>R2R Integration</strong><br>
+                                    <small>User will be automatically synchronized with R2R system after creation. You'll receive a notification when sync is complete.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="@Url.Action("Index")" class="btn btn-outline-secondary">
+                                <i class="material-symbols-rounded me-2">cancel</i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">
+                                <i class="material-symbols-rounded me-2">person_add</i>Create User
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom CSS -->
+<style>
+    .card-title {
+        color: #495057;
+        font-weight: 600;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    
+    .btn-primary {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
+    }
+</style>
+
+<!-- JavaScript -->
+<script>
+    // Toggle password visibility
+    function togglePassword() {
+        const passwordInput = document.querySelector('input[name="Password"]');
+        const toggleIcon = document.getElementById('passwordToggleIcon');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleIcon.textContent = 'visibility_off';
+        } else {
+            passwordInput.type = 'password';
+            toggleIcon.textContent = 'visibility';
+        }
+    }
+
+    // Form submission handling
+    document.getElementById('createUserForm').addEventListener('submit', function(e) {
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="material-symbols-rounded me-2">hourglass_empty</i>Creating...';
+        
+        // Re-enable button after 10 seconds to prevent permanent disable
+        setTimeout(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="material-symbols-rounded me-2">person_add</i>Create User';
+        }, 10000);
+    });
+
+    // Auto-generate display name from first and last name
+    function updateDisplayName() {
+        const firstName = document.querySelector('input[name="FirstName"]').value;
+        const lastName = document.querySelector('input[name="LastName"]').value;
+        const nameInput = document.querySelector('input[name="Name"]');
+        
+        if (!nameInput.value && firstName && lastName) {
+            nameInput.placeholder = `${firstName} ${lastName}`;
+        }
+    }
+
+    document.querySelector('input[name="FirstName"]').addEventListener('blur', updateDisplayName);
+    document.querySelector('input[name="LastName"]').addEventListener('blur', updateDisplayName);
+
+    // Email validation feedback
+    document.querySelector('input[name="Email"]').addEventListener('blur', function() {
+        const email = this.value;
+        if (email && !email.includes('@@')) {
+            this.classList.add('is-invalid');
+        } else if (email) {
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+        } else {
+            this.classList.remove('is-invalid', 'is-valid');
+        }
+    });
+
+    // Password strength indicator
+    document.querySelector('input[name="Password"]').addEventListener('input', function() {
+        const password = this.value;
+        const formText = this.parentElement.nextElementSibling.nextElementSibling;
+        
+        if (password.length === 0) {
+            formText.textContent = 'Minimum 8 characters required';
+            formText.className = 'form-text';
+        } else if (password.length < 8) {
+            formText.textContent = `${8 - password.length} more characters needed`;
+            formText.className = 'form-text text-warning';
+        } else {
+            formText.textContent = 'Password meets requirements';
+            formText.className = 'form-text text-success';
+        }
+    });
+</script>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

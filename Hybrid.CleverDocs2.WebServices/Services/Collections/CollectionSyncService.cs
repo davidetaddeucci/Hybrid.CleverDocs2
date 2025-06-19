@@ -437,6 +437,15 @@ public class CollectionSyncService : ICollectionSyncService
                 return null;
             }
 
+            // 🔄 BIDIRECTIONAL SYNC: First check if collection already exists in R2R
+            var existingR2RCollectionId = await FindExistingR2RCollectionAsync(localCollection.Name);
+            if (!string.IsNullOrEmpty(existingR2RCollectionId))
+            {
+                _logger.LogInformation("Found existing R2R collection {R2RCollectionId} for local collection {LocalCollectionId}, CorrelationId: {CorrelationId}",
+                    existingR2RCollectionId, localCollectionId, correlationId);
+                return existingR2RCollectionId;
+            }
+
             // Create R2R collection request with enhanced metadata
             var r2rRequest = new CollectionRequest
             {
@@ -762,6 +771,58 @@ public class CollectionSyncService : ICollectionSyncService
         // In a full implementation, this would sync documents between local and R2R collections
         _logger.LogDebug("Document sync for collection {CollectionId} - placeholder implementation", localCollection.Id);
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Finds an existing R2R collection by name to support bidirectional sync
+    /// </summary>
+    private async Task<string?> FindExistingR2RCollectionAsync(string collectionName)
+    {
+        try
+        {
+            _logger.LogInformation("🔍 Searching for existing R2R collection: {CollectionName}", collectionName);
+
+            // List all collections from R2R
+            var r2rCollections = await _r2rCollectionClient.ListCollectionsAsync();
+
+            if (r2rCollections?.Results?.Any() == true)
+            {
+                _logger.LogInformation("📋 Found {Count} R2R collections total", r2rCollections.Results.Count);
+
+                // Log all collections for debugging
+                foreach (var collection in r2rCollections.Results)
+                {
+                    _logger.LogInformation("📁 R2R Collection: Name='{Name}', ID='{Id}'",
+                        collection.Name, collection.CollectionId);
+                }
+
+                // Find collection by name (case-insensitive match)
+                var matchingCollection = r2rCollections.Results
+                    .FirstOrDefault(c => string.Equals(c.Name, collectionName, StringComparison.OrdinalIgnoreCase));
+
+                if (matchingCollection != null)
+                {
+                    _logger.LogInformation("✅ Found existing R2R collection: {CollectionName} -> {R2RCollectionId}",
+                        collectionName, matchingCollection.CollectionId);
+                    return matchingCollection.CollectionId;
+                }
+                else
+                {
+                    _logger.LogInformation("❌ No matching R2R collection found for name: {CollectionName}", collectionName);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("⚠️ No R2R collections returned from API");
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "💥 Error searching for existing R2R collection: {CollectionName}", collectionName);
+            return null;
+        }
     }
 }
 

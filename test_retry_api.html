@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Document Retry API</title>
+</head>
+<body>
+    <h1>Document Retry Test</h1>
+    <button onclick="testRetryAPI()">Test Retry API</button>
+    <div id="result"></div>
+
+    <script>
+        async function testRetryAPI() {
+            const documentId = '674c24b7-d01b-4316-bce0-dc8c83761caf';
+            const apiUrl = `http://localhost:5252/api/UserDocuments/${documentId}/retry`;
+            
+            try {
+                console.log('Testing retry API for document:', documentId);
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include' // Include cookies for authentication
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                const result = await response.text();
+                console.log('Response body:', result);
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>API Test Result:</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>Response:</strong> ${result}</p>
+                `;
+                
+                if (response.ok) {
+                    alert('Retry API call successful!');
+                } else {
+                    alert(`Retry API call failed with status: ${response.status}`);
+                }
+                
+            } catch (error) {
+                console.error('Error testing retry API:', error);
+                document.getElementById('result').innerHTML = `
+                    <h3>Error:</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

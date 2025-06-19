@@ -1,0 +1,322 @@
+/**
+ * R2R Admin Notifications Styles
+ * Stili per notifiche SignalR admin (Company/User creation)
+ */
+
+/* Toast Animations */
+.toast {
+    animation: slideInRight 0.3s ease-out;
+}
+
+.toast.hide {
+    animation: slideOutRight 0.3s ease-in;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* R2R Status Indicators */
+.r2r-status-indicator {
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.r2r-status-indicator .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.r2r-status-indicator .material-symbols-rounded {
+    font-size: 0.8rem !important;
+}
+
+/* Spinning animation for sync indicators */
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Pulse animation for pending states */
+.pulse {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* Bounce animation for success states */
+.bounce {
+    animation: bounce 0.6s ease-in-out;
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-10px);
+    }
+    60% {
+        transform: translateY(-5px);
+    }
+}
+
+/* Shake animation for error states */
+.shake {
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    25% {
+        transform: translateX(-5px);
+    }
+    75% {
+        transform: translateX(5px);
+    }
+}
+
+/* R2R Status Cards */
+.r2r-status-card {
+    border-left: 4px solid #0d6efd;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    transition: all 0.3s ease;
+}
+
+.r2r-status-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.r2r-status-card.success {
+    border-left-color: #198754;
+}
+
+.r2r-status-card.warning {
+    border-left-color: #ffc107;
+}
+
+.r2r-status-card.danger {
+    border-left-color: #dc3545;
+}
+
+/* Toast Container Improvements */
+.toast-container {
+    z-index: 1060 !important;
+}
+
+.toast-container .toast {
+    margin-bottom: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-radius: 0.5rem;
+}
+
+.toast-container .toast .toast-body {
+    padding: 1rem;
+    font-size: 0.9rem;
+}
+
+.toast-container .toast .material-symbols-rounded {
+    font-size: 1.2rem;
+    vertical-align: middle;
+}
+
+/* Admin Page Specific Styles */
+.admin-page .r2r-status-indicator {
+    margin-left: 0.5rem;
+}
+
+.admin-page .table .r2r-status-indicator {
+    white-space: nowrap;
+}
+
+/* Company/User Status Badges */
+.status-badge-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.status-badge-container .badge {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: 500;
+}
+
+.status-badge-container .material-symbols-rounded {
+    font-size: 0.9rem !important;
+}
+
+/* R2R Sync Progress Indicator */
+.r2r-sync-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: rgba(13, 110, 253, 0.1);
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    color: #0d6efd;
+}
+
+.r2r-sync-progress .material-symbols-rounded {
+    font-size: 1rem !important;
+}
+
+.r2r-sync-progress.success {
+    background: rgba(25, 135, 84, 0.1);
+    color: #198754;
+}
+
+.r2r-sync-progress.warning {
+    background: rgba(255, 193, 7, 0.1);
+    color: #ffc107;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .toast-container {
+        left: 1rem;
+        right: 1rem;
+        top: 1rem !important;
+    }
+    
+    .toast-container .toast {
+        margin-bottom: 0.25rem;
+    }
+    
+    .status-badge-container {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .r2r-status-indicator .small {
+        display: none;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    .r2r-status-card {
+        background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+        color: #e2e8f0;
+    }
+    
+    .r2r-sync-progress {
+        background: rgba(13, 110, 253, 0.2);
+    }
+    
+    .r2r-sync-progress.success {
+        background: rgba(25, 135, 84, 0.2);
+    }
+    
+    .r2r-sync-progress.warning {
+        background: rgba(255, 193, 7, 0.2);
+    }
+}
+
+/* Loading States */
+.r2r-loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.r2r-loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        left: -100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+/* Success/Error State Transitions */
+.r2r-status-transition {
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.r2r-status-transition.success {
+    background-color: rgba(25, 135, 84, 0.1);
+    border-color: #198754;
+}
+
+.r2r-status-transition.error {
+    background-color: rgba(220, 53, 69, 0.1);
+    border-color: #dc3545;
+}
+
+/* Notification Sound Effect (CSS-only) */
+.notification-sound {
+    position: relative;
+}
+
+.notification-sound::before {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(13, 110, 253, 0.3);
+    animation: soundWave 0.6s ease-out;
+}
+
+@keyframes soundWave {
+    0% {
+        width: 0;
+        height: 0;
+        opacity: 1;
+    }
+    100% {
+        width: 40px;
+        height: 40px;
+        opacity: 0;
+    }
+}

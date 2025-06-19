@@ -102,13 +102,7 @@ public class CollectionsApiClient : ICollectionsApiClient
         {
             await SetAuthorizationHeaderAsync();
             
-            var cacheKey = $"collections:search:{GetSearchCacheKey(search)}";
-            var cached = await _cacheService.GetAsync<PagedResult<CollectionViewModel>>(cacheKey);
-            if (cached != null)
-            {
-                _logger.LogDebug("Collections search cache hit for key: {CacheKey}", cacheKey);
-                return cached;
-            }
+            // CACHING REMOVED: Direct API call without Redis caching to avoid cache invalidation issues
 
             var requestBody = JsonSerializer.Serialize(new
             {
@@ -140,8 +134,7 @@ public class CollectionsApiClient : ICollectionsApiClient
                 {
                     var result = MapToPagedResult(apiResponse.Data);
 
-                    // Cache for 5 minutes
-                    await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+                    // CACHING REMOVED: No Redis caching to avoid cache invalidation issues
 
                     return result;
                 }
@@ -163,13 +156,7 @@ public class CollectionsApiClient : ICollectionsApiClient
         {
             await SetAuthorizationHeaderAsync();
             
-            var cacheKey = $"collection:details:{collectionId}";
-            var cached = await _cacheService.GetAsync<CollectionViewModel>(cacheKey);
-            if (cached != null)
-            {
-                _logger.LogDebug("Collection details cache hit for ID: {CollectionId}", collectionId);
-                return cached;
-            }
+            // CACHING REMOVED: Direct API call without Redis caching to avoid cache invalidation issues
 
             var response = await _httpClient.GetAsync($"/api/UserCollections/{collectionId}");
             
@@ -182,8 +169,7 @@ public class CollectionsApiClient : ICollectionsApiClient
                 {
                     var result = MapToViewModel(apiResponse.Data);
                     
-                    // Cache for 10 minutes
-                    await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(10));
+                    // CACHING REMOVED: No Redis caching to avoid cache invalidation issues
                     
                     return result;
                 }
@@ -360,8 +346,7 @@ public class CollectionsApiClient : ICollectionsApiClient
                         TotalPages = 1
                     };
 
-                    // Cache for 3 minutes
-                    await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(3));
+                    // CACHING REMOVED: No Redis caching to avoid cache invalidation issues
 
                     return result;
                 }
@@ -382,12 +367,7 @@ public class CollectionsApiClient : ICollectionsApiClient
         {
             await SetAuthorizationHeaderAsync();
             
-            var cacheKey = $"collections:recent:{limit}";
-            var cached = await _cacheService.GetAsync<List<CollectionViewModel>>(cacheKey);
-            if (cached != null)
-            {
-                return cached;
-            }
+            // CACHING REMOVED: Direct API call without Redis caching to avoid cache invalidation issues
 
             var response = await _httpClient.GetAsync($"/api/UserCollections/recent?limit={limit}");
             
@@ -400,8 +380,7 @@ public class CollectionsApiClient : ICollectionsApiClient
                 {
                     var result = apiResponse.Data.Select(MapToViewModel).ToList();
                     
-                    // Cache for 2 minutes
-                    await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(2));
+                    // CACHING REMOVED: No Redis caching to avoid cache invalidation issues
                     
                     return result;
                 }

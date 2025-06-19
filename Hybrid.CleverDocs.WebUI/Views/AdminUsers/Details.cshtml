@@ -1,0 +1,390 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.Users.UserDetailsViewModel
+@{
+    ViewData["Title"] = $"{Model.User.FirstName} {Model.User.LastName}";
+    Layout = "_Layout";
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        @if (!string.IsNullOrEmpty(Model.User.ProfilePicture))
+                        {
+                            <img src="@Model.User.ProfilePicture" alt="@Model.User.FirstName @Model.User.LastName" 
+                                 class="rounded-circle" style="width: 60px; height: 60px; object-fit: cover;" />
+                        }
+                        else
+                        {
+                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                                 style="width: 60px; height: 60px; font-size: 1.5rem; font-weight: bold;">
+                                @Model.User.FirstName.Substring(0, 1).ToUpper()@Model.User.LastName.Substring(0, 1).ToUpper()
+                            </div>
+                        }
+                    </div>
+                    <div>
+                        <h1 class="h3 mb-1">@Model.User.FirstName @Model.User.LastName</h1>
+                        <p class="text-muted mb-0">
+                            @Model.User.Email
+                            @if (!string.IsNullOrEmpty(Model.User.Name))
+                            {
+                                <span class="ms-2">(@Model.User.Name)</span>
+                            }
+                        </p>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="@Url.Action("Index")" class="btn btn-outline-secondary">
+                        <i class="material-symbols-rounded me-2">arrow_back</i>Back to List
+                    </a>
+                    @if (Model.CanEdit)
+                    {
+                        <a href="@Url.Action("Edit", new { id = Model.User.Id })" class="btn btn-primary">
+                            <i class="material-symbols-rounded me-2">edit</i>Edit User
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Status and R2R Sync -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert @(Model.User.IsActive ? "alert-success" : "alert-warning") d-flex align-items-center">
+                <i class="material-symbols-rounded me-2">
+                    @(Model.User.IsActive ? "check_circle" : "warning")
+                </i>
+                <div class="flex-grow-1">
+                    <strong>Status: @(Model.User.IsActive ? "Active" : "Inactive")</strong>
+                    @if (!string.IsNullOrEmpty(Model.User.R2RUserId))
+                    {
+                        <span class="ms-3">
+                            <i class="material-symbols-rounded me-1">sync</i>
+                            R2R User ID: <code>@Model.User.R2RUserId</code>
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="ms-3 text-warning">
+                            <i class="material-symbols-rounded me-1">sync_problem</i>
+                            R2R sync pending...
+                        </span>
+                    }
+                </div>
+                <!-- Role Badge -->
+                <div>
+                    @switch (Model.User.Role)
+                    {
+                        case "Admin":
+                            <span class="badge bg-danger fs-6">
+                                <i class="material-symbols-rounded me-1" style="font-size: 14px;">admin_panel_settings</i>
+                                Administrator
+                            </span>
+                            break;
+                        case "Company":
+                            <span class="badge bg-warning fs-6">
+                                <i class="material-symbols-rounded me-1" style="font-size: 14px;">business</i>
+                                Company Manager
+                            </span>
+                            break;
+                        default:
+                            <span class="badge bg-primary fs-6">
+                                <i class="material-symbols-rounded me-1" style="font-size: 14px;">person</i>
+                                Standard User
+                            </span>
+                            break;
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Left Column - User Information -->
+        <div class="col-lg-8">
+            <!-- Basic Information -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="material-symbols-rounded me-2">person</i>User Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Name:</dt>
+                                <dd class="col-sm-8">@Model.User.FirstName @Model.User.LastName</dd>
+                                
+                                <dt class="col-sm-4">Email:</dt>
+                                <dd class="col-sm-8">
+                                    <a href="mailto:@Model.User.Email" class="text-decoration-none">
+                                        @Model.User.Email
+                                    </a>
+                                    @if (Model.User.IsEmailVerified)
+                                    {
+                                        <i class="material-symbols-rounded text-success ms-1" style="font-size: 16px;" title="Email verified">verified</i>
+                                    }
+                                </dd>
+                                
+                                @if (!string.IsNullOrEmpty(Model.User.Name))
+                                {
+                                    <dt class="col-sm-4">Display Name:</dt>
+                                    <dd class="col-sm-8">@Model.User.Name</dd>
+                                }
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Role:</dt>
+                                <dd class="col-sm-8">
+                                    @switch (Model.User.Role)
+                                    {
+                                        case "Admin":
+                                            <span>Administrator</span>
+                                            break;
+                                        case "Company":
+                                            <span>Company Manager</span>
+                                            break;
+                                        default:
+                                            <span>Standard User</span>
+                                            break;
+                                    }
+                                </dd>
+                                
+                                <dt class="col-sm-4">Company:</dt>
+                                <dd class="col-sm-8">
+                                    @if (!string.IsNullOrEmpty(Model.User.CompanyName))
+                                    {
+                                        <a href="@Url.Action("Details", "Companies", new { id = Model.User.CompanyId })" 
+                                           class="text-decoration-none">
+                                            @Model.User.CompanyName
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No Company</span>
+                                    }
+                                </dd>
+                                
+                                <dt class="col-sm-4">Created:</dt>
+                                <dd class="col-sm-8">@Model.User.CreatedAt.ToString("MMMM dd, yyyy")</dd>
+                            </dl>
+                        </div>
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(Model.User.Bio))
+                    {
+                        <hr>
+                        <dl class="row">
+                            <dt class="col-sm-2">Bio:</dt>
+                            <dd class="col-sm-10">@Model.User.Bio</dd>
+                        </dl>
+                    }
+                </div>
+            </div>
+
+            <!-- Activity Information -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="material-symbols-rounded me-2">history</i>Activity Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <!-- Account Status -->
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="material-symbols-rounded text-info" style="font-size: 2rem;">
+                                        @(Model.User.IsActive ? "check_circle" : "cancel")
+                                    </i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">Account Status</h6>
+                                    <span class="badge @(Model.User.IsActive ? "bg-success" : "bg-danger")">
+                                        @(Model.User.IsActive ? "Active" : "Inactive")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Email Verification -->
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="material-symbols-rounded @(Model.User.IsEmailVerified ? "text-success" : "text-warning")" style="font-size: 2rem;">
+                                        @(Model.User.IsEmailVerified ? "mark_email_read" : "mark_email_unread")
+                                    </i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">Email Status</h6>
+                                    <span class="badge @(Model.User.IsEmailVerified ? "bg-success" : "bg-warning")">
+                                        @(Model.User.IsEmailVerified ? "Verified" : "Unverified")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Last Login -->
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="material-symbols-rounded text-primary" style="font-size: 2rem;">login</i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">Last Login</h6>
+                                    @if (Model.User.LastLoginAt.HasValue)
+                                    {
+                                        <small class="text-muted">@Model.User.LastLoginAt.Value.ToString("MMMM dd, yyyy HH:mm")</small>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">Never logged in</small>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Verification Status -->
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="material-symbols-rounded @(Model.User.IsVerified ? "text-success" : "text-warning")" style="font-size: 2rem;">
+                                        @(Model.User.IsVerified ? "verified_user" : "pending")
+                                    </i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">Verification</h6>
+                                    <span class="badge @(Model.User.IsVerified ? "bg-success" : "bg-warning")">
+                                        @(Model.User.IsVerified ? "Verified" : "Pending")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Actions and R2R Info -->
+        <div class="col-lg-4">
+            <!-- Quick Actions -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="material-symbols-rounded me-2">settings</i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        @if (Model.CanEdit)
+                        {
+                            <a href="@Url.Action("Edit", new { id = Model.User.Id })" class="btn btn-outline-primary">
+                                <i class="material-symbols-rounded me-2">edit</i>Edit User
+                            </a>
+                        }
+                        
+                        @if (Model.CanDelete && Model.User.IsActive)
+                        {
+                            <button type="button" class="btn btn-outline-danger" 
+                                    onclick="deactivateUser('@Model.User.Id', '@Model.User.FirstName @Model.User.LastName')">
+                                <i class="material-symbols-rounded me-2">block</i>Deactivate User
+                            </button>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(Model.User.CompanyName))
+                        {
+                            <a href="@Url.Action("Details", "Companies", new { id = Model.User.CompanyId })" class="btn btn-outline-secondary">
+                                <i class="material-symbols-rounded me-2">business</i>View Company
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- R2R Integration Status -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="material-symbols-rounded me-2">integration_instructions</i>R2R Integration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(Model.User.R2RUserId))
+                    {
+                        <div class="alert alert-success">
+                            <i class="material-symbols-rounded me-2">check_circle</i>
+                            <strong>Synchronized</strong>
+                        </div>
+                        <dl class="row small">
+                            <dt class="col-sm-5">User ID:</dt>
+                            <dd class="col-sm-7"><code>@Model.User.R2RUserId</code></dd>
+                            
+                            <dt class="col-sm-5">Company ID:</dt>
+                            <dd class="col-sm-7"><code>@Model.User.CompanyId</code></dd>
+                        </dl>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <i class="material-symbols-rounded me-2">sync_problem</i>
+                            <strong>Sync Pending</strong>
+                            <div class="small mt-1">R2R user creation in progress...</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript -->
+<script>
+    // Deactivate user
+    function deactivateUser(userId, userName) {
+        if (confirm(`Are you sure you want to deactivate the user "${userName}"?`)) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/AdminUsers/${userId}/deactivate`;
+
+            // Add anti-forgery token
+            const token = document.querySelector('input[name="__RequestVerificationToken"]');
+            if (token) {
+                const tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = '__RequestVerificationToken';
+                tokenInput.value = token.value;
+                form.appendChild(tokenInput);
+            }
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    // Auto-refresh R2R status if pending
+    @if (string.IsNullOrEmpty(Model.User.R2RUserId))
+    {
+        <text>
+        // Check for R2R sync updates every 5 seconds
+        setInterval(function() {
+            fetch(`/AdminUsers/@Model.User.Id/r2r-status`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.r2rUserId) {
+                        location.reload();
+                    }
+                })
+                .catch(error => console.log('R2R status check failed:', error));
+        }, 5000);
+        </text>
+    }
+</script>
+
+@Html.AntiForgeryToken()

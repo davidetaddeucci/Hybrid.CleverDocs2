@@ -1,0 +1,16 @@
+﻿This is test document 15 for rate limiting verification.
+
+Created for testing bulk upload with R2R rate limiting.
+Document ID: 15
+Timestamp: 06/19/2025 14:04:18
+User: a.morviducci@microsis.it
+Collection: ANDREA_COLLECTION1
+
+Content for testing purposes:
+- Rate limiting verification
+- SignalR real-time updates
+- Bulk upload processing
+- R2R queue management
+
+This document should be processed through the R2R pipeline
+with proper rate limiting (10 req/s) and real-time status updates.

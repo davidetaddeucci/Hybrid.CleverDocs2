@@ -186,11 +186,19 @@ void RegisterR2RClient<TInterface, TImplementation>(IServiceCollection services)
     {
         var cfg = builder.Configuration.GetSection("R2R");
         var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
+
         client.BaseAddress = new Uri(url);
         client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
-    })
-    .AddPolicyHandler(retryPolicy)
-    .AddPolicyHandler(circuitBreakerPolicy);
+
+        // R2R service is configured for anonymous access - no authentication required
+        // Clear any default headers that might interfere
+        client.DefaultRequestHeaders.Clear();
+        client.DefaultRequestHeaders.Add("Accept", "application/json");
+        client.DefaultRequestHeaders.Add("User-Agent", "Hybrid.CleverDocs2.WebServices/2.0.0");
+    });
+    // Temporarily disable Polly policies to test if they're causing issues
+    // .AddPolicyHandler(retryPolicy)
+    // .AddPolicyHandler(circuitBreakerPolicy);
 }
 
 // Register all R2R clients
@@ -264,7 +272,7 @@ builder.Services.Configure<L1CacheOptions>(builder.Configuration.GetSection("L1C
 builder.Services.Configure<L2CacheOptions>(builder.Configuration.GetSection("L2Cache"));
 builder.Services.Configure<L3CacheOptions>(builder.Configuration.GetSection("L3Cache"));
 builder.Services.Configure<CacheInvalidationOptions>(builder.Configuration.GetSection("CacheInvalidation"));
-builder.Services.Configure<CacheWarmingOptions>(builder.Configuration.GetSection("CacheWarming"));
+builder.Services.Configure<Hybrid.CleverDocs2.WebServices.Services.Cache.CacheWarmingOptions>(builder.Configuration.GetSection("CacheWarming"));
 
 // Cache Service Implementations
 builder.Services.AddSingleton<ICacheKeyGenerator, CacheKeyGenerator>();
@@ -281,7 +289,7 @@ builder.Services.AddScoped<IR2RCacheService, R2RCacheService>();
 
 // Collection Services
 builder.Services.Configure<UserCollectionOptions>(builder.Configuration.GetSection("UserCollections"));
-builder.Services.Configure<CollectionSyncOptions>(builder.Configuration.GetSection("CollectionSync"));
+builder.Services.Configure<Hybrid.CleverDocs2.WebServices.Services.Collections.CollectionSyncOptions>(builder.Configuration.GetSection("CollectionSync"));
 builder.Services.Configure<CollectionSuggestionOptions>(builder.Configuration.GetSection("CollectionSuggestions"));
 builder.Services.Configure<CollectionAnalyticsOptions>(builder.Configuration.GetSection("CollectionAnalytics"));
 
@@ -314,6 +322,19 @@ builder.Services.AddScoped<IUserDocumentService, UserDocumentService>();
 // Background Workers - R2R Document Processing
 // builder.Services.AddHostedService<IngestionWorker>(); // Old MassTransit worker - disabled
 builder.Services.AddHostedService<R2RDocumentProcessingWorker>(); // ✅ Re-enabled with Redis working
+
+// Background Workers - Additional Services
+builder.Services.Configure<Hybrid.CleverDocs2.WebServices.Workers.UserSyncOptions>(builder.Configuration.GetSection("BackgroundServices:UserSync"));
+builder.Services.AddHostedService<UserSyncWorker>();
+
+builder.Services.Configure<Hybrid.CleverDocs2.WebServices.Workers.CollectionSyncOptions>(builder.Configuration.GetSection("BackgroundServices:CollectionSync"));
+builder.Services.AddHostedService<CollectionSyncWorker>();
+
+builder.Services.Configure<Hybrid.CleverDocs2.WebServices.Workers.MaintenanceOptions>(builder.Configuration.GetSection("BackgroundServices:Maintenance"));
+builder.Services.AddHostedService<MaintenanceWorker>();
+
+builder.Services.Configure<Hybrid.CleverDocs2.WebServices.Workers.CacheWarmingOptions>(builder.Configuration.GetSection("BackgroundServices:CacheWarming"));
+builder.Services.AddHostedService<CacheWarmingWorker>();
 
 // CORS - Enhanced configuration
 var corsSection = builder.Configuration.GetSection("Cors");

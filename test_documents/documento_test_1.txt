@@ -1,0 +1,19 @@
+Documento di Test 1 - Sistema CleverDocs2
+
+Questo è un documento di test per verificare il funzionamento del sistema di upload e ingestion di CleverDocs2.
+
+Il sistema dovrebbe:
+1. Caricare il documento nel database PostgreSQL
+2. Inviare il documento a R2R per l'ingestion
+3. Aggiornare lo stato in tempo reale via SignalR
+4. Gestire correttamente il rate limiting per evitare errori
+
+Contenuto di esempio:
+- Tecnologie utilizzate: .NET 9.0, PostgreSQL, Redis, RabbitMQ, R2R
+- Architettura: Multi-tenant con isolamento a livello utente
+- Sicurezza: JWT con HttpOnly cookies
+- Real-time: SignalR per aggiornamenti live
+
+Data di creazione: 19 giugno 2025
+Autore: Sistema di test automatico
+Categoria: Test di funzionalità

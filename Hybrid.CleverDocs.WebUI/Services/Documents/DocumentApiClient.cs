@@ -786,17 +786,19 @@ public class DocumentApiClient : IDocumentApiClient
     private static DocumentStatus MapDocumentStatus(string status)
     {
         // Handle both string and numeric status values
+        // Backend enum: Draft=0, Processing=1, Ready=2, Error=3, Archived=4, Deleted=5
         return status?.ToLowerInvariant() switch
         {
-            "uploaded" or "1" => DocumentStatus.Processing,
-            "processing" or "2" => DocumentStatus.Processing,
-            "processed" or "3" => DocumentStatus.Ready,
-            "failed" or "4" => DocumentStatus.Error,
-            "deleted" or "5" => DocumentStatus.Deleted,
-            "ready" => DocumentStatus.Ready,
-            "error" => DocumentStatus.Error,
             "draft" or "0" => DocumentStatus.Draft,
-            "archived" => DocumentStatus.Archived,
+            "processing" or "1" => DocumentStatus.Processing,
+            "ready" or "2" => DocumentStatus.Ready,
+            "error" or "3" => DocumentStatus.Error,
+            "archived" or "4" => DocumentStatus.Archived,
+            "deleted" or "5" => DocumentStatus.Deleted,
+            // Legacy string mappings for backward compatibility
+            "uploaded" => DocumentStatus.Processing,
+            "processed" => DocumentStatus.Ready,
+            "failed" => DocumentStatus.Error,
             _ => DocumentStatus.Draft
         };
     }

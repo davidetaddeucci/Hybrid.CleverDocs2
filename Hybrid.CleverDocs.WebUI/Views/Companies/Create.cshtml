@@ -1,0 +1,249 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.Companies.CreateCompanyViewModel
+@{
+    ViewData["Title"] = "Create Company";
+    Layout = "_Layout";
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <i class="material-symbols-rounded text-primary me-2">add_business</i>Create New Company
+                    </h1>
+                    <p class="text-muted mb-0">Add a new company to the system with R2R integration</p>
+                </div>
+                <div>
+                    <a href="@Url.Action("Index")" class="btn btn-outline-secondary">
+                        <i class="material-symbols-rounded me-2">arrow_back</i>Back to Companies
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Form -->
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <form asp-action="Create" method="post" id="createCompanyForm">
+                        @Html.AntiForgeryToken()
+                        
+                        <!-- Basic Information -->
+                        <div class="mb-4">
+                            <h5 class="card-title mb-3">
+                                <i class="material-symbols-rounded me-2">info</i>Basic Information
+                            </h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="Name" class="form-label">Company Name *</label>
+                                    <input asp-for="Name" class="form-control" placeholder="Enter company name" />
+                                    <span asp-validation-for="Name" class="text-danger"></span>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="Website" class="form-label">Website</label>
+                                    <input asp-for="Website" class="form-control" placeholder="https://example.com" />
+                                    <span asp-validation-for="Website" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="Description" class="form-label">Description</label>
+                                <textarea asp-for="Description" class="form-control" rows="3" 
+                                          placeholder="Brief description of the company"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Contact Information -->
+                        <div class="mb-4">
+                            <h5 class="card-title mb-3">
+                                <i class="material-symbols-rounded me-2">contact_mail</i>Contact Information
+                            </h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="ContactEmail" class="form-label">Contact Email</label>
+                                    <input asp-for="ContactEmail" class="form-control" placeholder="contact@company.com" />
+                                    <span asp-validation-for="ContactEmail" class="text-danger"></span>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="ContactPhone" class="form-label">Contact Phone</label>
+                                    <input asp-for="ContactPhone" class="form-control" placeholder="+1 (555) 123-4567" />
+                                    <span asp-validation-for="ContactPhone" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="Address" class="form-label">Address</label>
+                                <textarea asp-for="Address" class="form-control" rows="2" 
+                                          placeholder="Company address"></textarea>
+                                <span asp-validation-for="Address" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Limits & Quotas -->
+                        <div class="mb-4">
+                            <h5 class="card-title mb-3">
+                                <i class="material-symbols-rounded me-2">settings</i>Limits & Quotas
+                            </h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="MaxUsers" class="form-label">Max Users</label>
+                                    <input asp-for="MaxUsers" class="form-control" type="number" min="1" max="10000" />
+                                    <span asp-validation-for="MaxUsers" class="text-danger"></span>
+                                    <div class="form-text">Maximum number of users allowed</div>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="MaxDocuments" class="form-label">Max Documents</label>
+                                    <input asp-for="MaxDocuments" class="form-control" type="number" min="1" max="1000000" />
+                                    <span asp-validation-for="MaxDocuments" class="text-danger"></span>
+                                    <div class="form-text">Maximum number of documents allowed</div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="MaxCollections" class="form-label">Max Collections</label>
+                                    <input asp-for="MaxCollections" class="form-control" type="number" min="1" max="10000" />
+                                    <span asp-validation-for="MaxCollections" class="text-danger"></span>
+                                    <div class="form-text">Maximum number of collections allowed</div>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="MaxStorageGB" class="form-label">Max Storage (GB)</label>
+                                    <input type="number" id="MaxStorageGB" class="form-control" min="1" max="1000" 
+                                           value="@(Model.MaxStorageBytes / (1024 * 1024 * 1024))" 
+                                           onchange="updateStorageBytes()" />
+                                    <input asp-for="MaxStorageBytes" type="hidden" />
+                                    <div class="form-text">Maximum storage space allowed</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- R2R Configuration -->
+                        <div class="mb-4">
+                            <h5 class="card-title mb-3">
+                                <i class="material-symbols-rounded me-2">integration_instructions</i>R2R Configuration
+                                <small class="text-muted">(Optional)</small>
+                            </h5>
+                            
+                            <div class="mb-3">
+                                <label asp-for="R2RApiKey" class="form-label">R2R API Key</label>
+                                <input asp-for="R2RApiKey" class="form-control" type="password" 
+                                       placeholder="Optional custom R2R API key" />
+                                <span asp-validation-for="R2RApiKey" class="text-danger"></span>
+                                <div class="form-text">Leave empty to use system default</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="R2RConfiguration" class="form-label">R2R Configuration</label>
+                                <textarea asp-for="R2RConfiguration" class="form-control" rows="3" 
+                                          placeholder="Optional JSON configuration for R2R"></textarea>
+                                <span asp-validation-for="R2RConfiguration" class="text-danger"></span>
+                                <div class="form-text">Custom R2R configuration in JSON format</div>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="@Url.Action("Index")" class="btn btn-outline-secondary">
+                                <i class="material-symbols-rounded me-2">cancel</i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">
+                                <i class="material-symbols-rounded me-2">save</i>Create Company
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom CSS -->
+<style>
+    .card-title {
+        color: #495057;
+        font-weight: 600;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .form-control:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    
+    .btn-primary {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
+    }
+</style>
+
+<!-- JavaScript -->
+<script>
+    // Update storage bytes when GB input changes
+    function updateStorageBytes() {
+        const gbInput = document.getElementById('MaxStorageGB');
+        const bytesInput = document.querySelector('input[name="MaxStorageBytes"]');
+        const gb = parseFloat(gbInput.value) || 0;
+        bytesInput.value = gb * 1024 * 1024 * 1024;
+    }
+
+    // Form submission handling
+    document.getElementById('createCompanyForm').addEventListener('submit', function(e) {
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="material-symbols-rounded me-2">hourglass_empty</i>Creating...';
+        
+        // Re-enable button after 10 seconds to prevent permanent disable
+        setTimeout(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="material-symbols-rounded me-2">save</i>Create Company';
+        }, 10000);
+    });
+
+    // Initialize storage bytes on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateStorageBytes();
+    });
+
+    // Validate R2R Configuration JSON
+    document.querySelector('textarea[name="R2RConfiguration"]').addEventListener('blur', function() {
+        const value = this.value.trim();
+        if (value && value !== '') {
+            try {
+                JSON.parse(value);
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            } catch (e) {
+                this.classList.remove('is-valid');
+                this.classList.add('is-invalid');
+                // You could add a validation message here
+            }
+        } else {
+            this.classList.remove('is-invalid', 'is-valid');
+        }
+    });
+</script>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

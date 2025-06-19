@@ -94,13 +94,38 @@ class R2RProcessingManager {
             this.connection.on("R2RProcessingUpdate", (queueItem) => {
                 this.handleR2RUpdate(queueItem);
             });
-            
+
             this.connection.on("R2RProcessingStatus", (status) => {
                 this.handleR2RStatusUpdate(status);
             });
-            
+
             this.connection.on("InitialUploadSessions", (sessions) => {
                 this.handleInitialSessions(sessions);
+            });
+
+            // Event handlers per notifiche Admin (Company/User creation)
+            this.connection.on("CompanyCreated", (data) => {
+                this.handleCompanyCreated(data);
+            });
+
+            this.connection.on("CompanyUpdated", (data) => {
+                this.handleCompanyUpdated(data);
+            });
+
+            this.connection.on("CompanyDeactivated", (data) => {
+                this.handleCompanyDeactivated(data);
+            });
+
+            this.connection.on("UserCreated", (data) => {
+                this.handleUserCreated(data);
+            });
+
+            this.connection.on("UserUpdated", (data) => {
+                this.handleUserUpdated(data);
+            });
+
+            this.connection.on("UserDeactivated", (data) => {
+                this.handleUserDeactivated(data);
             });
             
             // Connection state handlers
@@ -238,6 +263,67 @@ class R2RProcessingManager {
         console.log('Initial sessions received:', sessions);
         // Processa sessioni iniziali se necessario
     }
+
+    // Admin notification handlers
+    handleCompanyCreated(data) {
+        console.log('Company created:', data);
+        this.showAdminNotification('success', 'Company Created',
+            `Company "${data.Name}" created successfully. R2R tenant sync in progress.`, 'business');
+
+        // Update company pages if we're on them
+        if (this.isOnPage(['companies', 'adminusers'])) {
+            this.schedulePageRefresh(3000);
+        }
+    }
+
+    handleCompanyUpdated(data) {
+        console.log('Company updated:', data);
+        this.showAdminNotification('info', 'Company Updated',
+            `Company "${data.Name}" updated successfully. R2R tenant sync in progress.`, 'edit');
+
+        // Update R2R status indicators
+        this.updateR2RStatusIndicator('company', data.CompanyId, data.R2RTenantId);
+    }
+
+    handleCompanyDeactivated(data) {
+        console.log('Company deactivated:', data);
+        this.showAdminNotification('warning', 'Company Deactivated',
+            `Company "${data.Name}" has been deactivated.`, 'block');
+
+        if (this.isOnPage(['companies'])) {
+            this.schedulePageRefresh(2000);
+        }
+    }
+
+    handleUserCreated(data) {
+        console.log('User created:', data);
+        this.showAdminNotification('success', 'User Created',
+            `User "${data.Email}" created successfully. R2R user sync in progress.`, 'person_add');
+
+        // Update user pages if we're on them
+        if (this.isOnPage(['adminusers', 'companyusers'])) {
+            this.schedulePageRefresh(3000);
+        }
+    }
+
+    handleUserUpdated(data) {
+        console.log('User updated:', data);
+        this.showAdminNotification('info', 'User Updated',
+            `User "${data.Email}" updated successfully. R2R user sync in progress.`, 'edit');
+
+        // Update R2R status indicators
+        this.updateR2RStatusIndicator('user', data.UserId, data.R2RUserId);
+    }
+
+    handleUserDeactivated(data) {
+        console.log('User deactivated:', data);
+        this.showAdminNotification('warning', 'User Deactivated',
+            `User "${data.Email}" has been deactivated.`, 'block');
+
+        if (this.isOnPage(['adminusers', 'companyusers'])) {
+            this.schedulePageRefresh(2000);
+        }
+    }
     
     updateProcessingList() {
         const listContainer = document.getElementById('r2r-processing-list');
@@ -353,7 +439,7 @@ class R2RProcessingManager {
     showStatusNotification(queueItem) {
         const config = this.statusConfig[queueItem.Status];
         const isSuccess = queueItem.Status === 'Completed';
-        
+
         // Crea notifica toast
         const toast = document.createElement('div');
         toast.className = `toast align-items-center text-white bg-${config.color} border-0`;
@@ -367,7 +453,39 @@ class R2RProcessingManager {
                 <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
             </div>
         `;
-        
+
+        this.showToast(toast, 5000);
+    }
+
+    showAdminNotification(type, title, message, icon = 'info') {
+        const colorMap = {
+            'success': 'success',
+            'info': 'info',
+            'warning': 'warning',
+            'error': 'danger'
+        };
+
+        const bgColor = colorMap[type] || 'info';
+
+        // Crea notifica toast per admin
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${bgColor} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="material-symbols-rounded me-2">${icon}</i>
+                    <strong>${title}</strong><br>
+                    <small>${message}</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+
+        this.showToast(toast, 7000);
+    }
+
+    showToast(toast, delay = 5000) {
         // Aggiungi al container toast
         let toastContainer = document.getElementById('toast-container');
         if (!toastContainer) {
@@ -377,13 +495,13 @@ class R2RProcessingManager {
             toastContainer.style.zIndex = '1055';
             document.body.appendChild(toastContainer);
         }
-        
+
         toastContainer.appendChild(toast);
-        
+
         // Mostra toast
-        const bsToast = new bootstrap.Toast(toast, { delay: 5000 });
+        const bsToast = new bootstrap.Toast(toast, { delay });
         bsToast.show();
-        
+
         // Rimuovi dopo che si nasconde
         toast.addEventListener('hidden.bs.toast', () => {
             toast.remove();
@@ -428,16 +546,57 @@ class R2RProcessingManager {
         }, 30000);
     }
     
+    // Admin support methods
+    isOnPage(pageNames) {
+        const currentPath = window.location.pathname.toLowerCase();
+        return pageNames.some(page => currentPath.includes(page.toLowerCase()));
+    }
+
+    schedulePageRefresh(delay = 3000) {
+        // Show refresh notification
+        this.showAdminNotification('info', 'Page Refresh',
+            `Page will refresh in ${delay/1000} seconds to show updates.`, 'refresh');
+
+        // Schedule refresh
+        setTimeout(() => {
+            window.location.reload();
+        }, delay);
+    }
+
+    updateR2RStatusIndicator(type, entityId, r2rId) {
+        // Update R2R status indicators on the page
+        const indicators = document.querySelectorAll(`[data-${type}-id="${entityId}"] .r2r-status, .r2r-status[data-${type}-id="${entityId}"]`);
+
+        indicators.forEach(indicator => {
+            if (r2rId) {
+                indicator.innerHTML = `
+                    <span class="badge bg-success" title="R2R Synchronized">
+                        <i class="material-symbols-rounded me-1" style="font-size: 12px;">check_circle</i>
+                        Synced
+                    </span>
+                    <div class="small text-muted mt-1">ID: ${r2rId.substring(0, 8)}...</div>
+                `;
+            } else {
+                indicator.innerHTML = `
+                    <span class="badge bg-warning" title="R2R Sync in Progress">
+                        <i class="material-symbols-rounded me-1 spin" style="font-size: 12px;">sync</i>
+                        Syncing...
+                    </span>
+                `;
+            }
+        });
+    }
+
     // Metodi pubblici per integrazione esterna
     getProcessingStatus(documentId) {
         return this.processingItems.get(documentId);
     }
-    
+
     isDocumentProcessing(documentId) {
         const item = this.processingItems.get(documentId);
         return item && !['Completed', 'Failed'].includes(item.Status);
     }
-    
+
     getActiveProcessingCount() {
         return Array.from(this.processingItems.values())
             .filter(item => !['Completed', 'Failed'].includes(item.Status)).length;
@@ -480,8 +639,14 @@ class R2RProcessingManager {
 
 // Inizializza automaticamente quando il DOM è pronto
 document.addEventListener('DOMContentLoaded', () => {
-    // Inizializza solo se siamo in una pagina con documenti
-    if (document.querySelector('.documents-table, #documents-table, [data-page="documents"]')) {
+    // Inizializza se siamo in una pagina con documenti o pagine admin
+    const isDocumentPage = document.querySelector('.documents-table, #documents-table, [data-page="documents"]');
+    const isAdminPage = document.querySelector('[data-page="companies"], [data-page="adminusers"], [data-page="companyusers"]') ||
+                       window.location.pathname.toLowerCase().includes('/companies') ||
+                       window.location.pathname.toLowerCase().includes('/adminusers') ||
+                       window.location.pathname.toLowerCase().includes('/companyusers');
+
+    if (isDocumentPage || isAdminPage) {
         window.r2rManager = new R2RProcessingManager();
     }
 });

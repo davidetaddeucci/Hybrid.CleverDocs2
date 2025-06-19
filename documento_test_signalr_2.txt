@@ -1,0 +1,23 @@
+Test Document per SignalR Real-Time Updates - SECONDO TEST
+===========================================================
+
+Questo è il SECONDO documento di test per verificare che la correzione della cache
+e SignalR funzioni correttamente in tempo reale.
+
+CORREZIONE IMPLEMENTATA:
+- Cambiato UserDocumentService da CacheOptions.ForSearch() a CacheOptions.ForDocumentLists()
+- Ora la cache ha i tag corretti per l'invalidazione
+- L'invalidazione per tag dovrebbe funzionare correttamente
+
+RISULTATI ATTESI:
+- La griglia dovrebbe aggiornarsi automaticamente senza ricaricare la pagina
+- Il contatore dei documenti dovrebbe passare da 4 a 5
+- SignalR dovrebbe inviare notifiche real-time
+
+Data test: 19 giugno 2025
+Ora test: 12:45 PM
+Sistema: Hybrid.CleverDocs2 v2.0.0
+Test: SECONDO UPLOAD per verificare SignalR real-time
+
+Questo test verifica che la correzione della cache funzioni e che SignalR
+aggiorni la griglia in tempo reale senza dover ricaricare la pagina.

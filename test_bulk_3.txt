@@ -1,0 +1,4 @@
+This is test document 3 for bulk upload verification.
+Created for testing cache invalidation and SignalR updates.
+Document ID: 3
+Timestamp: 2025-06-19 14:22:00

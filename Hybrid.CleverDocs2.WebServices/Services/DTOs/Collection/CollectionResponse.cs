@@ -4,7 +4,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Collection
 {
     public class CollectionResponse
     {
-        [JsonPropertyName("collection_id")]
+        [JsonPropertyName("id")]
         public string CollectionId { get; set; } = string.Empty;
 
         [JsonPropertyName("name")]

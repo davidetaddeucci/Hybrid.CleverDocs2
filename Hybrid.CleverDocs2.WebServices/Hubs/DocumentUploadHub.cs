@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using System.Collections.Concurrent;
 using Hybrid.CleverDocs2.WebServices.Models.Documents;
 using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Documents;
@@ -8,7 +10,7 @@ using Hybrid.CleverDocs2.WebServices.Services.Logging;
 namespace Hybrid.CleverDocs2.WebServices.Hubs;
 
 /// <summary>
-/// SignalR hub for real-time document upload progress tracking
+/// SignalR hub for real-time document upload progress tracking with event persistence
 /// </summary>
 [Authorize]
 public class DocumentUploadHub : Hub
@@ -17,6 +19,10 @@ public class DocumentUploadHub : Hub
     private readonly IDocumentUploadService _uploadService;
     private readonly ILogger<DocumentUploadHub> _logger;
     private readonly ICorrelationService _correlationService;
+
+    // Event persistence for handling race conditions between processing completion and connection establishment
+    private static readonly ConcurrentDictionary<string, List<PendingSignalREvent>> _pendingEvents = new();
+    private static readonly object _eventLock = new object();
 
     public DocumentUploadHub(
         IUploadProgressService progressService,
@@ -44,10 +50,16 @@ public class DocumentUploadHub : Hub
                 userId, Context.ConnectionId, correlationId);
 
             // Join user-specific group for targeted updates
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
+            var userGroup = $"user_{userId}";
+            await Groups.AddToGroupAsync(Context.ConnectionId, userGroup);
+            _logger.LogInformation("Added connection {ConnectionId} to group {UserGroup}, CorrelationId: {CorrelationId}",
+                Context.ConnectionId, userGroup, correlationId);
 
             // Send initial upload sessions data
             await SendInitialUploadDataAsync(userId);
+
+            // Replay any pending events that were sent before this connection was established
+            await ReplayPendingEventsAsync(userId);
 
             await base.OnConnectedAsync();
         }
@@ -331,6 +343,16 @@ public class DocumentUploadHub : Hub
     // Helper methods
     private string GetUserId()
     {
+        // Get the user ID from the JWT token claims (nameid claim contains the user GUID)
+        var userIdClaim = Context.User?.FindFirst("nameid")?.Value ??
+                         Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (!string.IsNullOrEmpty(userIdClaim))
+        {
+            return userIdClaim;
+        }
+
+        // Fallback to other identifiers
         return Context.User?.Identity?.Name ?? Context.UserIdentifier ?? "anonymous";
     }
 
@@ -365,6 +387,125 @@ public class DocumentUploadHub : Hub
         // This is a simplified version
         await Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Replays any pending events for the user that were sent before connection was established
+    /// Only replays very recent events to avoid infinite refresh loops
+    /// </summary>
+    private async Task ReplayPendingEventsAsync(string userId)
+    {
+        try
+        {
+            if (_pendingEvents.TryGetValue(userId, out var events))
+            {
+                List<PendingSignalREvent> eventsToReplay;
+
+                // Create a copy of events to avoid modification during iteration
+                lock (_eventLock)
+                {
+                    eventsToReplay = events.ToList();
+                }
+
+                // Add delay to ensure page is fully loaded before replaying events
+                await Task.Delay(2000);
+
+                var recentEventThreshold = TimeSpan.FromSeconds(30); // Only replay very recent events
+                var eventsReplayed = 0;
+
+                foreach (var pendingEvent in eventsToReplay)
+                {
+                    // Only replay very recent events (within last 30 seconds) to avoid refresh loops
+                    if (DateTime.UtcNow - pendingEvent.Timestamp <= recentEventThreshold)
+                    {
+                        _logger.LogInformation("Replaying recent SignalR event {EventType} for user {UserId}, sent {SecondsAgo} seconds ago",
+                            pendingEvent.EventType, userId, (DateTime.UtcNow - pendingEvent.Timestamp).TotalSeconds);
+
+                        // Send the event to this specific connection
+                        await Clients.Caller.SendAsync(pendingEvent.EventType, pendingEvent.EventData);
+                        eventsReplayed++;
+
+                        // Add small delay between events to prevent overwhelming the client
+                        await Task.Delay(100);
+                    }
+                }
+
+                _logger.LogInformation("Replayed {EventCount} recent events for user {UserId}", eventsReplayed, userId);
+
+                // Clean up old events (older than 30 seconds)
+                lock (_eventLock)
+                {
+                    events.RemoveAll(e => DateTime.UtcNow - e.Timestamp > recentEventThreshold);
+
+                    // Remove user from dictionary if no events left
+                    if (events.Count == 0)
+                    {
+                        _pendingEvents.TryRemove(userId, out _);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error replaying pending events for user {UserId}", userId);
+        }
+    }
+
+    /// <summary>
+    /// Stores a SignalR event for later replay if user is not connected
+    /// Only stores events for a short time to prevent infinite refresh loops
+    /// </summary>
+    public static void StorePendingEvent(string userId, string eventType, object eventData)
+    {
+        try
+        {
+            lock (_eventLock)
+            {
+                if (!_pendingEvents.ContainsKey(userId))
+                {
+                    _pendingEvents[userId] = new List<PendingSignalREvent>();
+                }
+
+                var pendingEvent = new PendingSignalREvent
+                {
+                    EventType = eventType,
+                    EventData = eventData,
+                    Timestamp = DateTime.UtcNow
+                };
+
+                _pendingEvents[userId].Add(pendingEvent);
+
+                // Clean up old events immediately (older than 30 seconds)
+                var cutoffTime = DateTime.UtcNow.AddSeconds(-30);
+                _pendingEvents[userId].RemoveAll(e => e.Timestamp < cutoffTime);
+
+                // Limit to last 3 events per user to prevent memory issues and reduce refresh loops
+                if (_pendingEvents[userId].Count > 3)
+                {
+                    _pendingEvents[userId].RemoveRange(0, _pendingEvents[userId].Count - 3);
+                }
+
+                // Remove user from dictionary if no recent events
+                if (_pendingEvents[userId].Count == 0)
+                {
+                    _pendingEvents.TryRemove(userId, out _);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Silently fail to avoid breaking the main flow
+        }
+    }
+}
+
+/// <summary>
+/// Represents a pending SignalR event that needs to be replayed when user connects
+/// </summary>
+public class PendingSignalREvent
+{
+    public string EventType { get; set; } = string.Empty;
+    public object EventData { get; set; } = new();
+    public DateTime Timestamp { get; set; }
 }
 
 /// <summary>
@@ -396,13 +537,27 @@ public static class DocumentUploadHubExtensions
     }
 
     /// <summary>
-    /// Broadcasts file upload completion
+    /// Broadcasts file upload completion with event persistence
     /// </summary>
-    public static async Task BroadcastFileUploadCompleted(this IHubContext<DocumentUploadHub> hubContext, 
+    public static async Task BroadcastFileUploadCompleted(this IHubContext<DocumentUploadHub> hubContext,
         Guid sessionId, FileUploadInfoDto fileInfo)
     {
         await hubContext.Clients.Group($"session_{sessionId}")
             .SendAsync("FileUploadCompleted", fileInfo);
+    }
+
+    /// <summary>
+    /// Broadcasts file upload completion to user group with event persistence for race condition handling
+    /// </summary>
+    public static async Task BroadcastFileUploadCompletedToUser(this IHubContext<DocumentUploadHub> hubContext,
+        string userId, object eventData)
+    {
+        // Send to connected clients
+        await hubContext.Clients.Group($"user_{userId}")
+            .SendAsync("FileUploadCompleted", eventData);
+
+        // Store for replay in case user connects after event is sent
+        DocumentUploadHub.StorePendingEvent(userId, "FileUploadCompleted", eventData);
     }
 
     /// <summary>

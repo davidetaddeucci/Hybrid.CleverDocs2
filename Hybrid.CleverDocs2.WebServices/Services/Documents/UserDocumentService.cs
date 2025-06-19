@@ -6,6 +6,7 @@ using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Services.Clients;
 using Hybrid.CleverDocs2.WebServices.Hubs;
+
 using System.Text.Json;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Documents;
@@ -22,6 +23,7 @@ public class UserDocumentService : IUserDocumentService
     private readonly IDocumentClient _documentClient;
     private readonly ICollectionClient _collectionClient;
     private readonly IHubContext<DocumentUploadHub> _hubContext;
+    private readonly IDocumentProcessingService _documentProcessingService;
 
     /// <summary>
     /// Helper method to convert string userId to Guid for database compatibility
@@ -43,7 +45,8 @@ public class UserDocumentService : IUserDocumentService
         ICorrelationService correlationService,
         IDocumentClient documentClient,
         ICollectionClient collectionClient,
-        IHubContext<DocumentUploadHub> hubContext)
+        IHubContext<DocumentUploadHub> hubContext,
+        IDocumentProcessingService documentProcessingService)
     {
         _context = context;
         _cacheService = cacheService;
@@ -52,6 +55,7 @@ public class UserDocumentService : IUserDocumentService
         _documentClient = documentClient;
         _collectionClient = collectionClient;
         _hubContext = hubContext;
+        _documentProcessingService = documentProcessingService;
     }
 
     public async Task<PagedDocumentResultDto> SearchDocumentsAsync(DocumentQueryDto query, CancellationToken cancellationToken = default)
@@ -63,17 +67,8 @@ public class UserDocumentService : IUserDocumentService
             _logger.LogInformation("Searching documents with query: {Query}, CorrelationId: {CorrelationId}", 
                 JsonSerializer.Serialize(query), correlationId);
 
-            // Build cache key
-            var cacheKey = $"documents:search:{GenerateQueryHash(query)}";
-            
-            // Try cache first with ForSearch options (DISABLED for debugging)
-            var searchCacheOptions = CacheOptions.ForSearch();
-            var cachedResult = await _cacheService.GetAsync<PagedDocumentResultDto>(cacheKey, searchCacheOptions);
-            if (cachedResult != null)
-            {
-                _logger.LogDebug("Returning cached search results, CorrelationId: {CorrelationId}", correlationId);
-                return cachedResult;
-            }
+            // REDIS REMOVED: No caching for CRUD operations as per user requirements
+            // Redis should only be used for intensive chat operations
 
             // Build query
             var documentsQuery = _context.Documents.AsQueryable();
@@ -216,9 +211,7 @@ public class UserDocumentService : IUserDocumentService
                 Aggregations = await BuildAggregations(documentsQuery, cancellationToken)
             };
 
-            // Cache result with ForSearch options (DISABLED for debugging)
-            var cacheOptions = CacheOptions.ForSearch();
-            await _cacheService.SetAsync(cacheKey, result, cacheOptions);
+            // REDIS REMOVED: No caching for CRUD operations as per user requirements
 
             _logger.LogInformation("Document search completed: {TotalCount} results, CorrelationId: {CorrelationId}", 
                 totalCount, correlationId);
@@ -245,13 +238,7 @@ public class UserDocumentService : IUserDocumentService
 
         try
         {
-            var cacheKey = $"document:{documentId}:{userId}";
-            
-            var cachedDocument = await _cacheService.GetAsync<UserDocumentDto>(cacheKey);
-            if (cachedDocument != null)
-            {
-                return cachedDocument;
-            }
+            // REDIS REMOVED: No caching for CRUD operations as per user requirements
 
             var document = await _context.Documents
                 .Where(d => d.Id == documentId && d.UserId == userId)
@@ -297,7 +284,7 @@ public class UserDocumentService : IUserDocumentService
                     document.CollectionName = collection;
                 }
 
-                await _cacheService.SetAsync(cacheKey, document, CacheOptions.ForDocumentMetadata());
+                // REDIS REMOVED: No caching for CRUD operations as per user requirements
             }
 
             return document;
@@ -773,7 +760,89 @@ public class UserDocumentService : IUserDocumentService
     public async Task<PagedDocumentResultDto> GetArchivedDocumentsAsync(Guid userId, DocumentQueryDto query) => await Task.FromResult(new PagedDocumentResultDto());
     public async Task<bool> PermanentlyDeleteDocumentAsync(Guid documentId, Guid userId) => await Task.FromResult(false);
     public async Task<List<UserDocumentDto>> GetPendingProcessingDocumentsAsync(Guid userId) => await Task.FromResult(new List<UserDocumentDto>());
-    public async Task<bool> RetryDocumentProcessingAsync(Guid documentId, Guid userId) => await Task.FromResult(false);
+    public async Task<bool> RetryDocumentProcessingAsync(Guid documentId, Guid userId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+
+        try
+        {
+            _logger.LogInformation("Retrying document processing for DocumentId: {DocumentId}, UserId: {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+
+            // Get the document
+            var document = await _context.Documents
+                .FirstOrDefaultAsync(d => d.Id == documentId && d.UserId == userId);
+
+            if (document == null)
+            {
+                _logger.LogWarning("Document not found for retry: DocumentId: {DocumentId}, UserId: {UserId}, CorrelationId: {CorrelationId}",
+                    documentId, userId, correlationId);
+                return false;
+            }
+
+            // Check if document is in a state that can be retried
+            if (document.Status != (int)Data.Entities.DocumentStatus.Processing && document.Status != (int)Data.Entities.DocumentStatus.Error)
+            {
+                _logger.LogWarning("Document is not in a retryable state: DocumentId: {DocumentId}, Status: {Status}, CorrelationId: {CorrelationId}",
+                    documentId, document.Status, correlationId);
+                return false;
+            }
+
+            // Reset document status for retry
+            document.Status = (int)Data.Entities.DocumentStatus.Processing;
+            document.IsProcessing = true;
+            document.ProcessingError = null;
+            document.UpdatedAt = DateTime.UtcNow;
+
+            // Create R2R processing queue item
+            var queueItem = new R2RProcessingQueueItemDto
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = documentId,
+                FileName = document.FileName,
+                FilePath = document.FilePath,
+                FileSize = document.SizeInBytes,
+                UserId = userId.ToString(),
+                CollectionId = document.CollectionId,
+                Priority = R2RProcessingPriorityDto.Normal,
+                Status = R2RProcessingStatusDto.Queued,
+                CreatedAt = DateTime.UtcNow,
+                RetryCount = 0,
+                MaxRetries = 3
+            };
+
+            // Queue for R2R processing
+            var queued = await _documentProcessingService.QueueDocumentForProcessingAsync(queueItem);
+
+            if (queued)
+            {
+                await _context.SaveChangesAsync();
+
+                // Invalidate cache
+                var tenantId = userId.ToString();
+                var cacheOptions = CacheOptions.ForDocumentLists(userId.ToString(), document.CollectionId?.ToString());
+
+                await _cacheService.InvalidateByTagsAsync(cacheOptions.Tags, tenantId);
+
+                _logger.LogInformation("Document processing retry queued successfully: DocumentId: {DocumentId}, QueueItemId: {QueueItemId}, CorrelationId: {CorrelationId}",
+                    documentId, queueItem.Id, correlationId);
+
+                return true;
+            }
+            else
+            {
+                _logger.LogError("Failed to queue document for retry processing: DocumentId: {DocumentId}, CorrelationId: {CorrelationId}",
+                    documentId, correlationId);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrying document processing: DocumentId: {DocumentId}, UserId: {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+            return false;
+        }
+    }
     public async Task<Dictionary<string, object>> GetDocumentProcessingStatusAsync(Guid documentId, Guid userId) => await Task.FromResult(new Dictionary<string, object>());
     public async Task<string> ShareDocumentAsync(Guid documentId, Guid userId, List<string> targetUserIds, DocumentPermissions permissions, TimeSpan? expiration = null) => await Task.FromResult(string.Empty);
     // Additional interface methods implementations

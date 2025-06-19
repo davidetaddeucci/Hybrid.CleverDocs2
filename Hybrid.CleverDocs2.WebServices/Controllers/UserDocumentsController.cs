@@ -81,7 +81,12 @@ public class UserDocumentsController : ControllerBase
 
         try
         {
-            _logger.LogInformation("Getting documents for collection {CollectionId}, user {UserId}, CorrelationId: {CorrelationId}", 
+            // Add cache-busting headers to prevent browser caching of dynamic data
+            Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
+            Response.Headers.Append("Pragma", "no-cache");
+            Response.Headers.Append("Expires", "0");
+
+            _logger.LogInformation("Getting documents for collection {CollectionId}, user {UserId}, CorrelationId: {CorrelationId}",
                 collectionId, userId, correlationId);
 
             var query = new DocumentQueryDto
@@ -548,6 +553,40 @@ public class UserDocumentsController : ControllerBase
             
             // Don't fail the request for tracking errors
             return this.Success("Document view tracking failed but request completed");
+        }
+    }
+
+    /// <summary>
+    /// Retry processing for a failed or stuck document
+    /// </summary>
+    [HttpPost("{documentId:guid}/retry")]
+    public async Task<IActionResult> RetryDocumentProcessing(Guid documentId)
+    {
+        var correlationId = _correlationService.GetCorrelationId();
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            _logger.LogInformation("Retrying document processing for document {DocumentId}, user {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+
+            var success = await _documentService.RetryDocumentProcessingAsync(documentId, userId);
+
+            if (success)
+            {
+                return this.Success("Document processing retry initiated successfully");
+            }
+            else
+            {
+                return this.Error("Failed to retry document processing. Document may not be in a retryable state or not found.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrying document processing for document {DocumentId}, user {UserId}, CorrelationId: {CorrelationId}",
+                documentId, userId, correlationId);
+
+            return this.Error("Failed to retry document processing", ex.Message, 500);
         }
     }
 

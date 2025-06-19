@@ -94,12 +94,70 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
         {
             try
             {
-                // Find user by refresh token (we need to search through cache or implement a different approach)
-                // For now, we'll implement a simple approach - in production, consider storing refresh tokens in database
-                
-                // This is a simplified implementation - in production, you'd want to store refresh tokens with user associations
-                _logger.LogWarning("RefreshTokenAsync needs proper implementation with user-token association");
-                return new AuthResult { Success = false, ErrorMessage = "Refresh token functionality needs implementation" };
+                if (string.IsNullOrEmpty(refreshToken))
+                {
+                    _logger.LogWarning("Refresh token is null or empty");
+                    return new AuthResult { Success = false, ErrorMessage = "Refresh token is required" };
+                }
+
+                // Find the refresh token in the database
+                var storedRefreshToken = await _context.RefreshTokens
+                    .Where(rt => rt.Token == refreshToken && rt.IsActive)
+                    .FirstOrDefaultAsync();
+
+                if (storedRefreshToken == null)
+                {
+                    _logger.LogWarning("Invalid or expired refresh token provided");
+                    return new AuthResult { Success = false, ErrorMessage = "Invalid or expired refresh token" };
+                }
+
+                // Get the user associated with this refresh token
+                var user = await _context.Users
+                    .Include(u => u.Company)
+                    .Where(u => u.Id == storedRefreshToken.UserId && u.IsActive)
+                    .FirstOrDefaultAsync();
+
+                if (user == null)
+                {
+                    _logger.LogWarning("User not found or inactive for refresh token. UserId: {UserId}", storedRefreshToken.UserId);
+
+                    // Revoke the refresh token since the user is invalid
+                    await _jwtService.RevokeRefreshTokenAsync(storedRefreshToken.UserId);
+
+                    return new AuthResult { Success = false, ErrorMessage = "User not found or inactive" };
+                }
+
+                // Check if user is still active and verified
+                if (!user.IsActive || !user.IsVerified)
+                {
+                    _logger.LogWarning("User is inactive or unverified. UserId: {UserId}", user.Id);
+
+                    // Revoke the refresh token for inactive/unverified users
+                    await _jwtService.RevokeRefreshTokenAsync(user.Id);
+
+                    return new AuthResult { Success = false, ErrorMessage = "User account is inactive or unverified" };
+                }
+
+                // Generate new access token
+                var newAccessToken = _jwtService.GenerateAccessToken(user);
+
+                // Generate new refresh token (token rotation)
+                var newRefreshToken = _jwtService.GenerateRefreshToken();
+
+                // Save the new refresh token and revoke the old one
+                await _jwtService.SaveRefreshTokenAsync(user.Id, newRefreshToken, TimeSpan.FromDays(30));
+
+                // Log successful refresh
+                _logger.LogInformation("Token refreshed successfully for user {UserId} from IP {IpAddress}",
+                    user.Id, ipAddress ?? "unknown");
+
+                return new AuthResult
+                {
+                    Success = true,
+                    AccessToken = newAccessToken,
+                    RefreshToken = newRefreshToken,
+                    User = user
+                };
             }
             catch (Exception ex)
             {

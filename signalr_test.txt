@@ -1,0 +1,5 @@
+SignalR Real-Time Update Test Document
+Created: 2025-06-19 14:45:00
+Purpose: Testing SignalR real-time status updates from Processing to Completed
+Expected behavior: Status should change automatically without page refresh
+Test ID: SIGNALR_001

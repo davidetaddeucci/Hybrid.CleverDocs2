@@ -9,19 +9,20 @@
 - **Status database**: Documento salvato correttamente con Status=2 (Ready)
 - **Cache Redis**: Restituisce risultati obsoleti (4 documenti invece di 5)
 
-## 🔧 FIX IMMEDIATO NECESSARIO
+## ✅ FIX IMMEDIATO COMPLETATO
 ### Pattern Cache Invalidation CORRETTI:
 ```csharp
-// SBAGLIATO (attuale):
-await _cacheService.InvalidateAsync($"type:pageddocumentresultdto:documents:search:*");
-
-// CORRETTO (da implementare):
+// ❌ SBAGLIATO (precedente):
 await _cacheService.InvalidateAsync($"*type:pageddocumentresultdto:documents:search:*");
+
+// ✅ CORRETTO (implementato):
+await _cacheService.InvalidateAsync($"cleverdocs2:type:pageddocumentresultdto:documents:search:*");
 ```
 
-### File da correggere:
-- `Hybrid.CleverDocs2.WebServices/Services/Documents/DocumentUploadService.cs` (linea 767)
-- Verificare anche DocumentProcessingService per consistenza
+### File corretti:
+- ✅ `Hybrid.CleverDocs2.WebServices/Services/Documents/DocumentUploadService.cs` (linea 768)
+- ✅ `Hybrid.CleverDocs2.WebServices/Services/Documents/DocumentProcessingService.cs` (linea 699)
+- ✅ Consistenza verificata con UserDocumentService.cs (linea 618)
 
 ## 🎯 STRATEGIA REDIS MODIFICATA (Post-Fix)
 
@@ -45,20 +46,24 @@ await _cacheService.InvalidateAsync($"*type:pageddocumentresultdto:documents:sea
 
 ## 🛠️ IMPLEMENTAZIONE FASI
 
-### FASE 1: FIX IMMEDIATO (DOMANI MATTINA)
-1. Correggere pattern invalidation in DocumentUploadService
-2. Testare upload → visualizzazione documento in griglia
-3. Verificare consistenza pattern in tutti i servizi
+### ✅ FASE 1: FIX IMMEDIATO (COMPLETATO)
+1. ✅ Corretto pattern invalidation in DocumentUploadService e DocumentProcessingService
+2. ✅ Sistema pronto per test upload → visualizzazione documento in griglia
+3. ✅ Verificata consistenza pattern in tutti i servizi
 
-### FASE 2: SEMANTIC CACHING
-1. Implementare RedisVL semantic cache
+### ✅ FASE 2: SELECTIVE CACHING (IMPLEMENTATO)
+1. ✅ Implementate nuove CacheOptions per dati statici vs dinamici:
+   - `ForDocumentChunks()`: Cache aggressiva (2h L1, 1d L2, 7d L3)
+   - `ForEmbeddings()`: Cache molto aggressiva (6h L1, 7d L2, 30d L3)
+   - `ForDocumentLists()`: Cache minimale (1min L1, 3min L2, no L3)
+   - `ForSemanticQueries()`: Cache media (30min L1, 4h L2, 1d L3)
+2. ✅ Aggiornato UserDocumentService per usare cache selettiva
+3. ✅ Ridotta priorità cache per dati dinamici
+
+### 🔄 FASE 3: SEMANTIC CACHING (PROSSIMO)
+1. Implementare RedisVL semantic cache per query simili
 2. Sostituire exact matching con similarity search (threshold: 0.85)
-3. Testare con query simili
-
-### FASE 3: SELECTIVE CACHING
-1. Rimuovere cache da document lists
-2. Mantenere cache solo per dati statici/semi-statici
-3. Implementare version-based keys per chunks
+3. Testare con query semanticamente simili ("carica file" ≈ "upload documento")
 
 ## 🔍 STATO SISTEMA ATTUALE
 - **Backend**: localhost:5252 (Terminal 4)
@@ -67,13 +72,13 @@ await _cacheService.InvalidateAsync($"*type:pageddocumentresultdto:documents:sea
 - **Redis**: 192.168.1.4:6380 (password: your_redis_password)
 - **R2R API**: 192.168.1.4:7272
 
-## 📋 CHECKLIST DOMANI MATTINA
-- [ ] Avviare Backend (Terminal 4)
-- [ ] Avviare Frontend (Terminal 5)
-- [ ] Correggere DocumentUploadService.cs linea 767
-- [ ] Testare upload nuovo documento
-- [ ] Verificare apparizione in griglia collezione
-- [ ] Procedere con Fase 2 se fix funziona
+## ✅ CHECKLIST COMPLETATA
+- ✅ Avviato Backend (Terminal 1) - localhost:5252
+- ✅ Avviato Frontend (Terminal 2) - localhost:5168
+- ✅ Corretto DocumentUploadService.cs linea 768
+- ✅ Corretto DocumentProcessingService.cs linea 699
+- ✅ Implementata strategia cache selettiva
+- 🔄 **PROSSIMO**: Testare upload nuovo documento e verificare apparizione immediata in griglia
 
 ## 🎯 OBIETTIVO FINALE
 Sistema Redis ottimizzato che:

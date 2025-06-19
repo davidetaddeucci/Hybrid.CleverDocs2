@@ -5,9 +5,11 @@ namespace Hybrid.CleverDocs.WebUI.Services;
 public interface IApiService
 {
     Task<T?> GetAsync<T>(string endpoint);
+    Task<T?> GetAsync<T>(string endpoint, Dictionary<string, string> queryParams);
     Task<T?> PostAsync<T>(string endpoint, object data);
     Task<T?> PutAsync<T>(string endpoint, object data);
     Task<bool> DeleteAsync(string endpoint);
+    Task<T?> DeleteAsync<T>(string endpoint);
     Task<HttpResponseMessage> PostAsync(string endpoint, object data);
 }
 
@@ -30,7 +32,7 @@ public class ApiService : IApiService
         {
             await SetAuthorizationHeader();
             var response = await _httpClient.GetAsync(endpoint);
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -39,8 +41,39 @@ public class ApiService : IApiService
                     PropertyNameCaseInsensitive = true
                 });
             }
-            
+
             _logger.LogWarning("API GET request failed: {StatusCode} - {Endpoint}", response.StatusCode, endpoint);
+            return default;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during GET request to {Endpoint}", endpoint);
+            return default;
+        }
+    }
+
+    public async Task<T?> GetAsync<T>(string endpoint, Dictionary<string, string> queryParams)
+    {
+        try
+        {
+            await SetAuthorizationHeader();
+
+            // Build query string
+            var queryString = string.Join("&", queryParams.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}"));
+            var fullEndpoint = string.IsNullOrEmpty(queryString) ? endpoint : $"{endpoint}?{queryString}";
+
+            var response = await _httpClient.GetAsync(fullEndpoint);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<T>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+
+            _logger.LogWarning("API GET request failed: {StatusCode} - {Endpoint}", response.StatusCode, fullEndpoint);
             return default;
         }
         catch (Exception ex)
@@ -128,6 +161,36 @@ public class ApiService : IApiService
         {
             _logger.LogError(ex, "Error during DELETE request to {Endpoint}", endpoint);
             return false;
+        }
+    }
+
+    public async Task<T?> DeleteAsync<T>(string endpoint)
+    {
+        try
+        {
+            await SetAuthorizationHeader();
+            var response = await _httpClient.DeleteAsync(endpoint);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrEmpty(content))
+                {
+                    return default;
+                }
+                return JsonSerializer.Deserialize<T>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+
+            _logger.LogWarning("API DELETE request failed: {StatusCode} - {Endpoint}", response.StatusCode, endpoint);
+            return default;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during DELETE request to {Endpoint}", endpoint);
+            return default;
         }
     }
 

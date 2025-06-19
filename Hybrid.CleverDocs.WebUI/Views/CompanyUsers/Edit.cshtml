@@ -1,0 +1,298 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.Users.EditCompanyUserViewModel
+@{
+    ViewData["Title"] = $"Edit {Model.FirstName} {Model.LastName}";
+    Layout = "_Layout";
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <i class="material-symbols-rounded text-primary me-2">edit</i>Edit User: @Model.FirstName @Model.LastName
+                    </h1>
+                    <p class="text-muted mb-0">Update user information for @Model.CompanyName</p>
+                </div>
+                <div>
+                    <a href="@Url.Action("Details", new { id = Model.Id })" class="btn btn-outline-secondary">
+                        <i class="material-symbols-rounded me-2">arrow_back</i>Back to Details
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- R2R Status Alert -->
+    @if (!string.IsNullOrEmpty(Model.R2RUserId))
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="alert alert-info d-flex align-items-center">
+                    <i class="material-symbols-rounded me-2">info</i>
+                    <div>
+                        <strong>R2R Integration Active</strong> - Changes will be synchronized with R2R user: <code>@Model.R2RUserId</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Edit Form -->
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="editUserForm">
+                        @Html.AntiForgeryToken()
+                        <input asp-for="Id" type="hidden" />
+                        <input asp-for="CompanyId" type="hidden" />
+                        <input asp-for="CompanyName" type="hidden" />
+                        <input asp-for="R2RUserId" type="hidden" />
+                        
+                        <!-- Basic Information -->
+                        <div class="mb-4">
+                            <h5 class="card-title mb-3">
+                                <i class="material-symbols-rounded me-2">person</i>Basic Information
+                            </h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="FirstName" class="form-label">First Name *</label>
+                                    <input asp-for="FirstName" class="form-control" placeholder="Enter first name" />
+                                    <span asp-validation-for="FirstName" class="text-danger"></span>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="LastName" class="form-label">Last Name *</label>
+                                    <input asp-for="LastName" class="form-control" placeholder="Enter last name" />
+                                    <span asp-validation-for="LastName" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="Email" class="form-label">Email Address</label>
+                                    <input asp-for="Email" class="form-control" type="email" readonly />
+                                    <div class="form-text">Email cannot be changed after user creation</div>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="Name" class="form-label">Display Name</label>
+                                    <input asp-for="Name" class="form-control" placeholder="Optional display name" />
+                                    <span asp-validation-for="Name" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="Bio" class="form-label">Bio</label>
+                                <textarea asp-for="Bio" class="form-control" rows="3" 
+                                          placeholder="Brief description about the user"></textarea>
+                                <span asp-validation-for="Bio" class="text-danger"></span>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="ProfilePicture" class="form-label">Profile Picture URL</label>
+                                <input asp-for="ProfilePicture" class="form-control" type="url" 
+                                       placeholder="https://example.com/avatar.jpg" />
+                                <span asp-validation-for="ProfilePicture" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Company and Role -->
+                        <div class="mb-4">
+                            <h5 class="card-title mb-3">
+                                <i class="material-symbols-rounded me-2">business</i>Company & Role Assignment
+                            </h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Company</label>
+                                    <input value="@Model.CompanyName" class="form-control" readonly />
+                                    <div class="form-text">Company assignment cannot be changed</div>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="Role" class="form-label">Role *</label>
+                                    <select asp-for="Role" class="form-select">
+                                        @foreach (var role in Hybrid.CleverDocs.WebUI.ViewModels.Users.UserRoles.GetCompanyRoles())
+                                        {
+                                            <option value="@role.Value" selected="@(Model.Role == role.Value)">@role.Display</option>
+                                        }
+                                    </select>
+                                    <span asp-validation-for="Role" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <!-- Role Descriptions -->
+                            <div class="alert alert-info">
+                                <h6 class="alert-heading">Role Descriptions:</h6>
+                                <ul class="mb-0 small">
+                                    <li><strong>Company Manager:</strong> Can manage users within the company</li>
+                                    <li><strong>Standard User:</strong> Basic access to documents and collections</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Status Settings -->
+                        <div class="mb-4">
+                            <h5 class="card-title mb-3">
+                                <i class="material-symbols-rounded me-2">settings</i>Status Settings
+                            </h5>
+                            
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input asp-for="IsActive" class="form-check-input" type="checkbox" />
+                                    <label asp-for="IsActive" class="form-check-label">
+                                        User is active
+                                    </label>
+                                </div>
+                                <div class="form-text">Inactive users cannot access the system</div>
+                            </div>
+                        </div>
+
+                        <!-- R2R Integration Status -->
+                        @if (!string.IsNullOrEmpty(Model.R2RUserId))
+                        {
+                            <div class="mb-4">
+                                <h5 class="card-title mb-3">
+                                    <i class="material-symbols-rounded me-2">integration_instructions</i>R2R Integration Status
+                                </h5>
+                                
+                                <div class="alert alert-success d-flex align-items-center">
+                                    <i class="material-symbols-rounded me-2">check_circle</i>
+                                    <div>
+                                        <strong>User Synchronized</strong><br>
+                                        <small>R2R User ID: <code>@Model.R2RUserId</code></small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-4">
+                                <div class="alert alert-warning d-flex align-items-center">
+                                    <i class="material-symbols-rounded me-2">sync_problem</i>
+                                    <div>
+                                        <strong>R2R Sync Pending</strong><br>
+                                        <small>User synchronization with R2R system is in progress...</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="@Url.Action("Details", new { id = Model.Id })" class="btn btn-outline-secondary">
+                                <i class="material-symbols-rounded me-2">cancel</i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">
+                                <i class="material-symbols-rounded me-2">save</i>Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom CSS -->
+<style>
+    .card-title {
+        color: #495057;
+        font-weight: 600;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    
+    .form-control[readonly] {
+        background-color: #f8f9fa;
+        opacity: 1;
+    }
+    
+    .btn-primary {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
+    }
+</style>
+
+<!-- JavaScript -->
+<script>
+    // Form submission handling
+    document.getElementById('editUserForm').addEventListener('submit', function(e) {
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="material-symbols-rounded me-2">hourglass_empty</i>Saving...';
+        
+        // Re-enable button after 10 seconds to prevent permanent disable
+        setTimeout(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="material-symbols-rounded me-2">save</i>Save Changes';
+        }, 10000);
+    });
+
+    // Auto-generate display name from first and last name if empty
+    function updateDisplayName() {
+        const firstName = document.querySelector('input[name="FirstName"]').value;
+        const lastName = document.querySelector('input[name="LastName"]').value;
+        const nameInput = document.querySelector('input[name="Name"]');
+        
+        if (!nameInput.value && firstName && lastName) {
+            nameInput.placeholder = `${firstName} ${lastName}`;
+        }
+    }
+
+    document.querySelector('input[name="FirstName"]').addEventListener('blur', updateDisplayName);
+    document.querySelector('input[name="LastName"]').addEventListener('blur', updateDisplayName);
+
+    // Profile picture URL validation
+    document.querySelector('input[name="ProfilePicture"]').addEventListener('blur', function() {
+        const url = this.value;
+        if (url && !url.startsWith('http')) {
+            this.classList.add('is-invalid');
+        } else if (url) {
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+        } else {
+            this.classList.remove('is-invalid', 'is-valid');
+        }
+    });
+
+    // Role change warning
+    document.querySelector('select[name="Role"]').addEventListener('change', function() {
+        const originalRole = '@Model.Role';
+        if (this.value !== originalRole) {
+            if (!document.getElementById('roleChangeWarning')) {
+                const warning = document.createElement('div');
+                warning.id = 'roleChangeWarning';
+                warning.className = 'alert alert-warning mt-2';
+                warning.innerHTML = '<i class="material-symbols-rounded me-2">warning</i><strong>Role Change:</strong> User permissions will be updated after saving.';
+                this.parentElement.appendChild(warning);
+            }
+        } else {
+            const warning = document.getElementById('roleChangeWarning');
+            if (warning) {
+                warning.remove();
+            }
+        }
+    });
+</script>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

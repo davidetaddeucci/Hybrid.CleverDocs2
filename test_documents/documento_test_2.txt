@@ -1,0 +1,23 @@
+Documento di Test 2 - Verifica SignalR
+
+Questo secondo documento serve per testare gli aggiornamenti real-time del sistema.
+
+Funzionalità da verificare:
+- Aggiornamento immediato della griglia documenti
+- Cambio di stato da "Uploading" a "Processing" a "Completed"
+- Notifiche in tempo reale all'utente
+- Sincronizzazione bidirezionale con R2R
+
+Scenario di test:
+1. Upload di questo documento
+2. Monitoraggio dello stato di ingestion
+3. Verifica che la griglia si aggiorni automaticamente
+4. Controllo che non ci siano errori di rate limiting
+
+Informazioni tecniche:
+- Collection: Test Collection Roberto
+- User: r.antoniucci@microsis.it
+- Sistema: Hybrid.CleverDocs2 v2.0.0
+- R2R API: v3 su porta 7272
+
+Test completato con successo se questo documento appare nella griglia con stato "Completed".

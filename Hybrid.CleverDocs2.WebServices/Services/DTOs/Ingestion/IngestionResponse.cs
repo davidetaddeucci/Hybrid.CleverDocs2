@@ -1,7 +1,12 @@
+using System;
+
 namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Ingestion
 {
     public class IngestionResponse
     {
-        // TODO: add response properties (e.g., IngestionId, Status)
+        public string Id { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
     }
 }

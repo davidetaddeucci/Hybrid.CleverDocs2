@@ -19,18 +19,15 @@ public class CollectionsController : Controller
 {
     private readonly ICollectionsApiClient _collectionsApiClient;
     private readonly IDocumentApiClient _documentApiClient;
-    private readonly ICacheService _cacheService;
     private readonly ILogger<CollectionsController> _logger;
 
     public CollectionsController(
         ICollectionsApiClient collectionsApiClient,
         IDocumentApiClient documentApiClient,
-        ICacheService cacheService,
         ILogger<CollectionsController> logger)
     {
         _collectionsApiClient = collectionsApiClient;
         _documentApiClient = documentApiClient;
-        _cacheService = cacheService;
         _logger = logger;
     }
 

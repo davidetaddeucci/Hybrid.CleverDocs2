@@ -1,0 +1,380 @@
+@model Hybrid.CleverDocs.WebUI.ViewModels.Users.UserListViewModel
+@{
+    ViewData["Title"] = "Users Management";
+    Layout = "_Layout";
+}
+
+<div class="container-fluid" data-page="adminusers">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <i class="material-symbols-rounded text-primary me-2">group</i>Users Management
+                    </h1>
+                    <p class="text-muted mb-0">
+                        @Model.Users.Count() of @Model.Pagination.TotalItems users
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="@Url.Action("Create")" class="btn btn-primary">
+                        <i class="material-symbols-rounded me-2">person_add</i>New User
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Controls -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <form method="get" id="searchForm" class="d-flex gap-3 align-items-center flex-wrap">
+                <!-- Search Input -->
+                <div class="flex-grow-1" style="min-width: 250px;">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0">
+                            <i class="material-symbols-rounded text-muted">search</i>
+                        </span>
+                        <input type="text"
+                               name="SearchTerm"
+                               value="@Model.Search.SearchTerm"
+                               class="form-control border-start-0 ps-0"
+                               placeholder="Search users by name or email..."
+                               style="box-shadow: none;" />
+                    </div>
+                </div>
+
+                <!-- Company Filter -->
+                <select name="CompanyId" class="form-select w-auto" onchange="updateFilters()" style="min-width: 150px;">
+                    <option value="">All Companies</option>
+                    @foreach (var company in Model.Companies)
+                    {
+                        <option value="@company.Id" selected="@(Model.Search.CompanyId == company.Id)">
+                            @company.Name
+                        </option>
+                    }
+                </select>
+
+                <!-- Status Filter -->
+                <select name="IsActive" class="form-select w-auto" onchange="updateFilters()" style="min-width: 120px;">
+                    <option value="">All Status</option>
+                    <option value="true" selected="@(Model.Search.IsActive == true)">Active</option>
+                    <option value="false" selected="@(Model.Search.IsActive == false)">Inactive</option>
+                </select>
+
+                <!-- Clear Filters -->
+                @if (Model.HasActiveFilters)
+                {
+                    <button type="button"
+                            class="btn btn-outline-danger"
+                            onclick="clearFilters()"
+                            title="Clear all filters">
+                        <i class="material-symbols-rounded">clear</i>
+                    </button>
+                }
+
+                <!-- Hidden fields -->
+                <input type="hidden" name="Page" value="1" />
+                <input type="hidden" name="PageSize" value="@Model.Search.PageSize" />
+            </form>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="row">
+        <div class="col-12">
+            @if (Model.Users.Any())
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="border-0 ps-4">User</th>
+                                        <th class="border-0">Company</th>
+                                        <th class="border-0">Role</th>
+                                        <th class="border-0">R2R Status</th>
+                                        <th class="border-0">Status</th>
+                                        <th class="border-0 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var user in Model.Users)
+                                    {
+                                        <tr>
+                                            <!-- User Info -->
+                                            <td class="ps-4">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="me-3">
+                                                        @if (!string.IsNullOrEmpty(user.ProfilePicture))
+                                                        {
+                                                            <img src="@user.ProfilePicture" alt="@user.FirstName @user.LastName" 
+                                                                 class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" />
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                                                                 style="width: 40px; height: 40px; font-weight: bold;">
+                                                                @user.FirstName.Substring(0, 1).ToUpper()@user.LastName.Substring(0, 1).ToUpper()
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                    <div>
+                                                        <h6 class="mb-1">
+                                                            <a href="@Url.Action("Details", new { id = user.Id })" 
+                                                               class="text-decoration-none text-dark fw-bold">
+                                                                @user.FirstName @user.LastName
+                                                            </a>
+                                                        </h6>
+                                                        <div class="small text-muted">@user.Email</div>
+                                                        @if (!string.IsNullOrEmpty(user.Name))
+                                                        {
+                                                            <div class="small text-muted">@user.Name</div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <!-- Company -->
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(user.CompanyName))
+                                                {
+                                                    <span class="fw-bold">@user.CompanyName</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No Company</span>
+                                                }
+                                            </td>
+
+                                            <!-- Role -->
+                                            <td>
+                                                @switch (user.Role)
+                                                {
+                                                    case "Admin":
+                                                        <span class="badge bg-danger">
+                                                            <i class="material-symbols-rounded me-1" style="font-size: 12px;">admin_panel_settings</i>
+                                                            Admin
+                                                        </span>
+                                                        break;
+                                                    case "Company":
+                                                        <span class="badge bg-warning">
+                                                            <i class="material-symbols-rounded me-1" style="font-size: 12px;">business</i>
+                                                            Company
+                                                        </span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge bg-primary">
+                                                            <i class="material-symbols-rounded me-1" style="font-size: 12px;">person</i>
+                                                            User
+                                                        </span>
+                                                        break;
+                                                }
+                                            </td>
+
+                                            <!-- R2R Status -->
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(user.R2RUserId))
+                                                {
+                                                    <span class="badge bg-success">
+                                                        <i class="material-symbols-rounded me-1" style="font-size: 12px;">check_circle</i>
+                                                        Synced
+                                                    </span>
+                                                    <div class="small text-muted mt-1">
+                                                        ID: @user.R2RUserId.Substring(0, 8)...
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning">
+                                                        <i class="material-symbols-rounded me-1" style="font-size: 12px;">sync</i>
+                                                        Pending
+                                                    </span>
+                                                }
+                                            </td>
+
+                                            <!-- Status -->
+                                            <td>
+                                                @if (user.IsActive)
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger">Inactive</span>
+                                                }
+                                                <div class="small text-muted mt-1">
+                                                    Created @user.CreatedAt.ToString("MMM dd, yyyy")
+                                                </div>
+                                                @if (user.LastLoginAt.HasValue)
+                                                {
+                                                    <div class="small text-muted">
+                                                        Last login @user.LastLoginAt.Value.ToString("MMM dd, yyyy")
+                                                    </div>
+                                                }
+                                            </td>
+
+                                            <!-- Actions -->
+                                            <td class="text-center">
+                                                <div class="btn-group" role="group">
+                                                    <a href="@Url.Action("Details", new { id = user.Id })"
+                                                       class="btn btn-sm btn-outline-primary" title="View Details">
+                                                        <i class="material-symbols-rounded">visibility</i>
+                                                    </a>
+                                                    <a href="@Url.Action("Edit", new { id = user.Id })"
+                                                       class="btn btn-sm btn-outline-secondary" title="Edit">
+                                                        <i class="material-symbols-rounded">edit</i>
+                                                    </a>
+                                                    @if (user.IsActive)
+                                                    {
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-danger"
+                                                                onclick="deactivateUser('@user.Id', '@user.FirstName @user.LastName')"
+                                                                title="Deactivate">
+                                                            <i class="material-symbols-rounded">block</i>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <div class="mb-3">
+                        <i class="material-symbols-rounded text-muted" style="font-size: 4rem;">group</i>
+                    </div>
+                    <h4 class="text-muted">No users found</h4>
+                    <p class="text-muted mb-3">
+                        @if (Model.HasActiveFilters)
+                        {
+                            <span>Try adjusting your search filters or </span>
+                        }
+                        <a href="@Url.Action("Create")" class="text-decoration-none">create your first user</a> to get started.
+                    </p>
+                    <a href="@Url.Action("Create")" class="btn btn-primary">
+                        <i class="material-symbols-rounded me-2">person_add</i>Create User
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    @if (Model.Pagination.TotalPages > 1)
+    {
+        <div class="row mt-4">
+            <div class="col-12">
+                <nav aria-label="Users pagination">
+                    <ul class="pagination justify-content-center">
+                        @if (Model.Pagination.CurrentPage > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" href="@Url.Action("Index", new {
+                                    SearchTerm = Model.Search.SearchTerm,
+                                    CompanyId = Model.Search.CompanyId,
+                                    IsActive = Model.Search.IsActive,
+                                    Page = Model.Pagination.CurrentPage - 1,
+                                    PageSize = Model.Pagination.PageSize
+                                })">Previous</a>
+                            </li>
+                        }
+
+                        @for (int i = Math.Max(1, Model.Pagination.CurrentPage - 2); i <= Math.Min(Model.Pagination.TotalPages, Model.Pagination.CurrentPage + 2); i++)
+                        {
+                            <li class="page-item @(i == Model.Pagination.CurrentPage ? "active" : "")">
+                                <a class="page-link" href="@Url.Action("Index", new {
+                                    SearchTerm = Model.Search.SearchTerm,
+                                    CompanyId = Model.Search.CompanyId,
+                                    IsActive = Model.Search.IsActive,
+                                    Page = i,
+                                    PageSize = Model.Pagination.PageSize
+                                })">@i</a>
+                            </li>
+                        }
+
+                        @if (Model.Pagination.CurrentPage < Model.Pagination.TotalPages)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" href="@Url.Action("Index", new {
+                                    SearchTerm = Model.Search.SearchTerm,
+                                    CompanyId = Model.Search.CompanyId,
+                                    IsActive = Model.Search.IsActive,
+                                    Page = Model.Pagination.CurrentPage + 1,
+                                    PageSize = Model.Pagination.PageSize
+                                })">Next</a>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- JavaScript for Users Functionality -->
+<script>
+    // Update filters when dropdown changes
+    function updateFilters() {
+        document.getElementById('searchForm').submit();
+    }
+
+    // Clear all filters
+    function clearFilters() {
+        document.querySelector('input[name="SearchTerm"]').value = '';
+        document.querySelector('select[name="CompanyId"]').value = '';
+        document.querySelector('select[name="IsActive"]').value = '';
+        document.getElementById('searchForm').submit();
+    }
+
+    // Deactivate user
+    function deactivateUser(userId, userName) {
+        if (confirm(`Are you sure you want to deactivate the user "${userName}"?`)) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/AdminUsers/${userId}/deactivate`;
+
+            // Add anti-forgery token
+            const token = document.querySelector('input[name="__RequestVerificationToken"]');
+            if (token) {
+                const tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = '__RequestVerificationToken';
+                tokenInput.value = token.value;
+                form.appendChild(tokenInput);
+            }
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    // Auto-submit search on Enter key
+    document.querySelector('input[name="SearchTerm"]').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('searchForm').submit();
+        }
+    });
+
+    // Auto-submit search after typing (debounced)
+    let searchTimeout;
+    document.querySelector('input[name="SearchTerm"]').addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            if (this.value.length >= 3 || this.value.length === 0) {
+                document.getElementById('searchForm').submit();
+            }
+        }, 500);
+    });
+</script>
+
+@Html.AntiForgeryToken()

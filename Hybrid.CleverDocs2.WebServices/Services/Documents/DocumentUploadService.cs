@@ -119,8 +119,18 @@ public class DocumentUploadService : IDocumentUploadService
             session.Statistics.PendingUploads = session.Files.Count;
             session.Statistics.StartTime = DateTime.UtcNow;
 
-            // Store session in memory only (Redis removed for performance)
+            // Store session in memory for fast access
             _activeSessions[session.SessionId] = session;
+
+            // Also store in cache for consistency with GetUploadSessionAsync
+            await _cacheService.SetAsync($"upload:session:{session.SessionId}", session,
+                new CacheOptions
+                {
+                    UseL1Cache = true,  // Fast access
+                    UseL2Cache = true,  // Redis for consistency
+                    L1TTL = TimeSpan.FromMinutes(30),
+                    L2TTL = TimeSpan.FromMinutes(30)
+                });
 
             // Initialize progress tracking
             await _progressService.UpdateProgressAsync(new UploadProgressDto
@@ -704,10 +714,27 @@ public class DocumentUploadService : IDocumentUploadService
         }
     }
 
-    private void UpdateSessionInMemory(DocumentUploadSessionDto session)
+    private async void UpdateSessionInMemory(DocumentUploadSessionDto session)
     {
-        // Store only in memory for better performance (Redis removed)
+        // Store in memory for fast access
         _activeSessions[session.SessionId] = session;
+
+        // Also update cache for consistency
+        try
+        {
+            await _cacheService.SetAsync($"upload:session:{session.SessionId}", session,
+                new CacheOptions
+                {
+                    UseL1Cache = true,  // Fast access
+                    UseL2Cache = true,  // Redis for consistency
+                    L1TTL = TimeSpan.FromMinutes(30),
+                    L2TTL = TimeSpan.FromMinutes(30)
+                });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update session cache for session {SessionId}", session.SessionId);
+        }
     }
 
     private async Task SaveDocumentToDatabaseImmediatelyAsync(R2RProcessingQueueItemDto queueItem)
@@ -771,6 +798,29 @@ public class DocumentUploadService : IDocumentUploadService
 
             _logger.LogInformation("Document {DocumentId} saved to database immediately with Processing status and cache invalidated, CorrelationId: {CorrelationId}",
                 queueItem.DocumentId, correlationId);
+
+            // CRITICAL FIX: Send SignalR notification to update frontend immediately
+            try
+            {
+                var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<DocumentUploadHub>>();
+                await hubContext.Clients.User(queueItem.UserId).SendAsync("FileUploadCompleted", new
+                {
+                    DocumentId = queueItem.DocumentId,
+                    FileName = queueItem.FileName,
+                    Status = "Processing",
+                    CollectionId = queueItem.CollectionId,
+                    Message = "Document uploaded and saved to database"
+                });
+
+                _logger.LogInformation("SignalR notification sent for document {DocumentId}, event: FileUploadCompleted, CorrelationId: {CorrelationId}",
+                    queueItem.DocumentId, correlationId);
+            }
+            catch (Exception signalREx)
+            {
+                _logger.LogError(signalREx, "Failed to send SignalR notification for document {DocumentId}, CorrelationId: {CorrelationId}",
+                    queueItem.DocumentId, correlationId);
+                // Don't throw - SignalR failure shouldn't break the upload
+            }
         }
         catch (Exception ex)
         {

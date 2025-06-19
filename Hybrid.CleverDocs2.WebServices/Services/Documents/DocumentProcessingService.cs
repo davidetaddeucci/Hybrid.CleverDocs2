@@ -182,6 +182,8 @@ public class DocumentProcessingService : IDocumentProcessingService
                 _consecutiveFailures = 0;
 
                 // Save document to database (with correct status)
+                _logger.LogInformation("About to call SaveDocumentToDatabaseAsync for document {DocumentId}, CorrelationId: {CorrelationId}",
+                    queueItem.DocumentId, correlationId);
                 await SaveDocumentToDatabaseAsync(queueItem);
             }
             else
@@ -750,14 +752,19 @@ public class DocumentProcessingService : IDocumentProcessingService
                 if (queueItem.Status == R2RProcessingStatusDto.Completed)
                 {
                     existingDocument.Status = (int)Data.Entities.DocumentStatus.Ready;
+                    existingDocument.IsProcessing = false; // CRITICAL FIX: Set IsProcessing to false when completed
+                    existingDocument.ProcessingError = null; // Clear any previous errors
                 }
                 else if (queueItem.Status == R2RProcessingStatusDto.Processing)
                 {
                     existingDocument.Status = (int)Data.Entities.DocumentStatus.Processing;
+                    existingDocument.IsProcessing = true;
                 }
                 else if (queueItem.Status == R2RProcessingStatusDto.Failed)
                 {
                     existingDocument.Status = (int)Data.Entities.DocumentStatus.Error;
+                    existingDocument.IsProcessing = false; // Stop processing on failure
+                    existingDocument.ProcessingError = "R2R processing failed";
                 }
 
                 existingDocument.UpdatedAt = DateTime.UtcNow;
@@ -850,19 +857,48 @@ public class DocumentProcessingService : IDocumentProcessingService
             // CRITICAL FIX: Pass tenantId to ensure tag transformation matches SET operation
             // Use CompanyId as TenantId (they are the same in our multi-tenant architecture)
             var tenantId = queueItem.CompanyId?.ToString();
+
+            // UNIFIED CACHE INVALIDATION STRATEGY:
+            // 1. Tag-based invalidation for new cache entries (ForDocumentLists)
             await _cacheService.InvalidateByTagsAsync(tags, tenantId);
 
-            _logger.LogInformation("Document {DocumentId} saved to database successfully and cache invalidated, CorrelationId: {CorrelationId}",
+            // 2. Pattern-based invalidation for ALL document cache patterns to ensure complete invalidation
+            var patterns = new[]
+            {
+                "*documents:search:*",
+                "*documents*",
+                "*document-lists*",
+                $"*collection:{queueItem.CollectionId}*",
+                $"*user:{queueItem.UserId}*",
+                "cleverdocs2:type:pageddocumentresultdto:documents:search:*"
+            };
+
+            foreach (var pattern in patterns)
+            {
+                await _cacheService.InvalidateAsync(pattern, tenantId);
+            }
+
+            _logger.LogInformation("Document {DocumentId} saved to database successfully and cache invalidated (both tag-based and pattern-based), CorrelationId: {CorrelationId}",
                 queueItem.DocumentId, correlationId);
 
-            // Broadcast document added/updated event to refresh collection view
-            await _hubContext.Clients.Group($"user_{queueItem.UserId}")
-                .SendAsync("DocumentUpdated", new {
-                    documentId = queueItem.DocumentId,
-                    collectionId = queueItem.CollectionId,
-                    action = existingDocument != null ? "updated" : "added",
-                    timestamp = DateTime.UtcNow
-                });
+            // Broadcast document upload completion to refresh collection view with event persistence
+            _logger.LogInformation("Broadcasting FileUploadCompleted with event persistence for user: {UserId}, document: {DocumentId}, CorrelationId: {CorrelationId}",
+                queueItem.UserId, queueItem.DocumentId, correlationId);
+
+            var eventData = new {
+                documentId = queueItem.DocumentId,
+                collectionId = queueItem.CollectionId,
+                action = existingDocument != null ? "updated" : "added",
+                timestamp = DateTime.UtcNow,
+                r2rDocumentId = queueItem.R2RDocumentId,
+                status = "completed"
+            };
+
+            _logger.LogInformation("Sending SignalR event data with persistence: {@EventData} to user: {UserId}, CorrelationId: {CorrelationId}",
+                eventData, queueItem.UserId, correlationId);
+
+            // Use the new method that includes event persistence for race condition handling
+            await _hubContext.BroadcastFileUploadCompletedToUser(queueItem.UserId, eventData);
         }
         catch (Exception ex)
         {
@@ -906,8 +942,27 @@ public class DocumentProcessingService : IDocumentProcessingService
                         // Save document to database with completed status
                         await SaveDocumentToDatabaseAsync(queueItem);
 
-                        // Broadcast completion status via SignalR
+                        // Broadcast completion status via SignalR (R2R processing update)
                         await _hubContext.BroadcastR2RProcessingUpdate(queueItem.UserId, queueItem);
+
+                        // Also broadcast file upload completion for UI refresh with event persistence
+                        _logger.LogInformation("Broadcasting FileUploadCompleted (R2R completion) with event persistence for user: {UserId}, document: {DocumentId}, CorrelationId: {CorrelationId}",
+                            queueItem.UserId, queueItem.DocumentId, correlationId);
+
+                        var eventData = new {
+                            documentId = queueItem.DocumentId,
+                            collectionId = queueItem.CollectionId,
+                            action = "completed",
+                            timestamp = DateTime.UtcNow,
+                            r2rDocumentId = queueItem.R2RDocumentId,
+                            status = "completed"
+                        };
+
+                        _logger.LogInformation("Sending SignalR event data (R2R completion) with persistence: {@EventData} to user: {UserId}, CorrelationId: {CorrelationId}",
+                            eventData, queueItem.UserId, correlationId);
+
+                        // Use the new method that includes event persistence for race condition handling
+                        await _hubContext.BroadcastFileUploadCompletedToUser(queueItem.UserId, eventData);
 
                         // Remove from active processing
                         _activeProcessing.TryRemove(queueItem.Id, out _);
