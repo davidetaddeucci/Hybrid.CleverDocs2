@@ -201,10 +201,23 @@
             if (files.length === 1) {
                 fileName.textContent = files[0].name;
                 fileSize.textContent = formatFileSize(files[0].size);
+                console.log(`📄 SINGLE FILE: ${files[0].name} (${formatFileSize(files[0].size)})`);
             } else {
-                fileName.textContent = `${files.length} files selected`;
+                // Multiple files selected - show detailed info
                 const totalSize = Array.from(files).reduce((total, file) => total + file.size, 0);
+                fileName.innerHTML = `
+                    <strong>${files.length} files selected for bulk upload</strong><br>
+                    <small class="text-muted">
+                        ${Array.from(files).slice(0, 3).map(f => f.name).join(', ')}
+                        ${files.length > 3 ? ` and ${files.length - 3} more...` : ''}
+                    </small>
+                `;
                 fileSize.textContent = formatFileSize(totalSize);
+
+                console.log(`📊 BULK UPLOAD: ${files.length} files selected, total size: ${formatFileSize(totalSize)}`);
+                Array.from(files).forEach((file, index) => {
+                    console.log(`  ${index + 1}. ${file.name} (${formatFileSize(file.size)})`);
+                });
             }
 
             uploadContent.classList.add('d-none');
@@ -235,13 +248,103 @@
                 return false;
             }
 
+            const files = Array.from(fileInput.files);
+            console.log(`🚀 BULK UPLOAD: Starting upload of ${files.length} files`);
+
             uploadBtn.disabled = true;
             uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
 
-            // Submit form data using FormData
-            const formData = new FormData(this);
+            // Use bulk upload API for multiple files
+            if (files.length > 1) {
+                uploadMultipleFiles(files);
+            } else {
+                uploadSingleFile(files[0]);
+            }
+        });
 
-            fetch(this.action, {
+        // Bulk upload function using the backend bulk upload API
+        async function uploadMultipleFiles(files) {
+            try {
+                console.log(`📊 BULK UPLOAD: Preparing ${files.length} files for bulk upload`);
+
+                // Create FormData for bulk upload
+                const formData = new FormData();
+
+                // Add collection ID if available
+                const collectionIdInput = document.querySelector('input[name="CollectionId"]');
+                if (collectionIdInput && collectionIdInput.value) {
+                    formData.append('CollectionId', collectionIdInput.value);
+                }
+
+                // Add upload options
+                formData.append('Options.ExtractMetadata', 'true');
+                formData.append('Options.PerformOCR', 'true');
+                formData.append('Options.AutoDetectLanguage', 'true');
+                formData.append('Options.GenerateThumbnails', 'true');
+                formData.append('Options.EnableVersioning', 'true');
+                formData.append('Options.MaxParallelUploads', '10');
+
+                // Add all files
+                files.forEach((file, index) => {
+                    formData.append('Files', file);
+                    console.log(`📁 BULK UPLOAD: Added file ${index + 1}/${files.length}: ${file.name} (${file.size} bytes)`);
+                });
+
+                // Add anti-forgery token
+                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                formData.append('__RequestVerificationToken', token);
+
+                console.log(`🎯 BULK UPLOAD: Sending ${files.length} files to bulk upload API`);
+
+                // Call the bulk upload API endpoint via WebUI proxy
+                const response = await fetch('/Documents/BulkUpload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log(`✅ BULK UPLOAD: Success! Response:`, result);
+
+                    if (result.success) {
+                        // Show success message and redirect
+                        alert(result.message || `Successfully uploaded ${files.length} files!`);
+
+                        // Redirect to collection using the collection ID from the response
+                        const collectionId = result.collectionId || collectionIdInput?.value;
+                        if (collectionId) {
+                            console.log(`🎯 BULK UPLOAD: Redirecting to collection: ${collectionId}`);
+                            // Use correct URL format: /Collections/{id} (not /Collections/Details/{id})
+                            window.location.href = `/Collections/${collectionId}`;
+                        } else {
+                            console.log(`🎯 BULK UPLOAD: No collection ID, redirecting to Documents index`);
+                            window.location.href = '/Documents';
+                        }
+                    } else {
+                        throw new Error(result.message || 'Upload failed');
+                    }
+                } else {
+                    const errorResult = await response.json().catch(() => ({ message: `${response.status} ${response.statusText}` }));
+                    console.error(`❌ BULK UPLOAD: Failed with status ${response.status}:`, errorResult);
+                    throw new Error(errorResult.message || `Upload failed: ${response.status} ${response.statusText}`);
+                }
+
+            } catch (error) {
+                console.error('❌ BULK UPLOAD: Error:', error);
+                alert(`Bulk upload failed: ${error.message}. Please try again.`);
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Upload Documents';
+            }
+        }
+
+        // Single file upload function (fallback to original logic)
+        function uploadSingleFile(file) {
+            console.log(`📄 SINGLE UPLOAD: Uploading single file: ${file.name}`);
+
+            // Use original form submission for single files
+            const formData = new FormData(document.getElementById('uploadForm'));
+
+            fetch(document.getElementById('uploadForm').action, {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -250,7 +353,6 @@
             })
             .then(response => {
                 if (response.redirected) {
-                    // If the server redirected, follow the redirect
                     window.location.href = response.url;
                 } else if (response.ok) {
                     return response.text();
@@ -260,20 +362,18 @@
             })
             .then(html => {
                 if (html) {
-                    // If we got HTML back, it means there were validation errors
-                    // Replace the current page content with the response
                     document.open();
                     document.write(html);
                     document.close();
                 }
             })
             .catch(error => {
-                console.error('Upload error:', error);
+                console.error('Single upload error:', error);
                 alert('Upload failed. Please try again.');
                 uploadBtn.disabled = false;
                 uploadBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Upload Documents';
             });
-        });
+        }
     </script>
 
     <style>

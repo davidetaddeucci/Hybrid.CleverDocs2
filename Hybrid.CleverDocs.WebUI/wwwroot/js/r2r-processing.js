@@ -10,55 +10,55 @@ class R2RProcessingManager {
         this.statusContainer = null;
         this.globalStatusIndicator = null;
         
-        // Stati R2R con configurazioni UI
+        // R2R Status configurations with UI settings
         this.statusConfig = {
             'Queued': {
                 icon: 'schedule',
                 color: 'secondary',
                 animation: 'pulse',
-                message: 'In coda per elaborazione'
+                message: 'Queued for processing'
             },
             'Processing': {
                 icon: 'sync',
                 color: 'warning',
                 animation: 'spin',
-                message: 'Elaborazione in corso'
+                message: 'Processing in progress'
             },
             'Chunking': {
                 icon: 'auto_awesome_motion',
                 color: 'info',
                 animation: 'pulse',
-                message: 'Suddivisione in chunks'
+                message: 'Splitting into chunks'
             },
             'R2RIngestion': {
                 icon: 'cloud_upload',
                 color: 'primary',
                 animation: 'bounce',
-                message: 'Invio a R2R API'
+                message: 'Sending to R2R API'
             },
             'Indexing': {
                 icon: 'search',
                 color: 'info',
                 animation: 'pulse',
-                message: 'Indicizzazione'
+                message: 'Indexing'
             },
             'Completed': {
                 icon: 'check_circle',
                 color: 'success',
                 animation: 'none',
-                message: 'Completato con successo'
+                message: 'Completed successfully'
             },
             'Failed': {
                 icon: 'error',
                 color: 'danger',
                 animation: 'shake',
-                message: 'Elaborazione fallita'
+                message: 'Processing failed'
             },
             'Retrying': {
                 icon: 'refresh',
                 color: 'warning',
                 animation: 'spin',
-                message: 'Nuovo tentativo in corso'
+                message: 'Retrying in progress'
             }
         };
         
@@ -130,30 +130,30 @@ class R2RProcessingManager {
             
             // Connection state handlers
             this.connection.onreconnecting(() => {
-                this.updateConnectionStatus('Riconnessione in corso...', 'warning');
+                this.updateConnectionStatus('Reconnecting...', 'warning');
             });
-            
+
             this.connection.onreconnected(() => {
-                this.updateConnectionStatus('Connesso', 'success');
+                this.updateConnectionStatus('Connected', 'success');
                 this.requestR2RStatus();
             });
-            
+
             this.connection.onclose(() => {
                 this.isConnected = false;
-                this.updateConnectionStatus('Disconnesso', 'danger');
+                this.updateConnectionStatus('Disconnected', 'danger');
             });
             
-            // Avvia connessione
+            // Start connection
             await this.connection.start();
             this.isConnected = true;
-            this.updateConnectionStatus('Connesso', 'success');
-            
-            // Richiedi stato iniziale
+            this.updateConnectionStatus('Connected', 'success');
+
+            // Request initial status
             await this.requestR2RStatus();
-            
+
         } catch (error) {
             console.error('SignalR connection failed:', error);
-            this.updateConnectionStatus('Errore di connessione', 'danger');
+            this.updateConnectionStatus('Connection error', 'danger');
         }
     }
     
@@ -179,18 +179,18 @@ class R2RProcessingManager {
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">
                         <i class="material-symbols-rounded me-2">cloud_sync</i>
-                        Stato Elaborazione R2R
+                        R2R Processing Status
                     </h6>
                     <div id="r2r-global-status" class="badge bg-secondary">
                         <i class="material-symbols-rounded me-1">sync</i>
-                        Inizializzazione...
+                        Initializing...
                     </div>
                 </div>
                 <div class="card-body">
                     <div id="r2r-processing-list" class="r2r-processing-list">
                         <div class="text-center text-muted py-3">
                             <i class="material-symbols-rounded" style="font-size: 2rem;">cloud_queue</i>
-                            <p class="mb-0 mt-2">Nessuna elaborazione in corso</p>
+                            <p class="mb-0 mt-2">No processing in progress</p>
                         </div>
                     </div>
                 </div>
@@ -337,7 +337,7 @@ class R2RProcessingManager {
             listContainer.innerHTML = `
                 <div class="text-center text-muted py-3">
                     <i class="material-symbols-rounded" style="font-size: 2rem;">cloud_done</i>
-                    <p class="mb-0 mt-2">Nessuna elaborazione in corso</p>
+                    <p class="mb-0 mt-2">No processing in progress</p>
                 </div>
             `;
             return;
@@ -409,13 +409,13 @@ class R2RProcessingManager {
             this.globalStatusIndicator.className = 'badge bg-success';
             this.globalStatusIndicator.innerHTML = `
                 <i class="material-symbols-rounded me-1">check_circle</i>
-                Tutto completato
+                All completed
             `;
         } else {
             this.globalStatusIndicator.className = 'badge bg-warning';
             this.globalStatusIndicator.innerHTML = `
                 <i class="material-symbols-rounded me-1 spin">sync</i>
-                ${activeCount} in elaborazione
+                ${activeCount} processing
             `;
         }
     }
@@ -430,7 +430,7 @@ class R2RProcessingManager {
                 this.globalStatusIndicator.className = 'badge bg-warning';
                 this.globalStatusIndicator.innerHTML = `
                     <i class="material-symbols-rounded me-1">queue</i>
-                    Coda: ${queueSize}
+                    Queue: ${queueSize}
                 `;
             }
         }

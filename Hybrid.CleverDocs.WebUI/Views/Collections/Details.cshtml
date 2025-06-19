@@ -227,7 +227,10 @@
                                                         </span>
                                                         break;
                                                     case "Failed":
-                                                        <span class="badge status-badge bg-danger">
+                                                        <span class="badge status-badge bg-danger"
+                                                              data-bs-toggle="tooltip"
+                                                              data-bs-placement="top"
+                                                              title="@(document.ProcessingError ?? "R2R processing failed")">
                                                             <i class="fas fa-exclamation-triangle me-1"></i>Failed
                                                         </span>
                                                         break;
@@ -469,8 +472,26 @@
                         console.log('Action:', fileInfo.action);
                         console.log('Timestamp:', fileInfo.timestamp);
 
-                        // Refresh the documents list to show the updated status
-                        this.refreshDocumentsList();
+                        // Check if this event is for the current collection
+                        const currentCollectionId = '@Model.Collection.Id';
+                        if (fileInfo.collectionId && fileInfo.collectionId !== currentCollectionId) {
+                            console.log('Document upload completion is for different collection, ignoring');
+                            return;
+                        }
+
+                        // Try targeted update first, then fallback to full refresh
+                        if (fileInfo.documentId) {
+                            // Set status to completed for the targeted update
+                            const updateData = {
+                                documentId: fileInfo.documentId,
+                                status: 'completed',
+                                action: fileInfo.action
+                            };
+                            this.handleR2RProcessingUpdate(updateData);
+                        } else {
+                            // Fallback: refresh the entire documents list
+                            this.refreshDocumentsList();
+                        }
 
                         // Show a success notification
                         if (fileInfo.action === 'completed') {
@@ -502,6 +523,22 @@
                         if (data.status === 'Completed') {
                             this.refreshDocumentsList();
                         }
+                    });
+
+                    // CRITICAL FIX: Add missing SignalR event handlers for document deletion
+                    this.connection.on("DocumentDeletionProgress", (data) => {
+                        console.log('🗑️ Document deletion progress:', data);
+                        this.handleDocumentDeletionProgress(data);
+                    });
+
+                    this.connection.on("DocumentDeletionCompleted", (data) => {
+                        console.log('✅ Document deletion completed:', data);
+                        this.handleDocumentDeletionCompleted(data);
+                    });
+
+                    this.connection.on("DocumentDeletionError", (data) => {
+                        console.error('❌ Document deletion error:', data);
+                        this.handleDocumentDeletionError(data);
                     });
 
                     // Start connection and wait for it to be fully established
@@ -573,6 +610,9 @@
                         tableBody.appendChild(row);
                     });
 
+                    // CRITICAL FIX: Initialize tooltips after updating table
+                    this.initializeTooltips();
+
                     console.log(`Updated documents table with ${documents.length} documents`);
                 } catch (error) {
                     console.error('Error updating documents table:', error);
@@ -586,6 +626,11 @@
                 const statusText = this.mapDocumentStatusForCollectionView(doc.status);
                 const statusClass = this.getStatusClassFromDocumentStatus(doc.status);
 
+                // CRITICAL FIX: Add error tooltip for failed documents
+                const isFailedStatus = doc.status === 4 || statusText === 'Fallito' || statusText === 'Failed';
+                const errorTooltip = isFailedStatus && doc.errorMessage ?
+                    `data-bs-toggle="tooltip" data-bs-placement="top" title="${this.escapeHtml(doc.errorMessage)}"` : '';
+
                 row.innerHTML = `
                     <td>
                         <div class="d-flex align-items-center">
@@ -597,7 +642,7 @@
                         </div>
                     </td>
                     <td>
-                        <span class="badge status-badge ${statusClass}">${statusText}</span>
+                        <span class="badge status-badge ${statusClass}" ${errorTooltip}>${statusText}</span>
                     </td>
                     <td>
                         <small class="text-muted">${this.formatDate(doc.updatedAt)}</small>
@@ -614,31 +659,86 @@
                     </td>
                 `;
 
+                // CRITICAL FIX: Initialize tooltips for the new row
+                this.initializeTooltips(row);
+
                 return row;
+            }
+
+            // CRITICAL FIX: Initialize Bootstrap tooltips
+            initializeTooltips(container = document) {
+                try {
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                        // Find all elements with tooltip attributes
+                        const tooltipElements = container.querySelectorAll('[data-bs-toggle="tooltip"]');
+                        tooltipElements.forEach(element => {
+                            // Dispose existing tooltip if any
+                            const existingTooltip = bootstrap.Tooltip.getInstance(element);
+                            if (existingTooltip) {
+                                existingTooltip.dispose();
+                            }
+                            // Create new tooltip
+                            new bootstrap.Tooltip(element);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error initializing tooltips:', error);
+                }
             }
 
             handleR2RProcessingUpdate(queueItem) {
                 console.log('Handling R2R processing update:', queueItem);
 
                 try {
+                    // Handle both DocumentId (capital D) and documentId (lowercase d) properties
+                    const documentId = queueItem.DocumentId || queueItem.documentId;
+                    if (!documentId) {
+                        console.warn('No document ID found in R2R processing update:', queueItem);
+                        this.refreshDocumentsList();
+                        return;
+                    }
+
                     // Find the document row by ID
-                    const documentRow = document.querySelector(`tr[data-document-id="${queueItem.DocumentId}"]`);
+                    const documentRow = document.querySelector(`tr[data-document-id="${documentId}"]`);
                     if (documentRow) {
                         // Update the status cell
                         const statusCell = documentRow.querySelector('.status-badge');
                         if (statusCell) {
-                            const statusText = this.getStatusText(queueItem.Status);
-                            const statusClass = this.getStatusClass(queueItem.Status);
+                            // Handle both Status (enum) and status (string) properties
+                            const status = queueItem.Status || queueItem.status;
+                            const statusText = this.getStatusText(status);
+                            const statusClass = this.getStatusClass(status);
 
-                            // Update status badge
+                            // CRITICAL FIX: Add error tooltip for failed R2R processing
+                            const isFailedStatus = status === 3 || status === 'Failed' || status === 'failed';
+                            const errorMessage = queueItem.ErrorMessage || queueItem.errorMessage;
+
+                            // Update status badge with icon
                             statusCell.className = `badge status-badge ${statusClass}`;
-                            statusCell.textContent = statusText;
+                            statusCell.innerHTML = this.getStatusHtmlWithIcon(statusText);
 
-                            console.log(`Updated document ${queueItem.DocumentId} status to ${statusText}`);
+                            // Add or remove tooltip based on status
+                            if (isFailedStatus && errorMessage) {
+                                statusCell.setAttribute('data-bs-toggle', 'tooltip');
+                                statusCell.setAttribute('data-bs-placement', 'top');
+                                statusCell.setAttribute('title', this.escapeHtml(errorMessage));
+
+                                // Initialize tooltip if Bootstrap is available
+                                if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                                    new bootstrap.Tooltip(statusCell);
+                                }
+                            } else {
+                                // Remove tooltip attributes for non-failed statuses
+                                statusCell.removeAttribute('data-bs-toggle');
+                                statusCell.removeAttribute('data-bs-placement');
+                                statusCell.removeAttribute('title');
+                            }
+
+                            console.log(`Updated document ${documentId} status to ${statusText}${isFailedStatus && errorMessage ? ' with error tooltip' : ''}`);
                         }
                     } else {
                         // If row not found, refresh the entire list
-                        console.log('Document row not found, refreshing list');
+                        console.log(`Document row not found for ID ${documentId}, refreshing list`);
                         this.refreshDocumentsList();
                     }
                 } catch (error) {
@@ -674,46 +774,99 @@
             }
 
             getStatusText(status) {
-                switch (status) {
-                    case 'Queued': return 'Queued';
-                    case 'Processing': return 'Processing';
-                    case 'Completed': return 'Ready';
-                    case 'Failed': return 'Failed';
-                    default: return status;
+                // Handle both string and enum values
+                const statusStr = typeof status === 'string' ? status : this.convertEnumToString(status);
+
+                switch (statusStr) {
+                    case 'Queued':
+                    case 'queued':
+                    case '0': return 'Queued';
+                    case 'Processing':
+                    case 'processing':
+                    case '1': return 'Processing';
+                    case 'Completed':
+                    case 'completed':
+                    case '2': return 'Completed';
+                    case 'Failed':
+                    case 'failed':
+                    case '3': return 'Failed';
+                    default: return statusStr || 'Unknown';
                 }
             }
 
             getStatusClass(status) {
-                switch (status) {
-                    case 'Queued': return 'badge-warning';
-                    case 'Processing': return 'badge-info';
-                    case 'Completed': return 'badge-success';
-                    case 'Failed': return 'badge-danger';
-                    default: return 'badge-secondary';
+                // Handle both string and enum values
+                const statusStr = typeof status === 'string' ? status : this.convertEnumToString(status);
+
+                switch (statusStr) {
+                    case 'Queued':
+                    case 'queued':
+                    case '0': return 'bg-warning';
+                    case 'Processing':
+                    case 'processing':
+                    case '1': return 'bg-info';
+                    case 'Completed':
+                    case 'completed':
+                    case '2': return 'bg-success';
+                    case 'Failed':
+                    case 'failed':
+                    case '3': return 'bg-danger';
+                    default: return 'bg-secondary';
+                }
+            }
+
+            getStatusHtmlWithIcon(statusText) {
+                // Return status text with appropriate icon to match server-side rendering
+                switch (statusText) {
+                    case 'Processing':
+                        return '<i class="fas fa-spinner fa-spin me-1"></i>Processing';
+                    case 'Completed':
+                        return '<i class="fas fa-check me-1"></i>Completed';
+                    case 'Failed':
+                        return '<i class="fas fa-exclamation-triangle me-1"></i>Failed';
+                    case 'Queued':
+                        return '<i class="fas fa-clock me-1"></i>Queued';
+                    case 'Draft':
+                        return '<i class="fas fa-edit me-1"></i>Draft';
+                    case 'Archived':
+                        return '<i class="fas fa-archive me-1"></i>Archived';
+                    default:
+                        return statusText; // No icon for unknown statuses
+                }
+            }
+
+            convertEnumToString(enumValue) {
+                // Convert R2RProcessingStatusDto enum values to strings
+                switch (enumValue) {
+                    case 0: return 'Queued';
+                    case 1: return 'Processing';
+                    case 2: return 'Completed';
+                    case 3: return 'Failed';
+                    default: return enumValue?.toString() || 'Unknown';
                 }
             }
 
             // Helper methods for document status mapping and formatting
             mapDocumentStatusForCollectionView(status) {
                 switch (status) {
-                    case 0: return 'Caricamento';
-                    case 1: return 'Caricato';
-                    case 2: return 'Elaborazione';
-                    case 3: return 'Pronto';
-                    case 4: return 'Fallito';
-                    case 5: return 'Archiviato';
-                    default: return 'Sconosciuto';
+                    case 0: return 'Draft';
+                    case 1: return 'Processing';
+                    case 2: return 'Completed';
+                    case 3: return 'Error';
+                    case 4: return 'Archived';
+                    case 5: return 'Deleted';
+                    default: return 'Unknown';
                 }
             }
 
             getStatusClassFromDocumentStatus(status) {
                 switch (status) {
-                    case 0: return 'bg-info';      // Caricamento
-                    case 1: return 'bg-primary';   // Caricato
-                    case 2: return 'bg-warning';   // Elaborazione
-                    case 3: return 'bg-success';   // Pronto
-                    case 4: return 'bg-danger';    // Fallito
-                    case 5: return 'bg-secondary'; // Archiviato
+                    case 0: return 'bg-secondary'; // Draft
+                    case 1: return 'bg-warning';   // Processing
+                    case 2: return 'bg-success';   // Completed
+                    case 3: return 'bg-danger';    // Error
+                    case 4: return 'bg-info';      // Archived
+                    case 5: return 'bg-dark';      // Deleted
                     default: return 'bg-secondary';
                 }
             }
@@ -832,6 +985,197 @@
                     console.error('Error updating document count:', error);
                 }
             }
+
+            // CRITICAL FIX: Add SignalR event handlers for document deletion
+            handleDocumentDeletionProgress(data) {
+                console.log('🗑️ Handling document deletion progress:', data);
+                try {
+                    const { documentId, status, message } = data;
+
+                    // Find the document row and show progress
+                    const documentRow = document.querySelector(`tr[data-document-id="${documentId}"]`);
+                    if (documentRow) {
+                        // Update the status cell or add a progress indicator
+                        const statusCell = documentRow.querySelector('.status-badge');
+                        if (statusCell) {
+                            statusCell.className = 'badge bg-warning text-dark';
+                            statusCell.textContent = 'Deleting...';
+                        }
+
+                        // Disable action buttons during deletion
+                        const actionButtons = documentRow.querySelectorAll('button');
+                        actionButtons.forEach(button => {
+                            button.disabled = true;
+                            if (button.innerHTML.includes('fa-trash')) {
+                                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                            }
+                        });
+                    }
+
+                    console.log(`Document ${documentId} deletion progress: ${status} - ${message}`);
+                } catch (error) {
+                    console.error('Error handling document deletion progress:', error);
+                }
+            }
+
+            handleDocumentDeletionCompleted(data) {
+                console.log('✅ Handling document deletion completed:', data);
+                try {
+                    const { documentId, success, message } = data;
+
+                    if (success) {
+                        // CRITICAL FIX: Properly refresh the data grid with pagination
+                        this.refreshDocumentsListWithPagination();
+                        console.log(`Document ${documentId} deleted successfully: ${message}`);
+                    } else {
+                        // Re-enable buttons and show error
+                        const documentRow = document.querySelector(`tr[data-document-id="${documentId}"]`);
+                        if (documentRow) {
+                            const actionButtons = documentRow.querySelectorAll('button');
+                            actionButtons.forEach(button => {
+                                button.disabled = false;
+                                if (button.innerHTML.includes('fa-spinner')) {
+                                    button.innerHTML = '<i class="fas fa-trash"></i>';
+                                }
+                            });
+
+                            const statusCell = documentRow.querySelector('.status-badge');
+                            if (statusCell) {
+                                statusCell.className = 'badge bg-danger';
+                                statusCell.textContent = 'Error';
+                            }
+                        }
+
+                        alert(`Failed to delete document: ${message}`);
+                        console.error(`Document ${documentId} deletion failed: ${message}`);
+                    }
+                } catch (error) {
+                    console.error('Error handling document deletion completed:', error);
+                    // Fallback to refresh
+                    this.refreshDocumentsListWithPagination();
+                }
+            }
+
+            handleDocumentDeletionError(data) {
+                console.error('❌ Handling document deletion error:', data);
+                try {
+                    const { documentId, error } = data;
+
+                    // Re-enable buttons and show error state
+                    const documentRow = document.querySelector(`tr[data-document-id="${documentId}"]`);
+                    if (documentRow) {
+                        const actionButtons = documentRow.querySelectorAll('button');
+                        actionButtons.forEach(button => {
+                            button.disabled = false;
+                            if (button.innerHTML.includes('fa-spinner')) {
+                                button.innerHTML = '<i class="fas fa-trash"></i>';
+                            }
+                        });
+
+                        const statusCell = documentRow.querySelector('.status-badge');
+                        if (statusCell) {
+                            statusCell.className = 'badge bg-danger';
+                            statusCell.textContent = 'Error';
+                        }
+                    }
+
+                    alert(`Error deleting document: ${error}`);
+                    console.error(`Document ${documentId} deletion error: ${error}`);
+                } catch (err) {
+                    console.error('Error handling document deletion error event:', err);
+                }
+            }
+
+            // CRITICAL FIX: Enhanced refresh method that properly handles pagination
+            async refreshDocumentsListWithPagination() {
+                console.log('🔄 Refreshing documents list with proper pagination handling...');
+                try {
+                    // Get current page parameters
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const currentPage = parseInt(urlParams.get('page')) || 1;
+                    const pageSize = parseInt(urlParams.get('pageSize')) || 10;
+                    const sortBy = urlParams.get('sortBy') || 'updated_at';
+                    const sortDirection = urlParams.get('sortDirection') || 'Desc';
+
+                    // Fetch updated data from server
+                    const collectionId = '@Model.Collection.Id';
+                    const response = await fetch(`/api/UserDocuments/collections/${collectionId}?page=${currentPage}&pageSize=${pageSize}&sortBy=${sortBy}&sortDirection=${sortDirection}&_t=${Date.now()}`, {
+                        method: 'GET',
+                        headers: {
+                            'Cache-Control': 'no-cache',
+                            'Pragma': 'no-cache'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.success && result.data) {
+                            const { items, totalCount, currentPage: newCurrentPage, totalPages } = result.data;
+
+                            // Check if current page is now empty (e.g., deleted last item on page)
+                            if (items.length === 0 && newCurrentPage > 1) {
+                                // Redirect to previous page
+                                const newUrl = new URL(window.location);
+                                newUrl.searchParams.set('page', newCurrentPage - 1);
+                                window.location.href = newUrl.toString();
+                                return;
+                            }
+
+                            // Update the documents table
+                            this.updateDocumentsTable(items);
+
+                            // Update document count display
+                            this.updateDocumentCountDisplay(totalCount);
+
+                            // Update pagination
+                            this.updatePaginationDisplay(totalCount, newCurrentPage, pageSize, totalPages);
+
+                            console.log(`✅ Successfully refreshed: ${items.length} documents, ${totalCount} total, page ${newCurrentPage}/${totalPages}`);
+                        } else {
+                            console.error('Invalid response format:', result);
+                            // Fallback to page reload
+                            window.location.reload();
+                        }
+                    } else {
+                        console.error('Failed to fetch documents:', response.status);
+                        // Fallback to page reload
+                        window.location.reload();
+                    }
+                } catch (error) {
+                    console.error('Error refreshing documents list with pagination:', error);
+                    // Fallback to page reload
+                    window.location.reload();
+                }
+            }
+
+            // CRITICAL FIX: Update pagination display after document changes
+            updatePaginationDisplay(totalCount, currentPage, pageSize, totalPages) {
+                console.log(`🔄 Updating pagination: ${totalCount} total, page ${currentPage}/${totalPages}`);
+                try {
+                    // Update pagination info text
+                    const startItem = totalCount > 0 ? ((currentPage - 1) * pageSize) + 1 : 0;
+                    const endItem = Math.min(currentPage * pageSize, totalCount);
+
+                    const paginationInfo = document.querySelector('.pagination-container .text-muted, nav[aria-label="Documents pagination"] .text-muted');
+                    if (paginationInfo) {
+                        paginationInfo.textContent = `Showing ${startItem} - ${endItem} of ${totalCount} documents`;
+                    }
+
+                    // If total pages changed, we need to reload to update pagination links
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const urlTotalPages = Math.ceil(totalCount / pageSize);
+
+                    if (totalPages !== urlTotalPages || totalCount === 0) {
+                        // Pagination structure changed, reload page to update links
+                        console.log('Pagination structure changed, reloading page...');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
+                    }
+                } catch (error) {
+                    console.error('Error updating pagination display:', error);
+                }
+            }
         }
 
         async function deleteDocument(documentId) {
@@ -867,20 +1211,14 @@
                 if (response.ok) {
                     const result = await response.json();
                     if (result.success) {
-                        // Remove the document row from the table immediately
-                        const documentRow = document.querySelector(`tr[data-document-id="${documentId}"]`);
-                        if (documentRow) {
-                            documentRow.style.transition = 'opacity 0.3s ease';
-                            documentRow.style.opacity = '0';
-                            setTimeout(() => {
-                                documentRow.remove();
-                                // Update document count if visible
-                                updateDocumentCount();
-                            }, 300);
-                        } else {
-                            // Fallback: refresh the documents list
-                            await refreshDocumentsList();
-                        }
+                        // CRITICAL FIX: Don't manipulate DOM immediately - let SignalR events handle it
+                        // The backend will send DocumentDeletionProgress and DocumentDeletionCompleted events
+                        // which will be handled by the SignalR event handlers we just added
+                        console.log(`✅ Document deletion request sent successfully for ${documentId}`);
+                        console.log('⏳ Waiting for SignalR events to handle UI updates...');
+
+                        // The button loading state will be managed by SignalR events
+                        // No need to manipulate DOM here
                     } else {
                         alert('Failed to delete document: ' + (result.message || 'Unknown error'));
                         // Restore button state
@@ -922,40 +1260,55 @@
         }
 
         async function refreshDocumentsList() {
-            // Refresh the documents list without full page reload
-            try {
-                const currentUrl = new URL(window.location);
-                const response = await fetch(currentUrl.toString(), {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
+            // CRITICAL FIX: Use the enhanced refresh method with proper pagination handling
+            if (window.collectionDetailsManager && window.collectionDetailsManager.refreshDocumentsListWithPagination) {
+                await window.collectionDetailsManager.refreshDocumentsListWithPagination();
+            } else {
+                // Fallback to old method if manager not available
+                console.log('CollectionDetailsManager not available, using fallback refresh...');
+                try {
+                    const currentUrl = new URL(window.location);
+                    const response = await fetch(currentUrl.toString(), {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Cache-Control': 'no-cache',
+                            'Pragma': 'no-cache'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const html = await response.text();
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+
+                        // Update the documents table
+                        const newTable = doc.querySelector('.documents-table tbody');
+                        const currentTable = document.querySelector('.documents-table tbody');
+
+                        if (newTable && currentTable) {
+                            currentTable.innerHTML = newTable.innerHTML;
+                        }
+
+                        // Update pagination if present
+                        const newPagination = doc.querySelector('.pagination-container, nav[aria-label="Documents pagination"]');
+                        const currentPagination = document.querySelector('.pagination-container, nav[aria-label="Documents pagination"]');
+
+                        if (newPagination && currentPagination) {
+                            currentPagination.innerHTML = newPagination.innerHTML;
+                        }
+
+                        // Update document count
+                        const newCount = doc.querySelector('.document-count');
+                        const currentCount = document.querySelector('.document-count');
+                        if (newCount && currentCount) {
+                            currentCount.textContent = newCount.textContent;
+                        }
                     }
-                });
-
-                if (response.ok) {
-                    const html = await response.text();
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-
-                    // Update the documents table
-                    const newTable = doc.querySelector('.documents-table tbody');
-                    const currentTable = document.querySelector('.documents-table tbody');
-
-                    if (newTable && currentTable) {
-                        currentTable.innerHTML = newTable.innerHTML;
-                    }
-
-                    // Update pagination if present
-                    const newPagination = doc.querySelector('.pagination-container');
-                    const currentPagination = document.querySelector('.pagination-container');
-
-                    if (newPagination && currentPagination) {
-                        currentPagination.innerHTML = newPagination.innerHTML;
-                    }
+                } catch (error) {
+                    console.error('Error refreshing documents list:', error);
+                    // Fallback to full page reload
+                    location.reload();
                 }
-            } catch (error) {
-                console.error('Error refreshing documents list:', error);
-                // Fallback to full page reload
-                location.reload();
             }
         }
 
@@ -1006,6 +1359,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             window.collectionDetailsManager = new CollectionDetailsManager();
             window.collectionDocumentsSortManager = new CollectionDocumentsSortManager('@Model.Collection.Id');
+
+            // CRITICAL FIX: Initialize tooltips for existing content on page load
+            if (window.collectionDetailsManager && window.collectionDetailsManager.initializeTooltips) {
+                window.collectionDetailsManager.initializeTooltips();
+            }
         });
     </script>
 }

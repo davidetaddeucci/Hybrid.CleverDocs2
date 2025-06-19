@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Hybrid.CleverDocs.WebUI.Models.Documents;
 using Hybrid.CleverDocs.WebUI.Services.Documents;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Hybrid.CleverDocs.WebUI.Services;
 
 namespace Hybrid.CleverDocs.WebUI.Controllers;
 
@@ -15,13 +16,16 @@ public class DocumentsController : Controller
 {
     private readonly IDocumentApiClient _documentApiClient;
     private readonly ILogger<DocumentsController> _logger;
+    private readonly IAuthService _authService;
 
     public DocumentsController(
         IDocumentApiClient documentApiClient,
-        ILogger<DocumentsController> logger)
+        ILogger<DocumentsController> logger,
+        IAuthService authService)
     {
         _documentApiClient = documentApiClient;
         _logger = logger;
+        _authService = authService;
         _logger.LogInformation("DocumentsController constructor called");
     }
 
@@ -194,11 +198,12 @@ public class DocumentsController : Controller
                     if (model.CollectionId.HasValue)
                     {
                         _logger.LogInformation("Redirecting to collection details: {CollectionId}", model.CollectionId.Value);
-                        return RedirectToAction("Details", "Collections", new { collectionId = model.CollectionId.Value });
+                        // Use relative URL for consistency with bulk upload
+                        return Redirect($"/Collections/{model.CollectionId.Value}");
                     }
 
                     _logger.LogInformation("Redirecting to document details: {DocumentId}", uploadedDocument.Id);
-                    return RedirectToAction("Details", new { documentId = uploadedDocument.Id });
+                    return Redirect($"/Documents/{uploadedDocument.Id}");
                 }
                 else
                 {
@@ -225,6 +230,128 @@ public class DocumentsController : Controller
             // Repopulate UI properties before returning view
             PopulateUploadViewModelProperties(model);
             return View(model);
+        }
+    }
+
+    /// <summary>
+    /// Bulk upload endpoint - proxies to WebServices bulk upload API
+    /// </summary>
+    [HttpPost("BulkUpload")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BulkUpload()
+    {
+        try
+        {
+            _logger.LogInformation("🚀 BULK UPLOAD: Starting bulk upload proxy");
+
+            // Get all files from the request
+            var files = Request.Form.Files;
+            if (files.Count == 0)
+            {
+                _logger.LogWarning("❌ BULK UPLOAD: No files received");
+                return BadRequest(new { success = false, message = "No files provided" });
+            }
+
+            _logger.LogInformation("📊 BULK UPLOAD: Received {FileCount} files", files.Count);
+
+            // Get other form data
+            var collectionId = Request.Form["CollectionId"].FirstOrDefault();
+
+            // Create HttpClient for calling WebServices
+            using var httpClient = new HttpClient();
+
+            // Create multipart form data
+            using var formData = new MultipartFormDataContent();
+
+            // Add collection ID if provided
+            if (!string.IsNullOrEmpty(collectionId))
+            {
+                formData.Add(new StringContent(collectionId), "CollectionId");
+                _logger.LogInformation("📁 BULK UPLOAD: Collection ID: {CollectionId}", collectionId);
+            }
+
+            // Add upload options
+            formData.Add(new StringContent("true"), "Options.ExtractMetadata");
+            formData.Add(new StringContent("true"), "Options.PerformOCR");
+            formData.Add(new StringContent("true"), "Options.AutoDetectLanguage");
+            formData.Add(new StringContent("true"), "Options.GenerateThumbnails");
+            formData.Add(new StringContent("true"), "Options.EnableVersioning");
+            formData.Add(new StringContent("10"), "Options.MaxParallelUploads");
+
+            // Add all files
+            foreach (var file in files)
+            {
+                var fileContent = new StreamContent(file.OpenReadStream());
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+                formData.Add(fileContent, "Files", file.FileName);
+                _logger.LogInformation("📄 BULK UPLOAD: Added file: {FileName} ({Size} bytes)", file.FileName, file.Length);
+            }
+
+            // Add anti-forgery token
+            var token = Request.Form["__RequestVerificationToken"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(token))
+            {
+                formData.Add(new StringContent(token), "__RequestVerificationToken");
+            }
+
+            // Get JWT token using AuthService (same as DocumentApiClient)
+            var jwtToken = await _authService.GetTokenAsync();
+            if (!string.IsNullOrEmpty(jwtToken))
+            {
+                httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwtToken);
+                _logger.LogInformation("🔐 BULK UPLOAD: Added JWT authentication via AuthService. Token length: {TokenLength}", jwtToken.Length);
+                _logger.LogInformation("🔐 BULK UPLOAD: Token starts with: {TokenStart}", jwtToken.Substring(0, Math.Min(20, jwtToken.Length)));
+            }
+            else
+            {
+                _logger.LogWarning("🔐 BULK UPLOAD: No JWT token available from AuthService");
+
+                // Try fallback to cookie-based token
+                var cookieToken = Request.Cookies["jwt"];
+                if (!string.IsNullOrEmpty(cookieToken))
+                {
+                    httpClient.DefaultRequestHeaders.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", cookieToken);
+                    _logger.LogInformation("🔐 BULK UPLOAD: Using fallback cookie token. Length: {TokenLength}", cookieToken.Length);
+                }
+                else
+                {
+                    _logger.LogError("🔐 BULK UPLOAD: No authentication token available from either AuthService or cookies!");
+                }
+            }
+
+            _logger.LogInformation("🎯 BULK UPLOAD: Calling WebServices bulk upload API");
+
+            // Call WebServices bulk upload endpoint
+            var response = await httpClient.PostAsync("http://localhost:5252/api/DocumentUpload/batch", formData);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("✅ BULK UPLOAD: Success! Response: {Response}", responseContent);
+
+                // Get collection ID from form data for redirect
+                var uploadCollectionId = Request.Form["CollectionId"].FirstOrDefault();
+
+                // Return JSON response for AJAX call with collection ID for proper redirect
+                return Json(new {
+                    success = true,
+                    message = $"Successfully uploaded {files.Count} files!",
+                    collectionId = uploadCollectionId
+                });
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("❌ BULK UPLOAD: Failed with status {StatusCode}: {Error}", response.StatusCode, errorContent);
+                return BadRequest(new { success = false, message = $"Upload failed: {response.StatusCode} {response.ReasonPhrase}" });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ BULK UPLOAD: Exception occurred");
+            return BadRequest(new { success = false, message = $"Upload failed: {ex.Message}" });
         }
     }
 

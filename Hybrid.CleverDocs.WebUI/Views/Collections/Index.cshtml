@@ -412,7 +412,7 @@
         if (confirm(`Are you sure you want to delete the collection "${collectionName}"? This action cannot be undone.`)) {
             const form = document.createElement('form');
             form.method = 'POST';
-            form.action = `/Collections/Delete/${collectionId}`;
+            form.action = `/Collections/${collectionId}/delete`;
 
             // Add anti-forgery token
             const token = document.querySelector('input[name="__RequestVerificationToken"]');

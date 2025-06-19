@@ -93,8 +93,8 @@ public class DocumentViewModel
         {
             DocumentStatus.Draft => "Draft",
             DocumentStatus.Processing => "Processing",
-            DocumentStatus.Ready => "Ready",
-            DocumentStatus.Error => "Error",
+            DocumentStatus.Ready => "Completed",
+            DocumentStatus.Error => "Failed",
             DocumentStatus.Archived => "Archived",
             DocumentStatus.Deleted => "Deleted",
             _ => "Unknown"
