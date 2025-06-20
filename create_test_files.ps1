@@ -1,49 +1,36 @@
 # Create test files for bulk upload testing
-Write-Host "=== Creating Test Files for Bulk Upload ===" -ForegroundColor Green
+Write-Host "Creating test files for bulk upload..." -ForegroundColor Green
 
-# Create test files directory
-$testDir = 'test_files_andrea'
-if (Test-Path $testDir) { 
-    Remove-Item $testDir -Recurse -Force 
-    Write-Host "Removed existing test directory" -ForegroundColor Yellow
-}
-New-Item -ItemType Directory -Path $testDir | Out-Null
-Write-Host "Created test directory: $testDir" -ForegroundColor Cyan
-
-# Create 20 test files
-Write-Host "`nCreating 20 test files..." -ForegroundColor Yellow
-
-for ($i = 1; $i -le 20; $i++) {
-    $fileName = "andrea_test_$i.txt"
-    $filePath = Join-Path $testDir $fileName
-    
+for ($i = 1; $i -le 10; $i++) {
+    $fileName = "test_upload_$i.md"
     $content = @"
-This is test document $i for rate limiting verification.
+# Test Document $i
 
-Created for testing bulk upload with R2R rate limiting.
-Document ID: $i
-Timestamp: $(Get-Date)
-User: a.morviducci@microsis.it
-Collection: ANDREA_COLLECTION1
+This is test document number $i for bulk upload testing.
 
-Content for testing purposes:
-- Rate limiting verification
-- SignalR real-time updates
-- Bulk upload processing
-- R2R queue management
+## Content
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
 
-This document should be processed through the R2R pipeline
-with proper rate limiting (10 req/s) and real-time status updates.
+## Metadata
+- File: $fileName
+- Created: $(Get-Date)
+- Purpose: Bulk upload testing
+- Test ID: $i
+
+## Additional Content
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
 "@
-
-    Set-Content -Path $filePath -Value $content -Encoding UTF8
-    Write-Host "✅ Created: $fileName ($(Get-Item $filePath | Select-Object -ExpandProperty Length) bytes)" -ForegroundColor Green
+    
+    $content | Out-File -FilePath $fileName -Encoding UTF8
+    Write-Host "Created: $fileName" -ForegroundColor Yellow
 }
 
-Write-Host "`n=== Summary ===" -ForegroundColor Green
-Write-Host "Successfully created 20 test files in '$testDir' directory" -ForegroundColor Cyan
-Write-Host "Files ready for bulk upload testing" -ForegroundColor Cyan
-
-# List all created files
-Write-Host "`nCreated files:" -ForegroundColor Yellow
-Get-ChildItem $testDir | Select-Object Name, Length | Format-Table -AutoSize
+Write-Host "✅ Created 10 test files for bulk upload testing" -ForegroundColor Green
+Write-Host "📁 Files: test_upload_1.md to test_upload_10.md" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor White
+Write-Host "🎯 Next steps:" -ForegroundColor Yellow
+Write-Host "1. Open browser to http://localhost:5168" -ForegroundColor White
+Write-Host "2. Login with r.antoniucci@microsis.it / Maremmabona1!" -ForegroundColor White
+Write-Host "3. Navigate to a collection" -ForegroundColor White
+Write-Host "4. Upload all 10 files at once" -ForegroundColor White
+Write-Host "5. Monitor Terminal 13 for enhanced logging" -ForegroundColor White

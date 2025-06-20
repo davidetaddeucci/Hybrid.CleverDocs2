@@ -64,6 +64,20 @@ public class DocumentProcessingService : IDocumentProcessingService
         _complianceService = complianceService;
 
         _processingLimiter = new SemaphoreSlim(_options.MaxConcurrentProcessing, _options.MaxConcurrentProcessing);
+
+        // CRITICAL FIX: Restore processing queue from database on startup
+        // Use Task.Run with proper error handling
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await RestoreProcessingQueueFromDatabaseAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ STARTUP: Critical error in RestoreProcessingQueueFromDatabaseAsync");
+            }
+        });
     }
 
     public async Task<bool> QueueDocumentForProcessingAsync(R2RProcessingQueueItemDto queueItem)
@@ -447,6 +461,14 @@ public class DocumentProcessingService : IDocumentProcessingService
                 return false;
             }
 
+            // CRITICAL FIX: Get corrected content type for R2R processing
+            var correctedContentType = _complianceService.GetCorrectedContentType(queueItem.FilePath, queueItem.ContentType);
+            if (correctedContentType != queueItem.ContentType)
+            {
+                _logger.LogInformation("Content type corrected for R2R processing: {OriginalContentType} -> {CorrectedContentType}, DocumentId: {DocumentId}, CorrelationId: {CorrelationId}",
+                    queueItem.ContentType, correctedContentType, queueItem.DocumentId, correlationId);
+            }
+
             // ✅ QUICK WIN 2 - Generate R2R compliant filename and checksum
             var fileBytes = await File.ReadAllBytesAsync(queueItem.FilePath);
             var r2rCompliantFilename = _complianceService.GenerateR2RCompliantFilename(queueItem.FileName, queueItem.DocumentId);
@@ -462,7 +484,7 @@ public class DocumentProcessingService : IDocumentProcessingService
             var formFile = new FormFile(fileStream, 0, fileBytes.Length, "file", r2rCompliantFilename)
             {
                 Headers = new HeaderDictionary(),
-                ContentType = queueItem.ContentType
+                ContentType = correctedContentType // CRITICAL FIX: Use corrected content type
             };
 
             // ✅ QUICK WIN 3 - Enhanced metadata for R2R compliance
@@ -470,7 +492,7 @@ public class DocumentProcessingService : IDocumentProcessingService
             {
                 File = formFile,
                 Title = queueItem.OriginalFileName ?? queueItem.FileName,
-                DocumentType = queueItem.ContentType,
+                DocumentType = correctedContentType, // CRITICAL FIX: Use corrected content type
                 Metadata = new Dictionary<string, object>
                 {
                     ["original_filename"] = queueItem.OriginalFileName ?? queueItem.FileName,
@@ -482,7 +504,8 @@ public class DocumentProcessingService : IDocumentProcessingService
                     ["company_id"] = queueItem.CompanyId,
                     ["document_id"] = queueItem.DocumentId,
                     ["file_id"] = queueItem.FileId,
-                    ["content_type"] = queueItem.ContentType,
+                    ["content_type"] = correctedContentType, // CRITICAL FIX: Use corrected content type
+                    ["original_content_type"] = queueItem.ContentType, // Keep original for reference
                     ["processing_priority"] = queueItem.Priority.ToString()
                 }
             };
@@ -513,14 +536,32 @@ public class DocumentProcessingService : IDocumentProcessingService
             {
                 if (!string.IsNullOrEmpty(documentResponse.Id))
                 {
-                    // Immediate success (HTTP 200) - store R2R document ID from response
-                    queueItem.R2RDocumentId = documentResponse.Id;
-                    queueItem.TaskId = null; // No task ID for immediate processing
+                    // CRITICAL FIX: For large files (>10MB), R2R may return ID immediately but still process in background
+                    var isLargeFile = queueItem.FileSize > 10 * 1024 * 1024; // 10MB threshold
 
-                    _logger.LogInformation("R2R processing completed successfully (immediate) for document {DocumentId}, R2R ID: {R2RDocumentId}, CorrelationId: {CorrelationId}",
-                        queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
+                    if (isLargeFile)
+                    {
+                        // Large file - treat as async processing even with immediate ID
+                        queueItem.R2RDocumentId = $"pending_{documentResponse.Id}";
+                        queueItem.TaskId = $"large_file_{queueItem.DocumentId}";
+                        queueItem.Status = R2RProcessingStatusDto.Processing;
 
-                    return true;
+                        _logger.LogInformation("R2R processing accepted (large file async) for document {DocumentId}, R2R ID: {R2RDocumentId}, Size: {FileSize}MB, CorrelationId: {CorrelationId}",
+                            queueItem.DocumentId, documentResponse.Id, queueItem.FileSize / (1024.0 * 1024.0), correlationId);
+
+                        return true;
+                    }
+                    else
+                    {
+                        // Small file - immediate success (HTTP 200) - store R2R document ID from response
+                        queueItem.R2RDocumentId = documentResponse.Id;
+                        queueItem.TaskId = null; // No task ID for immediate processing
+
+                        _logger.LogInformation("R2R processing completed successfully (immediate) for document {DocumentId}, R2R ID: {R2RDocumentId}, CorrelationId: {CorrelationId}",
+                            queueItem.DocumentId, queueItem.R2RDocumentId, correlationId);
+
+                        return true;
+                    }
                 }
                 else if (!string.IsNullOrEmpty(documentResponse.TaskId))
                 {
@@ -885,13 +926,21 @@ public class DocumentProcessingService : IDocumentProcessingService
             _logger.LogInformation("Broadcasting FileUploadCompleted with event persistence for user: {UserId}, document: {DocumentId}, CorrelationId: {CorrelationId}",
                 queueItem.UserId, queueItem.DocumentId, correlationId);
 
+            // CRITICAL FIX: Determine correct status based on R2R processing state
+            var signalRStatus = "completed";
+            if (queueItem.R2RDocumentId != null && queueItem.R2RDocumentId.StartsWith("pending_"))
+            {
+                // Large file still processing in R2R
+                signalRStatus = "processing";
+            }
+
             var eventData = new {
                 documentId = queueItem.DocumentId,
                 collectionId = queueItem.CollectionId,
                 action = existingDocument != null ? "updated" : "added",
                 timestamp = DateTime.UtcNow,
                 r2rDocumentId = queueItem.R2RDocumentId,
-                status = "completed"
+                status = signalRStatus
             };
 
             _logger.LogInformation("Sending SignalR event data with persistence: {@EventData} to user: {UserId}, CorrelationId: {CorrelationId}",
@@ -997,6 +1046,101 @@ public class DocumentProcessingService : IDocumentProcessingService
             _logger.LogError(ex, "Error checking R2R status for document {DocumentId}, CorrelationId: {CorrelationId}",
                 queueItem.DocumentId, correlationId);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// CRITICAL FIX: Restore processing queue from database on startup
+    /// This method finds documents that are stuck in "Processing" status and re-queues them for R2R processing
+    /// </summary>
+    private async Task RestoreProcessingQueueFromDatabaseAsync()
+    {
+        try
+        {
+            _logger.LogInformation("🔄 STARTUP: RestoreProcessingQueueFromDatabaseAsync method started");
+
+            // Wait a bit for the application to fully start
+            await Task.Delay(TimeSpan.FromSeconds(5));
+
+            var correlationId = _correlationService.GetCorrelationId();
+            _logger.LogInformation("🔄 STARTUP: Restoring R2R processing queue from database, CorrelationId: {CorrelationId}", correlationId);
+
+            using var scope = _serviceScopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            // Find documents that are stuck in Processing status
+            var stuckDocuments = await context.Documents
+                .Where(d => d.Status == (int)Data.Entities.DocumentStatus.Processing && d.IsProcessing == true)
+                .ToListAsync();
+
+            if (stuckDocuments.Any())
+            {
+                _logger.LogInformation("🔄 STARTUP: Found {Count} documents stuck in processing status, re-queuing for R2R processing, CorrelationId: {CorrelationId}",
+                    stuckDocuments.Count, correlationId);
+
+                foreach (var document in stuckDocuments)
+                {
+                    try
+                    {
+                        // Create R2R processing queue item from database document
+                        var queueItem = new R2RProcessingQueueItemDto
+                        {
+                            Id = Guid.NewGuid(),
+                            DocumentId = document.Id,
+                            FileName = document.FileName ?? document.Name,
+                            FilePath = document.FilePath ?? "",
+                            FileSize = document.SizeInBytes,
+                            UserId = document.UserId.ToString(),
+                            CollectionId = document.CollectionId,
+                            CompanyId = document.CompanyId,
+                            ContentType = document.ContentType ?? "application/octet-stream",
+                            Priority = R2RProcessingPriorityDto.Normal,
+                            Status = R2RProcessingStatusDto.Queued,
+                            CreatedAt = DateTime.UtcNow,
+                            RetryCount = 0,
+                            MaxRetries = 3
+                        };
+
+                        // Add to processing queue
+                        _processingQueue.Enqueue(queueItem);
+
+                        // Cache for persistence
+                        await _cacheService.SetAsync($"r2r:queue:{queueItem.Id}", queueItem,
+                            new CacheOptions
+                            {
+                                UseL1Cache = true,
+                                UseL2Cache = true,
+                                UseL3Cache = true,
+                                L1TTL = TimeSpan.FromMinutes(30),
+                                L2TTL = TimeSpan.FromHours(24),
+                                L3TTL = TimeSpan.FromDays(7)
+                            });
+
+                        _logger.LogInformation("🔄 STARTUP: Re-queued document {DocumentId} ({FileName}) for R2R processing, CorrelationId: {CorrelationId}",
+                            document.Id, document.Name, correlationId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "🔄 STARTUP: Error re-queuing document {DocumentId} for R2R processing, CorrelationId: {CorrelationId}",
+                            document.Id, correlationId);
+                    }
+                }
+
+                // Trigger processing
+                _ = Task.Run(async () => await ProcessQueueAsync());
+
+                _logger.LogInformation("✅ STARTUP: Successfully restored {Count} documents to R2R processing queue, CorrelationId: {CorrelationId}",
+                    stuckDocuments.Count, correlationId);
+            }
+            else
+            {
+                _logger.LogInformation("✅ STARTUP: No documents found in processing status, queue restoration complete, CorrelationId: {CorrelationId}", correlationId);
+            }
+        }
+        catch (Exception ex)
+        {
+            var correlationId = _correlationService.GetCorrelationId();
+            _logger.LogError(ex, "❌ STARTUP: Error restoring R2R processing queue from database, CorrelationId: {CorrelationId}", correlationId);
         }
     }
 }

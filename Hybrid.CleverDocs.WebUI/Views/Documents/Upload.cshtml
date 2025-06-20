@@ -239,6 +239,35 @@
             return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
         }
 
+        // Show success toast notification (non-blocking)
+        function showSuccessToast(message) {
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.className = 'toast align-items-center text-white bg-success border-0 position-fixed';
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999;';
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-check-circle me-2"></i>${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            `;
+
+            // Add to page
+            document.body.appendChild(toast);
+
+            // Initialize and show toast
+            const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+            bsToast.show();
+
+            // Remove from DOM after hiding
+            toast.addEventListener('hidden.bs.toast', () => {
+                document.body.removeChild(toast);
+            });
+        }
+
         // Form validation and submission
         document.getElementById('uploadForm').addEventListener('submit', function(event) {
             event.preventDefault(); // Always prevent default form submission
@@ -307,18 +336,25 @@
                     console.log(`✅ BULK UPLOAD: Success! Response:`, result);
 
                     if (result.success) {
-                        // Show success message and redirect
-                        alert(result.message || `Successfully uploaded ${files.length} files!`);
+                        // Minimize success notification - only show brief toast instead of alert
+                        console.log(`✅ BULK UPLOAD: ${result.message || `Successfully uploaded ${files.length} files!`}`);
+
+                        // Show brief success toast (non-blocking)
+                        showSuccessToast(result.message || `Successfully uploaded ${files.length} files!`);
 
                         // Redirect to collection using the collection ID from the response
                         const collectionId = result.collectionId || collectionIdInput?.value;
                         if (collectionId) {
                             console.log(`🎯 BULK UPLOAD: Redirecting to collection: ${collectionId}`);
                             // Use correct URL format: /Collections/{id} (not /Collections/Details/{id})
-                            window.location.href = `/Collections/${collectionId}`;
+                            setTimeout(() => {
+                                window.location.href = `/Collections/${collectionId}`;
+                            }, 1000); // Brief delay to show toast
                         } else {
                             console.log(`🎯 BULK UPLOAD: No collection ID, redirecting to Documents index`);
-                            window.location.href = '/Documents';
+                            setTimeout(() => {
+                                window.location.href = '/Documents';
+                            }, 1000); // Brief delay to show toast
                         }
                     } else {
                         throw new Error(result.message || 'Upload failed');

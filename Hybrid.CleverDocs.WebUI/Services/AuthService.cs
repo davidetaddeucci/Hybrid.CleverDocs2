@@ -365,10 +365,11 @@ namespace Hybrid.CleverDocs.WebUI.Services
                             if (httpContext != null)
                             {
                                 var userJson = JsonSerializer.Serialize(apiResponse.Data);
+                                var isProduction = httpContext.Request.IsHttps;
                                 var userCookieOptions = new CookieOptions
                                 {
                                     HttpOnly = false, // Allow JavaScript access for UI
-                                    Secure = true,
+                                    Secure = isProduction, // Only secure in HTTPS environments
                                     SameSite = SameSiteMode.Strict,
                                     Expires = DateTime.UtcNow.AddHours(8)
                                 };
@@ -535,10 +536,11 @@ namespace Hybrid.CleverDocs.WebUI.Services
             var context = _httpContextAccessor.HttpContext;
             if (context != null)
             {
+                var isProduction = context.Request.IsHttps;
                 var cookieOptions = new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
+                    Secure = isProduction, // Only secure in HTTPS environments
                     SameSite = SameSiteMode.Strict,
                     Expires = DateTime.UtcNow.AddDays(-1) // Expire immediately
                 };
@@ -554,10 +556,13 @@ namespace Hybrid.CleverDocs.WebUI.Services
             var context = _httpContextAccessor.HttpContext;
             if (context != null)
             {
+                // Use Secure=false in development (HTTP), Secure=true in production (HTTPS)
+                var isProduction = context.Request.IsHttps;
+
                 var cookieOptions = new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
+                    Secure = isProduction, // Only secure in HTTPS environments
                     SameSite = SameSiteMode.Strict,
                     Expires = DateTime.UtcNow.AddHours(8) // 8 hours expiry
                 };
@@ -569,7 +574,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
                     var refreshCookieOptions = new CookieOptions
                     {
                         HttpOnly = true,
-                        Secure = true,
+                        Secure = isProduction, // Only secure in HTTPS environments
                         SameSite = SameSiteMode.Strict,
                         Expires = DateTime.UtcNow.AddDays(7) // 7 days for refresh token
                     };
@@ -580,7 +585,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
                 var userCookieOptions = new CookieOptions
                 {
                     HttpOnly = false, // Allow JavaScript access for UI
-                    Secure = true,
+                    Secure = isProduction, // Only secure in HTTPS environments
                     SameSite = SameSiteMode.Strict,
                     Expires = DateTime.UtcNow.AddHours(8)
                 };

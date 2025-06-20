@@ -334,11 +334,17 @@ public class DocumentsController : Controller
                 // Get collection ID from form data for redirect
                 var uploadCollectionId = Request.Form["CollectionId"].FirstOrDefault();
 
+                // Parse the response to get more details
+                var apiResponse = System.Text.Json.JsonSerializer.Deserialize<dynamic>(responseContent);
+
                 // Return JSON response for AJAX call with collection ID for proper redirect
                 return Json(new {
                     success = true,
-                    message = $"Successfully uploaded {files.Count} files!",
-                    collectionId = uploadCollectionId
+                    message = $"Successfully uploaded {files.Count} files! Processing R2R ingestion...",
+                    collectionId = uploadCollectionId,
+                    fileCount = files.Count,
+                    timestamp = DateTime.UtcNow,
+                    details = "Files are being processed for R2R ingestion. Status updates will appear in real-time."
                 });
             }
             else

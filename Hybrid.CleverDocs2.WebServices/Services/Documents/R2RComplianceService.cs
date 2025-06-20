@@ -33,6 +33,11 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Documents
         /// Validates file for R2R compliance
         /// </summary>
         Task<(bool IsValid, List<string> Errors)> ValidateFileForR2RAsync(string filePath, string contentType);
+
+        /// <summary>
+        /// Gets corrected content type based on file extension to handle browser quirks
+        /// </summary>
+        string GetCorrectedContentType(string filePath, string originalContentType);
     }
 
     public class R2RComplianceService : IR2RComplianceService
@@ -175,7 +180,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Documents
         public async Task<(bool IsValid, List<string> Errors)> ValidateFileForR2RAsync(string filePath, string contentType)
         {
             var errors = new List<string>();
-            
+
             try
             {
                 // Check if file exists
@@ -184,7 +189,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Documents
                     errors.Add("File does not exist");
                     return (false, errors);
                 }
-                
+
                 // Check file size (R2R has limits)
                 var fileInfo = new FileInfo(filePath);
                 if (fileInfo.Length == 0)
@@ -195,23 +200,28 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Documents
                 {
                     errors.Add("File is too large (max 100MB for optimal processing)");
                 }
-                
-                // Check content type
-                if (!SupportedContentTypes.Contains(contentType.ToLowerInvariant()))
+
+                // CRITICAL FIX: Correct content type based on file extension for browser quirks
+                var correctedContentType = CorrectContentTypeForFile(filePath, contentType);
+                _logger.LogInformation("Content type correction: Original={OriginalContentType}, Corrected={CorrectedContentType}, File={FilePath}",
+                    contentType, correctedContentType, filePath);
+
+                // Check content type (use corrected content type)
+                if (!SupportedContentTypes.Contains(correctedContentType.ToLowerInvariant()))
                 {
-                    errors.Add($"Unsupported content type: {contentType}");
+                    errors.Add($"Unsupported content type: {correctedContentType}");
                 }
                 
-                // Additional validation for specific file types
-                if (contentType.StartsWith("image/"))
+                // Additional validation for specific file types (use corrected content type)
+                if (correctedContentType.StartsWith("image/"))
                 {
                     await ValidateImageFileAsync(filePath, errors);
                 }
-                else if (contentType == "application/pdf")
+                else if (correctedContentType == "application/pdf")
                 {
                     await ValidatePdfFileAsync(filePath, errors);
                 }
-                
+
                 return (errors.Count == 0, errors);
             }
             catch (Exception ex)
@@ -220,6 +230,155 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Documents
                 errors.Add($"Validation error: {ex.Message}");
                 return (false, errors);
             }
+        }
+
+        public string GetCorrectedContentType(string filePath, string originalContentType)
+        {
+            return CorrectContentTypeForFile(filePath, originalContentType);
+        }
+
+        /// <summary>
+        /// CRITICAL FIX: Corrects content type based on file extension to handle browser quirks
+        /// </summary>
+        private string CorrectContentTypeForFile(string filePath, string originalContentType)
+        {
+            var fileExtension = Path.GetExtension(filePath).ToLowerInvariant();
+            var contentType = originalContentType?.ToLowerInvariant() ?? string.Empty;
+
+            _logger.LogDebug("Correcting content type for file: {FilePath}, Extension: {Extension}, Original: {OriginalContentType}",
+                filePath, fileExtension, originalContentType);
+
+            // Handle browser quirks and incorrect content type detection
+            switch (fileExtension)
+            {
+                case ".pdf":
+                    // CRITICAL FIX: PDF files sometimes detected as application/text or other incorrect types
+                    if (contentType != "application/pdf")
+                    {
+                        _logger.LogInformation("Correcting PDF content type from {OriginalContentType} to application/pdf for file {FilePath}",
+                            originalContentType, filePath);
+                        return "application/pdf";
+                    }
+                    break;
+
+                case ".md":
+                    // Markdown files often sent as application/text or text/plain
+                    if (contentType == "application/text" || contentType == "text/plain")
+                    {
+                        return "text/markdown";
+                    }
+                    break;
+
+                case ".txt":
+                    // Text files should be text/plain
+                    if (contentType != "text/plain")
+                    {
+                        return "text/plain";
+                    }
+                    break;
+
+                case ".docx":
+                    // Word documents
+                    if (contentType != "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                    {
+                        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                    }
+                    break;
+
+                case ".doc":
+                    // Legacy Word documents
+                    if (contentType != "application/msword")
+                    {
+                        return "application/msword";
+                    }
+                    break;
+
+                case ".xlsx":
+                    // Excel documents
+                    if (contentType != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    {
+                        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    }
+                    break;
+
+                case ".xls":
+                    // Legacy Excel documents
+                    if (contentType != "application/vnd.ms-excel")
+                    {
+                        return "application/vnd.ms-excel";
+                    }
+                    break;
+
+                case ".pptx":
+                    // PowerPoint documents
+                    if (contentType != "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                    {
+                        return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+                    }
+                    break;
+
+                case ".ppt":
+                    // Legacy PowerPoint documents
+                    if (contentType != "application/vnd.ms-powerpoint")
+                    {
+                        return "application/vnd.ms-powerpoint";
+                    }
+                    break;
+
+                case ".csv":
+                    // CSV files
+                    if (contentType != "text/csv")
+                    {
+                        return "text/csv";
+                    }
+                    break;
+
+                case ".html" or ".htm":
+                    // HTML files
+                    if (contentType != "text/html")
+                    {
+                        return "text/html";
+                    }
+                    break;
+
+                case ".png":
+                    if (contentType != "image/png")
+                    {
+                        return "image/png";
+                    }
+                    break;
+
+                case ".jpg" or ".jpeg":
+                    if (contentType != "image/jpeg")
+                    {
+                        return "image/jpeg";
+                    }
+                    break;
+
+                case ".bmp":
+                    if (contentType != "image/bmp")
+                    {
+                        return "image/bmp";
+                    }
+                    break;
+
+                case ".tiff" or ".tif":
+                    if (contentType != "image/tiff")
+                    {
+                        return "image/tiff";
+                    }
+                    break;
+
+                case ".mp3":
+                    if (contentType != "audio/mpeg")
+                    {
+                        return "audio/mpeg";
+                    }
+                    break;
+            }
+
+            // Return original content type if no correction needed
+            return originalContentType ?? string.Empty;
         }
 
         private string SanitizeFileName(string fileName)

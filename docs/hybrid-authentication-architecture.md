@@ -261,10 +261,48 @@ builder.Services.AddHttpClient<IApiService, ApiService>(client =>
 3. **Monitor logs**: Watch for security anomalies
 4. **Test scenarios**: Verify all authentication paths work correctly
 
+## Logout Functionality (Updated June 20, 2025)
+
+### Secure Logout Implementation
+The logout functionality has been enhanced to ensure proper security and user experience:
+
+#### Backend Logout Controller
+```csharp
+[HttpPost]
+public async Task<IActionResult> Logout()
+{
+    // Clear authentication cookie
+    await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+    // Clear JWT token cookie
+    Response.Cookies.Delete("auth_token", new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict
+    });
+
+    return RedirectToAction("Login");
+}
+```
+
+#### Frontend Logout Implementation
+- **POST Method**: All logout links use proper POST forms instead of GET requests
+- **Confirmation Dialog**: User confirmation before logout to prevent accidental logouts
+- **Consistent UI**: Logout functionality available in all navigation components
+- **Role-Based**: Works across all user roles (Admin, Company, User)
+
+#### Security Improvements
+1. **CSRF Protection**: POST-based logout prevents CSRF attacks
+2. **Complete Session Cleanup**: Both cookie authentication and JWT tokens cleared
+3. **Secure Cookie Deletion**: Proper cookie deletion with security flags
+4. **User Confirmation**: Prevents accidental logout from misclicks
+
 ## Conclusion
 
 The hybrid authentication architecture provides enterprise-grade security while maintaining excellent user experience. The combination of Cookie Authentication and JWT in HttpOnly cookies eliminates common security vulnerabilities while providing seamless API access.
 
-**Status**: ✅ **PRODUCTION READY** - Fully implemented and tested
+**Status**: ✅ **PRODUCTION READY** - Fully implemented and tested (June 20, 2025)
 **Security Level**: Enterprise-grade with multiple protection layers
+**Logout Security**: Enhanced with POST-based logout and proper session cleanup
 **Maintenance**: Standard - regular monitoring and updates required

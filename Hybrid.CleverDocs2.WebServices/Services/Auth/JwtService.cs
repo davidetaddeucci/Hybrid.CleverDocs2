@@ -51,7 +51,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Email, user.Email),
                 new(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"),
-                new(ClaimTypes.Role, user.Role.ToString()),
+                new(ClaimTypes.Role, user.Role.ToString()), // This will use enum name (Admin, Company, User)
                 new("companyId", user.CompanyId.ToString()),
                 new("tenantId", user.CompanyId.ToString()), // For backward compatibility
                 new("firstName", user.FirstName),

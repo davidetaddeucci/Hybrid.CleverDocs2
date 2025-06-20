@@ -273,8 +273,20 @@ public class DocumentUploadService : IDocumentUploadService
 
         try
         {
-            _logger.LogInformation("Starting batch upload: {FileCount} files for user {UserId}, CorrelationId: {CorrelationId}", 
-                request.Files.Count, request.UserId, correlationId);
+            _logger.LogInformation("🚀 BATCH UPLOAD STARTED: {FileCount} files for user {UserId}, MaxParallel: {MaxParallel}, CorrelationId: {CorrelationId}",
+                request.Files.Count, request.UserId, request.Options.MaxParallelUploads, correlationId);
+
+            // Log system resources before starting
+            var memoryUsed = GC.GetTotalMemory(false);
+            _logger.LogInformation("📊 SYSTEM RESOURCES: Memory={MemoryMB}MB, CorrelationId: {CorrelationId}",
+                memoryUsed / 1024 / 1024, correlationId);
+
+            // Log each file being queued
+            foreach (var file in request.Files)
+            {
+                _logger.LogDebug("📁 FILE QUEUED: {FileName}, Size: {SizeKB}KB, ContentType: {ContentType}, CorrelationId: {CorrelationId}",
+                    file.FileName, file.Length / 1024, file.ContentType, correlationId);
+            }
 
             // Initialize session
             var initRequest = new InitializeUploadSessionDto
@@ -292,17 +304,125 @@ public class DocumentUploadService : IDocumentUploadService
             };
 
             var session = await InitializeUploadSessionAsync(initRequest);
+            _logger.LogInformation("✅ SESSION INITIALIZED: {SessionId}, CorrelationId: {CorrelationId}",
+                session.SessionId, correlationId);
 
-            // Upload files in parallel with rate limiting
-            var uploadTasks = new List<Task<UploadResponseDto>>();
+            // CHUNKED PROCESSING STRATEGY: Process files in smaller batches to prevent system overload
+            const int BATCH_SIZE = 5; // Process 5 files at a time to prevent memory/resource issues
+            var allResults = new List<UploadResponseDto>();
+            var fileList = request.Files.ToList();
+            var totalBatches = (int)Math.Ceiling((double)fileList.Count / BATCH_SIZE);
             var semaphore = new SemaphoreSlim(request.Options.MaxParallelUploads, request.Options.MaxParallelUploads);
 
-            foreach (var file in request.Files)
+            _logger.LogInformation("🔄 CHUNKED PROCESSING STRATEGY: {TotalFiles} files divided into {TotalBatches} batches of {BatchSize} files each, CorrelationId: {CorrelationId}",
+                fileList.Count, totalBatches, BATCH_SIZE, correlationId);
+
+            // Process files in batches to prevent system overload
+            for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
             {
-                uploadTasks.Add(UploadFileWithSemaphoreAsync(file, session.SessionId, request.UserId, request.Options, semaphore));
+                var batchStart = batchIndex * BATCH_SIZE;
+                var batchFiles = fileList.Skip(batchStart).Take(BATCH_SIZE).ToList();
+                var batchNumber = batchIndex + 1;
+
+                _logger.LogInformation("🚀 BATCH {BatchNumber}/{TotalBatches} STARTED: Processing {BatchFileCount} files, CorrelationId: {CorrelationId}",
+                    batchNumber, totalBatches, batchFiles.Count, correlationId);
+
+                // Create upload tasks for current batch only
+                var uploadTasks = new List<Task<UploadResponseDto>>();
+                foreach (var file in batchFiles)
+                {
+                    _logger.LogInformation("📁 FILE QUEUED (Batch {BatchNumber}): {FileName} ({FileSize} bytes), CorrelationId: {CorrelationId}",
+                        batchNumber, file.FileName, file.Length, correlationId);
+
+                    uploadTasks.Add(UploadFileWithSemaphoreAsync(file, session.SessionId, request.UserId, request.Options, semaphore, correlationId));
+                }
+
+                _logger.LogInformation("⏳ BATCH {BatchNumber} PARALLEL EXECUTION: {TaskCount} tasks with semaphore capacity {SemaphoreCapacity}, CorrelationId: {CorrelationId}",
+                    batchNumber, uploadTasks.Count, semaphore.CurrentCount, correlationId);
+
+                // Execute current batch with enhanced error handling
+                UploadResponseDto[] batchResults;
+                try
+                {
+                    batchResults = await Task.WhenAll(uploadTasks);
+                    _logger.LogInformation("🏁 BATCH {BatchNumber} COMPLETED: {ResultCount} results received, CorrelationId: {CorrelationId}",
+                        batchNumber, batchResults.Length, correlationId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "💥 BATCH {BatchNumber} FAILED: Exception during Task.WhenAll, CorrelationId: {CorrelationId}", batchNumber, correlationId);
+
+                    // Collect results from completed tasks in this batch
+                    var completedResults = new List<UploadResponseDto>();
+                    foreach (var task in uploadTasks)
+                    {
+                        if (task.IsCompletedSuccessfully)
+                        {
+                            completedResults.Add(task.Result);
+                        }
+                        else if (task.IsFaulted)
+                        {
+                            _logger.LogError(task.Exception, "❌ BATCH {BatchNumber} TASK FAILED: Individual upload task failed, CorrelationId: {CorrelationId}", batchNumber, correlationId);
+                            completedResults.Add(new UploadResponseDto
+                            {
+                                Success = false,
+                                Message = $"Upload task failed in batch {batchNumber}",
+                                Errors = new List<string> { task.Exception?.GetBaseException().Message ?? "Unknown error" }
+                            });
+                        }
+                    }
+                    batchResults = completedResults.ToArray();
+                }
+
+                // Add batch results to overall results
+                allResults.AddRange(batchResults);
+
+                // Log batch completion
+                var batchSuccessCount = batchResults.Count(r => r.Success);
+                var batchFailureCount = batchResults.Count(r => !r.Success);
+                _logger.LogInformation("📈 BATCH {BatchNumber} RESULTS: Success={Success}, Failures={Failures}, CorrelationId: {CorrelationId}",
+                    batchNumber, batchSuccessCount, batchFailureCount, correlationId);
+
+                // Small delay between batches to prevent overwhelming the system
+                if (batchIndex < totalBatches - 1) // Don't delay after the last batch
+                {
+                    await Task.Delay(500, CancellationToken.None); // 500ms delay between batches
+                    _logger.LogDebug("⏸️ BATCH DELAY: 500ms delay before next batch, CorrelationId: {CorrelationId}", correlationId);
+                }
             }
 
-            var results = await Task.WhenAll(uploadTasks);
+            // Convert all results to array for compatibility with existing code
+            var results = allResults.ToArray();
+
+            // Detailed result analysis with enhanced logging
+            var successCount = results.Count(r => r.Success);
+            var failureCount = results.Count(r => !r.Success);
+            var totalFiles = results.SelectMany(r => r.Files).Count();
+            var expectedFiles = request.Files.Count;
+
+            _logger.LogInformation("📈 CHUNKED PROCESSING FINAL RESULTS: Success={Success}, Failures={Failures}, TotalFiles={TotalFiles}, Expected={Expected}, Batches={TotalBatches}, CorrelationId: {CorrelationId}",
+                successCount, failureCount, totalFiles, expectedFiles, totalBatches, correlationId);
+
+            // Critical check for missing files
+            if (totalFiles < expectedFiles)
+            {
+                var missingCount = expectedFiles - totalFiles;
+                _logger.LogError("🚨 MISSING FILES DETECTED: {MissingCount} files were lost during chunked processing! Expected={Expected}, Actual={Actual}, Batches={TotalBatches}, CorrelationId: {CorrelationId}",
+                    missingCount, expectedFiles, totalFiles, totalBatches, correlationId);
+            }
+            else
+            {
+                _logger.LogInformation("✅ ALL FILES PROCESSED: No missing files detected in chunked processing, CorrelationId: {CorrelationId}", correlationId);
+            }
+
+            if (failureCount > 0)
+            {
+                var allErrors = results.SelectMany(r => r.Errors).ToList();
+                foreach (var error in allErrors)
+                {
+                    _logger.LogError("❌ BATCH ERROR: {Error}, CorrelationId: {CorrelationId}", error, correlationId);
+                }
+            }
 
             // Aggregate results
             var response = new UploadResponseDto
@@ -320,8 +440,8 @@ public class DocumentUploadService : IDocumentUploadService
 
             UpdateSessionInMemory(session);
 
-            _logger.LogInformation("Batch upload completed: {SuccessCount}/{TotalCount} files successful for session {SessionId}, CorrelationId: {CorrelationId}", 
-                response.Files.Count(f => f.Status == FileUploadStatusDto.Completed), request.Files.Count, session.SessionId, correlationId);
+            _logger.LogInformation("🎉 CHUNKED BATCH UPLOAD COMPLETED: {SuccessCount}/{TotalCount} files successful across {TotalBatches} batches for session {SessionId}, CorrelationId: {CorrelationId}",
+                response.Files.Count(f => f.Status == FileUploadStatusDto.Completed), request.Files.Count, totalBatches, session.SessionId, correlationId);
 
             return response;
         }
@@ -701,16 +821,74 @@ public class DocumentUploadService : IDocumentUploadService
         await _processingService.QueueDocumentForProcessingAsync(queueItem);
     }
 
-    private async Task<UploadResponseDto> UploadFileWithSemaphoreAsync(IFormFile file, Guid sessionId, string userId, UploadOptionsDto options, SemaphoreSlim semaphore)
+    private static int _activeOperations = 0;
+
+    private async Task<UploadResponseDto> UploadFileWithSemaphoreAsync(IFormFile file, Guid sessionId, string userId, UploadOptionsDto options, SemaphoreSlim semaphore, string correlationId)
     {
-        await semaphore.WaitAsync();
+        var startTime = DateTime.UtcNow;
+
+        _logger.LogDebug("🔒 SEMAPHORE WAIT: {FileName}, Available={Available}/{Total}, CorrelationId: {CorrelationId}",
+            file.FileName, semaphore.CurrentCount, options.MaxParallelUploads, correlationId);
+
+        // Add timeout to semaphore wait to prevent indefinite blocking (reduced from 5 minutes to 2 minutes)
+        var semaphoreAcquired = await semaphore.WaitAsync(TimeSpan.FromMinutes(2));
+
+        if (!semaphoreAcquired)
+        {
+            _logger.LogError("⏰ SEMAPHORE TIMEOUT: {FileName} failed to acquire semaphore within 2 minutes, CorrelationId: {CorrelationId}",
+                file.FileName, correlationId);
+            return new UploadResponseDto
+            {
+                Success = false,
+                Message = "Upload timeout - semaphore acquisition failed",
+                Errors = new List<string> { $"Semaphore timeout for file: {file.FileName}" }
+            };
+        }
+
+        var currentActive = Interlocked.Increment(ref _activeOperations);
+
         try
         {
-            return await UploadFileAsync(file, sessionId, userId, options);
+            _logger.LogInformation("🚀 UPLOAD STARTED: {FileName}, Active={Active}, Available={Available}, CorrelationId: {CorrelationId}",
+                file.FileName, currentActive, semaphore.CurrentCount, correlationId);
+
+            var result = await UploadFileAsync(file, sessionId, userId, options);
+
+            var duration = DateTime.UtcNow - startTime;
+
+            if (result.Success)
+            {
+                _logger.LogInformation("✅ UPLOAD SUCCESS: {FileName}, Duration={Duration}ms, CorrelationId: {CorrelationId}",
+                    file.FileName, duration.TotalMilliseconds, correlationId);
+            }
+            else
+            {
+                _logger.LogError("❌ UPLOAD FAILED: {FileName}, Duration={Duration}ms, Errors={Errors}, CorrelationId: {CorrelationId}",
+                    file.FileName, duration.TotalMilliseconds, string.Join("; ", result.Errors), correlationId);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            var duration = DateTime.UtcNow - startTime;
+            _logger.LogError(ex, "💥 UPLOAD EXCEPTION: {FileName}, Duration={Duration}ms, CorrelationId: {CorrelationId}",
+                file.FileName, duration.TotalMilliseconds, correlationId);
+
+            return new UploadResponseDto
+            {
+                Success = false,
+                Message = $"Upload failed with exception: {ex.Message}",
+                Errors = new List<string> { ex.Message }
+            };
         }
         finally
         {
+            var remainingActive = Interlocked.Decrement(ref _activeOperations);
             semaphore.Release();
+
+            _logger.LogDebug("🔓 SEMAPHORE RELEASED: {FileName}, Active={Active}, Available={Available}, CorrelationId: {CorrelationId}",
+                file.FileName, remainingActive, semaphore.CurrentCount, correlationId);
         }
     }
 

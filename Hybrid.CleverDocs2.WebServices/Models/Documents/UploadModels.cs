@@ -97,7 +97,7 @@ public class UploadOptionsDto
     public int MaxRetries { get; set; } = 3;
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(5);
     public bool EnableParallelProcessing { get; set; } = true;
-    public int MaxParallelUploads { get; set; } = 3;
+    public int MaxParallelUploads { get; set; } = 10; // Increased from 3 to 10 for better bulk upload performance
     public bool EnableChunkedUpload { get; set; } = true;
     public int ChunkSize { get; set; } = 5 * 1024 * 1024; // 5MB
     public bool EnableProgressTracking { get; set; } = true;
