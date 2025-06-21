@@ -160,6 +160,11 @@ public class R2RProcessingQueueItemDto
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public int RetryCount { get; set; }
+
+    /// <summary>
+    /// R2R Ingestion Job ID for audit trail and debugging
+    /// </summary>
+    public string? JobId { get; set; }
     public int MaxRetries { get; set; } = 3;
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(5);
     public DateTime? NextRetryAt { get; set; }

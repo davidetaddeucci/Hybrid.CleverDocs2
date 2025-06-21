@@ -25,7 +25,14 @@ namespace Hybrid.CleverDocs.WebUI.Models
     public class ConversationDetailViewModel
     {
         public string Id { get; set; } = string.Empty;
+        public string? R2RConversationId { get; set; }
         public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public List<string> CollectionIds { get; set; } = new();
+        public string Status { get; set; } = "Active";
+        public int MessageCount { get; set; }
+        public bool IsPinned { get; set; }
+        public DateTime? LastMessageAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public List<MessageViewModel> Messages { get; set; } = new();
@@ -38,13 +45,32 @@ namespace Hybrid.CleverDocs.WebUI.Models
     {
         public string Id { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
-        public string Role { get; set; } = string.Empty; // "user" or "assistant"
+        public string Role { get; set; } = string.Empty; // "user", "assistant", "system"
         public DateTime CreatedAt { get; set; }
+        public DateTime Timestamp { get; set; }
         public List<CitationViewModel> Citations { get; set; } = new();
         public bool IsUser => Role == "user";
         public bool IsAssistant => Role == "assistant";
+        public bool IsSystem => Role == "system";
         public bool IsTemporary { get; set; }
         public MessageMetadataViewModel Metadata { get; set; } = new();
+
+        // R2R Enhanced Properties
+        public string? ParentMessageId { get; set; }
+        public List<Dictionary<string, object>> RagContext { get; set; } = new();
+        public double? ConfidenceScore { get; set; }
+        public int? ProcessingTimeMs { get; set; }
+        public int? TokenCount { get; set; }
+        public string Status { get; set; } = "sent"; // "sent", "processing", "completed", "failed"
+        public bool IsEdited { get; set; }
+        public bool IsTyping { get; set; }
+
+        // Helper properties for UI
+        public bool HasCitations => Citations?.Any() == true;
+        public bool HasRagContext => RagContext?.Any() == true;
+        public string FormattedProcessingTime => ProcessingTimeMs.HasValue ? $"{ProcessingTimeMs}ms" : "";
+        public string FormattedTokenCount => TokenCount.HasValue ? $"{TokenCount} tokens" : "";
+        public string FormattedConfidence => ConfidenceScore.HasValue ? $"{ConfidenceScore:P1}" : "";
     }
 
     public class CitationViewModel
@@ -77,10 +103,22 @@ namespace Hybrid.CleverDocs.WebUI.Models
         public List<string> SelectedCollectionIds { get; set; } = new();
         public double RelevanceThreshold { get; set; } = 0.7;
         public int MaxResults { get; set; } = 10;
-        public string SearchMode { get; set; } = "hybrid"; // "hybrid", "semantic", "keyword"
+        public string SearchMode { get; set; } = "hybrid"; // "basic", "advanced", "custom"
         public bool UseVectorSearch { get; set; } = true;
         public bool UseHybridSearch { get; set; } = true;
         public bool IncludeTitleIfAvailable { get; set; } = true;
+
+        // R2R Advanced Settings
+        public double SemanticWeight { get; set; } = 5.0; // R2R semantic search weight
+        public double FullTextWeight { get; set; } = 1.0; // R2R keyword search weight
+        public int RrfK { get; set; } = 50; // Reciprocal Rank Fusion constant
+        public bool UseKnowledgeGraph { get; set; } = false; // GraphRAG integration
+        public bool AgenticMode { get; set; } = false; // Agentic RAG capabilities
+        public int ThinkingBudget { get; set; } = 4096; // Token budget for agentic reasoning
+        public bool MultiStepReasoning { get; set; } = false; // Multi-step reasoning
+        public bool ContextualEnrichment { get; set; } = true; // Contextual enrichment
+        public bool StreamingEnabled { get; set; } = true; // Streaming responses
+
         public Dictionary<string, object> RagGenerationConfig { get; set; } = new();
     }
 
@@ -195,5 +233,78 @@ namespace Hybrid.CleverDocs.WebUI.Models
         public DateTime Date { get; set; }
         public int ConversationCount { get; set; }
         public int MessageCount { get; set; }
+    }
+
+    // R2R Enhanced ViewModels
+    public class ConversationSearchViewModel
+    {
+        public string? Query { get; set; }
+        public string? Status { get; set; }
+        public bool? IsPinned { get; set; }
+        public List<string>? CollectionIds { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 20;
+        public string SortBy { get; set; } = "LastMessageAt";
+        public string SortOrder { get; set; } = "desc";
+    }
+
+    public class ConversationSearchResultViewModel
+    {
+        public List<ConversationViewModel> Conversations { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalPages { get; set; }
+        public bool HasNextPage { get; set; }
+        public bool HasPreviousPage { get; set; }
+    }
+
+    public class ConversationStatsViewModel
+    {
+        public int TotalConversations { get; set; }
+        public int ActiveConversations { get; set; }
+        public int ArchivedConversations { get; set; }
+        public int TotalMessages { get; set; }
+        public double AverageMessagesPerConversation { get; set; }
+        public DateTime? LastActivity { get; set; }
+        public List<CollectionUsageViewModel> TopCollections { get; set; } = new();
+    }
+
+    public class MessageEditHistoryViewModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string MessageId { get; set; } = string.Empty;
+        public string OriginalContent { get; set; } = string.Empty;
+        public string EditedContent { get; set; } = string.Empty;
+        public DateTime EditedAt { get; set; }
+        public string EditReason { get; set; } = string.Empty;
+    }
+
+    public class ConversationAnalyticsViewModel
+    {
+        public string ConversationId { get; set; } = string.Empty;
+        public int TotalMessages { get; set; }
+        public int UserMessages { get; set; }
+        public int AssistantMessages { get; set; }
+        public TimeSpan Duration { get; set; }
+        public double AverageResponseTime { get; set; }
+        public double AverageConfidenceScore { get; set; }
+        public int TotalTokensUsed { get; set; }
+        public List<string> TopTopics { get; set; } = new();
+        public List<CollectionUsageViewModel> CollectionUsage { get; set; } = new();
+    }
+
+    public class R2RStatusViewModel
+    {
+        public bool IsOnline { get; set; }
+        public string Version { get; set; } = string.Empty;
+        public DateTime LastCheck { get; set; }
+        public List<string> AvailableModels { get; set; } = new();
+        public Dictionary<string, object> SystemInfo { get; set; } = new();
+        public bool SupportsStreaming { get; set; }
+        public bool SupportsKnowledgeGraph { get; set; }
+        public bool SupportsAgenticRAG { get; set; }
     }
 }

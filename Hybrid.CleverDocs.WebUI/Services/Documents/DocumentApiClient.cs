@@ -480,6 +480,54 @@ public class DocumentApiClient : IDocumentApiClient
         }
     }
 
+    public async Task<(Stream? stream, string? contentType, string? fileName)> DownloadDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await SetAuthorizationHeaderAsync();
+
+            _logger.LogInformation("Downloading document {DocumentId}", documentId);
+
+            // First get the download URL
+            var downloadUrl = await GetDocumentDownloadUrlAsync(documentId, cancellationToken);
+            if (string.IsNullOrEmpty(downloadUrl))
+            {
+                _logger.LogWarning("No download URL available for document {DocumentId}", documentId);
+                return (null, null, null);
+            }
+
+            // Make authenticated request to download the file
+            var response = await _httpClient.GetAsync(downloadUrl, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Failed to download document {DocumentId}. Status: {StatusCode}", documentId, response.StatusCode);
+                return (null, null, null);
+            }
+
+            // Get content type and filename
+            var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+            var fileName = $"document_{documentId}";
+
+            // Try to get filename from Content-Disposition header
+            if (response.Content.Headers.ContentDisposition?.FileName != null)
+            {
+                fileName = response.Content.Headers.ContentDisposition.FileName.Trim('"');
+            }
+
+            // Get the file stream
+            var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+
+            _logger.LogInformation("Successfully downloaded document {DocumentId}", documentId);
+            return (stream, contentType, fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading document {DocumentId}", documentId);
+            return (null, null, null);
+        }
+    }
+
     // Advanced Search Methods Implementation
 
     public async Task<List<string>> GetDocumentNameSuggestionsAsync(string term, int limit = 10, CancellationToken cancellationToken = default)

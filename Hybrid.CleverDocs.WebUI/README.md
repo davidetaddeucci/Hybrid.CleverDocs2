@@ -8,10 +8,11 @@ Hybrid.CleverDocs2.WebUI è l'interfaccia utente del sistema, sviluppata in .NET
 
 ## Caratteristiche Principali
 
+- **📁 Document Management CRUD**: VIEW, DELETE, DOWNLOAD operations complete ✅
 - **Dashboard Avanzate**: StatCards dinamiche, Chart.js integration, widget drag-drop (SortableJS)
 - **Gestione Documenti**: Upload, processing, status tracking con SignalR real-time
 - **Gestione Collezioni**: CRUD completo con analytics e real-time updates
-- **Autenticazione Ibrida**: Cookie Authentication + JWT in HttpOnly cookies
+- **Autenticazione Sicura**: JWT authentication con typed HttpClients per tutte le operazioni
 - **Design Responsive**: Material Design 3 con template sidebar ottimizzato
 - **Multi-tenancy**: Supporto completo con isolamento dati per Company
 - **Real-time Updates**: SignalR per aggiornamenti immediati senza refresh
@@ -21,7 +22,7 @@ Hybrid.CleverDocs2.WebUI è l'interfaccia utente del sistema, sviluppata in .NET
   - Caricamento API parallelo per dashboard
   - Lazy loading e virtualizzazione per grandi dataset
   - Endpoint di monitoraggio performance
-- **🆕 SignalR Event Persistence**: Sistema intelligente per replay eventi con delay e cleanup automatico
+- **🆕 Document Operations**: Complete CRUD with authenticated downloads and real-time progress
 
 ## Prerequisiti
 

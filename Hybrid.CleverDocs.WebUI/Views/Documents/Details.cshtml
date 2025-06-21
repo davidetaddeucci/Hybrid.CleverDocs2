@@ -1,0 +1,276 @@
+@model Hybrid.CleverDocs.WebUI.Models.Documents.DocumentDetailsViewModel
+
+@{
+    ViewData["Title"] = $"Document: {Model.Document.Name}";
+    ViewData["PageTitle"] = Model.Document.Name;
+    ViewData["PageSubtitle"] = Model.Document.Description;
+}
+
+@* Anti-forgery token for CSRF protection *@
+@Html.AntiForgeryToken()
+
+<div class="container-fluid">
+    <!-- Document Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="fas fa-file-alt fa-3x text-primary"></i>
+                            </div>
+                            <div>
+                                <h2 class="mb-1">@Model.Document.Name</h2>
+                                @if (!string.IsNullOrEmpty(Model.Document.Description))
+                                {
+                                    <p class="text-muted mb-2">@Model.Document.Description</p>
+                                }
+                                <div class="d-flex align-items-center gap-3 document-stats">
+                                    <span class="badge bg-light text-dark">
+                                        <i class="fas fa-tag me-1"></i>
+                                        @Model.Document.ContentType
+                                    </span>
+                                    <span class="badge bg-light text-dark">
+                                        <i class="fas fa-weight-hanging me-1"></i>
+                                        @Model.Document.FormattedSize
+                                    </span>
+                                    <span class="badge bg-light text-dark">
+                                        <i class="fas fa-eye me-1"></i>
+                                        @Model.Document.ViewCount views
+                                    </span>
+                                    <span class="badge bg-light text-dark">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Uploaded @Model.Document.CreatedAt.ToString("MMM dd, yyyy")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            @if (Model.CanEdit)
+                            {
+                                <a href="/documents/@Model.Document.Id/edit" class="btn btn-outline-secondary">
+                                    <i class="fas fa-edit me-1"></i>
+                                    Edit
+                                </a>
+                            }
+                            @if (Model.Document.Permissions.CanDownload)
+                            {
+                                <a href="/documents/@Model.Document.Id/download" class="btn btn-outline-primary">
+                                    <i class="fas fa-download me-1"></i>
+                                    Download
+                                </a>
+                            }
+                            @if (Model.CanDelete)
+                            {
+                                <button type="button" class="btn btn-outline-danger" onclick="deleteDocument('@Model.Document.Id')">
+                                    <i class="fas fa-trash me-1"></i>
+                                    Delete
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document Status -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Processing Status</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="status-indicator">
+                            @switch (Model.Document.Status.ToString())
+                            {
+                                case "Processing":
+                                    <span class="badge status-badge bg-warning">
+                                        <i class="fas fa-spinner fa-spin me-1"></i>Processing
+                                    </span>
+                                    break;
+                                case "Completed":
+                                    <span class="badge status-badge bg-success">
+                                        <i class="fas fa-check me-1"></i>Completed
+                                    </span>
+                                    break;
+                                case "Ready":
+                                    <span class="badge status-badge bg-success">
+                                        <i class="fas fa-check me-1"></i>Ready
+                                    </span>
+                                    break;
+                                case "Failed":
+                                    <span class="badge status-badge bg-danger">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>Failed
+                                    </span>
+                                    break;
+                                default:
+                                    <span class="badge status-badge bg-light text-dark">@Model.Document.Status</span>
+                                    break;
+                            }
+                        </div>
+                        @if (Model.Document.ProcessingProgress.HasValue)
+                        {
+                            <div class="progress-container flex-grow-1">
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-primary"
+                                         style="width: @(Model.Document.ProcessingProgress ?? 0)%">
+                                    </div>
+                                </div>
+                                <small class="text-muted">
+                                    @(Model.Document.ProcessingProgress?.ToString("F0") ?? "0")% complete
+                                </small>
+                            </div>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.Document.ProcessingError))
+                    {
+                        <div class="alert alert-danger mt-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Processing Error:</strong> @Model.Document.ProcessingError
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document Tags -->
+    @if (Model.Document.Tags != null && Model.Document.Tags.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Tags</h5>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var tag in Model.Document.Tags)
+                            {
+                                <span class="badge bg-secondary">@tag</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Document Metadata -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Document Information</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">File Name:</dt>
+                                <dd class="col-sm-8">@Model.Document.Name</dd>
+                                
+                                <dt class="col-sm-4">File Type:</dt>
+                                <dd class="col-sm-8">@Model.Document.ContentType</dd>
+                                
+                                <dt class="col-sm-4">File Size:</dt>
+                                <dd class="col-sm-8">@Model.Document.FormattedSize</dd>
+                                
+                                <dt class="col-sm-4">Uploaded:</dt>
+                                <dd class="col-sm-8">@Model.Document.CreatedAt.ToString("MMM dd, yyyy HH:mm")</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                @if (Model.Document.CollectionId.HasValue)
+                                {
+                                    <dt class="col-sm-4">Collection:</dt>
+                                    <dd class="col-sm-8">
+                                        <a href="/collections/@Model.Document.CollectionId" class="text-decoration-none">
+                                            @(Model.Document.CollectionName ?? "View Collection")
+                                        </a>
+                                    </dd>
+                                }
+                                
+                                <dt class="col-sm-4">Views:</dt>
+                                <dd class="col-sm-8">@Model.Document.ViewCount</dd>
+                                
+                                @if (Model.Document.LastViewedAt.HasValue)
+                                {
+                                    <dt class="col-sm-4">Last Viewed:</dt>
+                                    <dd class="col-sm-8">@Model.Document.LastViewedAt.Value.ToString("MMM dd, yyyy HH:mm")</dd>
+                                }
+                                
+                                @if (!string.IsNullOrEmpty(Model.Document.R2RDocumentId))
+                                {
+                                    <dt class="col-sm-4">R2R ID:</dt>
+                                    <dd class="col-sm-8">
+                                        <code class="small">@Model.Document.R2RDocumentId</code>
+                                    </dd>
+                                }
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation -->
+<div class="row mt-4">
+    <div class="col-12">
+        @if (Model.Document.CollectionId.HasValue)
+        {
+            <a href="/collections/@Model.Document.CollectionId" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-arrow-left me-1"></i>
+                Back to Collection
+            </a>
+        }
+        <a href="/documents" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>
+            Back to Documents
+        </a>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        async function deleteDocument(documentId) {
+            if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (!tokenInput) {
+                    alert('Security token not found. Please refresh the page.');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', tokenInput.value);
+
+                const response = await fetch(`/documents/${documentId}/delete`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    // Redirect back to collection or documents list
+                    @if (Model.Document.CollectionId.HasValue)
+                    {
+                        <text>window.location.href = '/collections/@Model.Document.CollectionId';</text>
+                    }
+                    else
+                    {
+                        <text>window.location.href = '/documents';</text>
+                    }
+                } else {
+                    alert('Failed to delete document');
+                }
+            } catch (error) {
+                console.error('Error deleting document:', error);
+                alert('An error occurred while deleting the document');
+            }
+        }
+    </script>
+}

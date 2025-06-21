@@ -12,28 +12,27 @@ class ChatManager {
         this.bindEvents();
     }
     
-    // SignalR Integration con Hubs esistenti
+    // SignalR Integration - Following Collections pattern
     async initializeSignalR() {
         try {
-            // Usa CollectionHub esistente per notifiche collections
-            this.collectionConnection = new signalR.HubConnectionBuilder()
-                .withUrl("/hubs/collection")
-                .withAutomaticReconnect([0, 2000, 10000, 30000])
-                .configureLogging(signalR.LogLevel.Information)
-                .build();
-                
-            // Crea nuovo ChatHub per messaging real-time
+            // Get JWT token from meta tag or cookie (same as Collections)
+            const token = document.querySelector('meta[name="jwt-token"]')?.getAttribute('content') ||
+                        this.getCookieValue('CleverDocs.AccessToken');
+
+            if (!token) {
+                console.warn('No JWT token found for SignalR connection');
+                return;
+            }
+
+            // Use only ChatHub for messaging (simplified approach like Collections)
             this.chatConnection = new signalR.HubConnectionBuilder()
-                .withUrl("/hubs/chat")
+                .withUrl("http://localhost:5253/hubs/chat", {
+                    accessTokenFactory: () => token
+                })
                 .withAutomaticReconnect([0, 2000, 10000, 30000])
                 .configureLogging(signalR.LogLevel.Information)
                 .build();
                 
-            // Collection Hub Event handlers
-            this.collectionConnection.on("CollectionUpdated", (collection, updateType) => {
-                this.handleCollectionUpdate(collection, updateType);
-            });
-            
             // Chat Hub Event handlers
             this.chatConnection.on("ReceiveMessage", (message) => {
                 this.handleIncomingMessage(message);
@@ -70,15 +69,15 @@ class ChatManager {
                 this.handleConnectionError();
             });
             
-            // Start connections
-            await Promise.all([
-                this.chatConnection.start(),
-                this.collectionConnection.start()
-            ]);
-            
+            // Start connection and wait for it to be fully established (like Collections)
+            await this.chatConnection.start();
+            console.log('SignalR connected for Chat');
+
+            // Wait a moment to ensure the connection is fully established (like Collections)
+            await new Promise(resolve => setTimeout(resolve, 500));
+            console.log('SignalR connection fully established and ready for events');
+
             this.isConnected = true;
-            console.log("SignalR connected successfully");
-            this.showConnectionStatus("Connesso", "success");
             
             // Join conversation room if we have one
             if (this.currentConversationId) {
@@ -509,6 +508,13 @@ class ChatManager {
     getAntiForgeryToken() {
         const token = document.querySelector('input[name="__RequestVerificationToken"]');
         return token ? token.value : '';
+    }
+
+    getCookieValue(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
     }
     
     queueMessage(content, conversationId) {

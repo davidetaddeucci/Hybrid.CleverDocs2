@@ -328,6 +328,7 @@ public class DocumentViewModel
     public string FileType { get; set; } = string.Empty;
     public string Status { get; set; } = "Completed";
     public string? ProcessingError { get; set; }
+    public double? ProcessingProgress { get; set; }
 
     public string FileSizeFormatted
     {

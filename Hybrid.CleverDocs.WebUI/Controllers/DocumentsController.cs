@@ -324,7 +324,7 @@ public class DocumentsController : Controller
             _logger.LogInformation("🎯 BULK UPLOAD: Calling WebServices bulk upload API");
 
             // Call WebServices bulk upload endpoint
-            var response = await httpClient.PostAsync("http://localhost:5252/api/DocumentUpload/batch", formData);
+            var response = await httpClient.PostAsync("http://localhost:5253/api/DocumentUpload/batch", formData);
 
             if (response.IsSuccessStatusCode)
             {
@@ -418,16 +418,21 @@ public class DocumentsController : Controller
             // Track download
             _ = Task.Run(async () => await _documentApiClient.TrackDocumentViewAsync(documentId));
 
-            // Get download URL from the API
-            var downloadUrl = await _documentApiClient.GetDocumentDownloadUrlAsync(documentId);
-            if (string.IsNullOrEmpty(downloadUrl))
+            // Download the file using the authenticated API client
+            var (fileStream, contentType, fileName) = await _documentApiClient.DownloadDocumentAsync(documentId);
+
+            if (fileStream == null)
             {
-                TempData["ErrorMessage"] = "Unable to generate download link for this document.";
+                TempData["ErrorMessage"] = "Unable to download this document.";
                 return RedirectToAction("Details", new { documentId });
             }
 
-            // Redirect to the download URL
-            return Redirect(downloadUrl);
+            // Use the document name from the database, or fall back to the filename from the API
+            var downloadFileName = document.Name ?? fileName ?? $"document_{documentId}";
+            var downloadContentType = contentType ?? "application/octet-stream";
+
+            // Return the file with proper headers
+            return File(fileStream, downloadContentType, downloadFileName);
         }
         catch (Exception ex)
         {

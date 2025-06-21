@@ -188,6 +188,7 @@
                                                 </div>
                                             </div>
                                         </th>
+                                        <th>Progress</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -248,6 +249,20 @@
                                                         <span class="badge status-badge bg-light text-dark">@document.Status</span>
                                                         break;
                                                 }
+                                            </td>
+                                            <td>
+                                                <div class="progress-container" data-document-id="@document.Id">
+                                                    <div class="progress" style="height: 8px;">
+                                                        <div class="progress-bar"
+                                                             id="progress-@document.Id"
+                                                             style="width: @(document.ProcessingProgress ?? 0)%"
+                                                             data-document-id="@document.Id">
+                                                        </div>
+                                                    </div>
+                                                    <small class="text-muted progress-text" id="progress-text-@document.Id">
+                                                        @(document.ProcessingProgress?.ToString("F0") ?? "0")%
+                                                    </small>
+                                                </div>
                                             </td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
@@ -456,7 +471,7 @@
 
                     // Initialize SignalR connection
                     this.connection = new signalR.HubConnectionBuilder()
-                        .withUrl("http://localhost:5252/hubs/upload", {
+                        .withUrl("http://localhost:5253/hubs/upload", {
                             accessTokenFactory: () => token
                         })
                         .withAutomaticReconnect([0, 2000, 10000, 30000])
@@ -503,6 +518,12 @@
                     this.connection.on("R2RProcessingUpdate", (queueItem) => {
                         console.log('R2R processing update:', queueItem);
                         this.handleR2RProcessingUpdate(queueItem);
+                    });
+
+                    // Listen for R2R progress updates (real-time progress tracking)
+                    this.connection.on("R2RProgressUpdate", (progressData) => {
+                        console.log('R2R progress update:', progressData);
+                        this.handleR2RProgressUpdate(progressData);
                     });
 
                     // Listen for document added/updated events
@@ -1352,6 +1373,59 @@
                 url.searchParams.set('page', '1'); // Reset alla prima pagina
 
                 window.location.href = url.toString();
+            }
+
+            // Handle R2R progress updates for real-time progress tracking
+            handleR2RProgressUpdate(progressData) {
+                try {
+                    console.log('Handling R2R progress update:', progressData);
+
+                    if (!progressData.documentId) {
+                        console.warn('Progress update missing documentId');
+                        return;
+                    }
+
+                    // Update progress bar
+                    const progressBar = document.getElementById(`progress-${progressData.documentId}`);
+                    const progressText = document.getElementById(`progress-text-${progressData.documentId}`);
+
+                    if (progressBar && progressData.progress !== undefined) {
+                        // Update progress bar width
+                        progressBar.style.width = `${progressData.progress}%`;
+
+                        // Update progress bar color based on status
+                        progressBar.className = 'progress-bar';
+                        if (progressData.status === 'completed') {
+                            progressBar.classList.add('bg-success');
+                        } else if (progressData.status === 'failed') {
+                            progressBar.classList.add('bg-danger');
+                        } else {
+                            progressBar.classList.add('bg-primary');
+                        }
+
+                        console.log(`Updated progress bar for document ${progressData.documentId}: ${progressData.progress}%`);
+                    }
+
+                    if (progressText) {
+                        // Update progress text with current step info
+                        const progressPercent = Math.round(progressData.progress || 0);
+                        const stepInfo = progressData.currentStep ? ` (${progressData.currentStep})` : '';
+                        progressText.textContent = `${progressPercent}%${stepInfo}`;
+
+                        console.log(`Updated progress text for document ${progressData.documentId}: ${progressPercent}%${stepInfo}`);
+                    }
+
+                    // If progress is complete, refresh the documents list after a short delay
+                    if (progressData.progress >= 100 || progressData.status === 'completed') {
+                        console.log('Document processing completed, refreshing documents list in 2 seconds...');
+                        setTimeout(() => {
+                            this.refreshDocumentsList();
+                        }, 2000);
+                    }
+
+                } catch (error) {
+                    console.error('Error handling R2R progress update:', error);
+                }
             }
         }
 

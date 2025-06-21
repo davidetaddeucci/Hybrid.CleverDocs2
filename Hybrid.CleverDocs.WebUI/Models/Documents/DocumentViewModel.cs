@@ -39,7 +39,7 @@ public class DocumentViewModel
     // UI Helper Properties
     public string FileTypeIcon => GetFileTypeIcon(ContentType);
     public string StatusBadgeClass => GetStatusBadgeClass(Status);
-    public string StatusDisplayName => GetStatusDisplayName(Status);
+    public string StatusDisplayName => GetValidatedStatusDisplayName(Status, R2RDocumentId);
     public bool CanPreview => CanPreviewFile(ContentType);
     public string RelativeCreatedTime => GetRelativeTime(CreatedAt);
     public string RelativeUpdatedTime => GetRelativeTime(UpdatedAt);
@@ -99,6 +99,21 @@ public class DocumentViewModel
             DocumentStatus.Deleted => "Deleted",
             _ => "Unknown"
         };
+    }
+
+    /// <summary>
+    /// CRITICAL FIX: Get status display name with R2RDocumentId validation
+    /// This prevents showing "Completed" for documents that don't have valid R2RDocumentId
+    /// </summary>
+    private static string GetValidatedStatusDisplayName(DocumentStatus status, string? r2rDocumentId)
+    {
+        // If status is Ready but R2RDocumentId is missing, show as Processing instead
+        if (status == DocumentStatus.Ready && string.IsNullOrEmpty(r2rDocumentId))
+        {
+            return "Processing"; // Data inconsistency - should not show as Completed
+        }
+
+        return GetStatusDisplayName(status);
     }
 
     private static bool CanPreviewFile(string contentType)

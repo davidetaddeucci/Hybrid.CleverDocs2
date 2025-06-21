@@ -83,7 +83,7 @@ class R2RProcessingManager {
 
             // Connessione al DocumentUploadHub sul backend
             this.connection = new signalR.HubConnectionBuilder()
-                .withUrl("http://localhost:5252/hubs/upload", {
+                .withUrl("http://localhost:5253/hubs/upload", {
                     accessTokenFactory: () => token
                 })
                 .withAutomaticReconnect([0, 2000, 10000, 30000])

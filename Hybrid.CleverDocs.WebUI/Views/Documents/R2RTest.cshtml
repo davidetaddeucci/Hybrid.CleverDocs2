@@ -204,7 +204,7 @@
             const token = getJwtToken();
 
             testConnection = new signalR.HubConnectionBuilder()
-                .withUrl("http://localhost:5252/hubs/upload", {
+                .withUrl("http://localhost:5253/hubs/upload", {
                     accessTokenFactory: () => token
                 })
                 .withAutomaticReconnect()

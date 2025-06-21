@@ -1,6 +1,7 @@
 using Hybrid.CleverDocs.WebUI.Services;
 using Hybrid.CleverDocs.WebUI.Services.Documents;
 using Hybrid.CleverDocs.WebUI.Services.Collections;
+using Hybrid.CleverDocs.WebUI.Services.Chat;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -98,6 +99,25 @@ builder.Services.AddHttpClient<ICollectionsApiClient, CollectionsApiClient>(clie
     }
     // Connection pooling optimization for Collections API
     handler.MaxConnectionsPerServer = 10;
+    return handler;
+});
+
+// Add Chat Service with R2R integration
+builder.Services.AddHttpClient<IChatService, ChatService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7219");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "Hybrid.CleverDocs.WebUI/1.0");
+    client.Timeout = TimeSpan.FromSeconds(120); // Extended timeout for R2R operations
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new HttpClientHandler();
+    if (builder.Environment.IsDevelopment())
+    {
+        handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
+    }
+    // Optimized for chat operations with R2R
+    handler.MaxConnectionsPerServer = 15;
     return handler;
 });
 
@@ -208,6 +228,17 @@ app.MapControllerRoute(
     name: "documents-index",
     pattern: "documents",
     defaults: new { controller = "Documents", action = "Index" });
+
+// Chat routes
+app.MapControllerRoute(
+    name: "chat-index",
+    pattern: "chat",
+    defaults: new { controller = "Chat", action = "Index" });
+
+app.MapControllerRoute(
+    name: "chat-conversation",
+    pattern: "chat/{id}",
+    defaults: new { controller = "Chat", action = "Conversation" });
 
 // Default route should go to login
 app.MapControllerRoute(

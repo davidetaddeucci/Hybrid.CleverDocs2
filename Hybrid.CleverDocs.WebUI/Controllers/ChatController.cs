@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Hybrid.CleverDocs.WebUI.Models;
 using Hybrid.CleverDocs.WebUI.Services;
-using System.Security.Claims;
+using Hybrid.CleverDocs.WebUI.Services.Chat;
 
 namespace Hybrid.CleverDocs.WebUI.Controllers
 {
@@ -10,30 +10,33 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
     public class ChatController : Controller
     {
         private readonly IAuthService _authService;
+        private readonly IChatService _chatService;
         private readonly ILogger<ChatController> _logger;
 
-        public ChatController(IAuthService authService, ILogger<ChatController> logger)
+        public ChatController(IAuthService authService, IChatService chatService, ILogger<ChatController> logger)
         {
             _authService = authService;
+            _chatService = chatService;
             _logger = logger;
         }
 
         public async Task<IActionResult> Index()
         {
+            _logger.LogInformation("ChatController.Index called");
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var companyId = User.FindFirst("CompanyId")?.Value;
-
-                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(companyId))
+                // Get user info from AuthService (like Collections does)
+                var currentUser = await _authService.GetCurrentUserAsync();
+                _logger.LogInformation("Current user: {UserId}", currentUser?.Id);
+                if (currentUser == null)
                 {
                     return RedirectToAction("Login", "Auth");
                 }
 
                 var model = new ChatIndexViewModel
                 {
-                    UserId = userId,
-                    CompanyId = companyId,
+                    UserId = currentUser.Id.ToString(),
+                    CompanyId = currentUser.CompanyId?.ToString() ?? "default",
                     Conversations = new List<ConversationViewModel>(),
                     AvailableCollections = new List<CollectionViewModel>(),
                     Settings = new ChatSettingsViewModel
@@ -70,14 +73,14 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userId))
+                var currentUser = await _authService.GetCurrentUserAsync();
+                if (currentUser == null)
                 {
                     return Json(new { success = false, message = "User not authenticated" });
                 }
 
                 // Load conversation details via API
-                var conversation = await LoadConversationDetailsAsync(id, userId);
+                var conversation = await LoadConversationDetailsAsync(id, currentUser.Id.ToString());
                 if (conversation == null)
                 {
                     return Json(new { success = false, message = "Conversation not found" });
@@ -97,17 +100,17 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userId))
+                var currentUser = await _authService.GetCurrentUserAsync();
+                if (currentUser == null)
                 {
                     return Json(new { success = false, message = "User not authenticated" });
                 }
 
                 // Send message via API
-                var response = await SendMessageToApiAsync(request, userId);
-                
-                return Json(new { 
-                    success = true, 
+                var response = await SendMessageToApiAsync(request, currentUser.Id.ToString());
+
+                return Json(new {
+                    success = true,
                     messageId = response.MessageId,
                     content = response.Content,
                     citations = response.Citations,
@@ -126,16 +129,16 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userId))
+                var currentUser = await _authService.GetCurrentUserAsync();
+                if (currentUser == null)
                 {
                     return Json(new { success = false, message = "User not authenticated" });
                 }
 
-                var response = await CreateConversationViaApiAsync(request, userId);
-                
-                return Json(new { 
-                    success = true, 
+                var response = await CreateConversationViaApiAsync(request, currentUser.Id.ToString());
+
+                return Json(new {
+                    success = true,
                     conversationId = response.ConversationId,
                     title = response.Title
                 });
@@ -152,16 +155,16 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userId))
+                var currentUser = await _authService.GetCurrentUserAsync();
+                if (currentUser == null)
                 {
                     return Json(new { success = false, message = "User not authenticated" });
                 }
 
-                var results = await SearchConversationsViaApiAsync(query, userId, page, pageSize);
-                
-                return Json(new { 
-                    success = true, 
+                var results = await SearchConversationsViaApiAsync(query, currentUser.Id.ToString(), page, pageSize);
+
+                return Json(new {
+                    success = true,
                     conversations = results.Conversations,
                     pagination = results.Pagination
                 });
@@ -173,41 +176,135 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
             }
         }
 
-        // Private helper methods
+        // Private helper methods - Now using ChatService
         private async Task LoadConversationsAsync(ChatIndexViewModel model)
         {
-            // TODO: Implement API call to load conversations
-            // This will be implemented when we create the API client
+            try
+            {
+                var conversations = await _chatService.GetConversationsAsync(
+                    model.Pagination.CurrentPage,
+                    model.Pagination.PageSize);
+
+                model.Conversations = conversations;
+                model.Pagination.TotalItems = conversations.Count;
+                model.Pagination.TotalPages = (int)Math.Ceiling((double)conversations.Count / model.Pagination.PageSize);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading conversations");
+                model.Conversations = new List<ConversationViewModel>();
+            }
         }
 
         private async Task LoadCollectionsAsync(ChatIndexViewModel model)
         {
-            // TODO: Implement API call to load collections
-            // This will be implemented when we create the API client
+            try
+            {
+                var collections = await _chatService.GetAvailableCollectionsAsync();
+                model.AvailableCollections = collections;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading collections");
+                model.AvailableCollections = new List<CollectionViewModel>();
+            }
         }
 
         private async Task<ConversationDetailViewModel?> LoadConversationDetailsAsync(string conversationId, string userId)
         {
-            // TODO: Implement API call to load conversation details
-            return null;
+            try
+            {
+                if (int.TryParse(conversationId, out var id))
+                {
+                    return await _chatService.GetConversationAsync(id);
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading conversation details for {ConversationId}", conversationId);
+                return null;
+            }
         }
 
         private async Task<SendMessageResponse> SendMessageToApiAsync(SendMessageRequest request, string userId)
         {
-            // TODO: Implement API call to send message
-            return new SendMessageResponse();
+            try
+            {
+                if (string.IsNullOrEmpty(request.ConversationId) || !int.TryParse(request.ConversationId, out var conversationId))
+                {
+                    throw new ArgumentException("Invalid conversation ID");
+                }
+
+                var message = await _chatService.SendMessageAsync(conversationId, request.Content);
+
+                return new SendMessageResponse
+                {
+                    MessageId = message.Id,
+                    Content = message.Content,
+                    Citations = message.Citations,
+                    Timestamp = message.Timestamp
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending message via API");
+                throw;
+            }
         }
 
         private async Task<CreateConversationResponse> CreateConversationViaApiAsync(CreateConversationRequest request, string userId)
         {
-            // TODO: Implement API call to create conversation
-            return new CreateConversationResponse();
+            try
+            {
+                var conversation = await _chatService.CreateConversationAsync(
+                    request.Title,
+                    null,
+                    request.Collections);
+
+                return new CreateConversationResponse
+                {
+                    ConversationId = conversation.Id,
+                    Title = conversation.Title
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating conversation via API");
+                throw;
+            }
         }
 
         private async Task<SearchConversationsResponse> SearchConversationsViaApiAsync(string query, string userId, int page, int pageSize)
         {
-            // TODO: Implement API call to search conversations
-            return new SearchConversationsResponse();
+            try
+            {
+                var searchRequest = new ConversationSearchViewModel
+                {
+                    Query = query,
+                    Page = page,
+                    PageSize = pageSize
+                };
+
+                var results = await _chatService.SearchConversationsAsync(searchRequest);
+
+                return new SearchConversationsResponse
+                {
+                    Conversations = results.Conversations,
+                    Pagination = new PaginationViewModel
+                    {
+                        CurrentPage = results.Page,
+                        PageSize = results.PageSize,
+                        TotalItems = results.TotalCount,
+                        TotalPages = results.TotalPages
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching conversations via API");
+                return new SearchConversationsResponse();
+            }
         }
 
         [HttpPost]
@@ -215,13 +312,13 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userId))
+                var currentUser = await _authService.GetCurrentUserAsync();
+                if (currentUser == null)
                 {
                     return Json(new { success = false, message = "User not authenticated" });
                 }
 
-                var exportData = await ExportConversationAsync(id, request, userId);
+                var exportData = await ExportConversationAsync(id, request, currentUser.Id.ToString());
 
                 var contentType = request.Format switch
                 {
@@ -242,8 +339,19 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
 
         private async Task<byte[]> ExportConversationAsync(string conversationId, ExportRequest request, string userId)
         {
-            // TODO: Implement API call to export conversation
-            return Array.Empty<byte>();
+            try
+            {
+                if (int.TryParse(conversationId, out var id))
+                {
+                    return await _chatService.ExportConversationAsync(id, request.Format);
+                }
+                return Array.Empty<byte>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting conversation {ConversationId}", conversationId);
+                return Array.Empty<byte>();
+            }
         }
     }
 

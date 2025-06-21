@@ -82,6 +82,11 @@ public interface IDocumentApiClient
     /// </summary>
     Task<string?> GetDocumentDownloadUrlAsync(Guid documentId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Download document file content
+    /// </summary>
+    Task<(Stream? stream, string? contentType, string? fileName)> DownloadDocumentAsync(Guid documentId, CancellationToken cancellationToken = default);
+
     // Advanced Search Methods
 
     /// <summary>

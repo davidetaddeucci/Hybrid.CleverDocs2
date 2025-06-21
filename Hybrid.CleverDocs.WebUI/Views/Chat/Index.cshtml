@@ -1,12 +1,15 @@
 @model ChatIndexViewModel
 @{
     ViewData["Title"] = "Chat RAG - CleverDocs";
-    Layout = "~/Views/Shared/_LayoutUser.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
 @section Styles {
     <link rel="stylesheet" href="~/css/chat.css" />
 }
+
+@* CRITICAL: Anti-forgery token for AJAX requests *@
+@Html.AntiForgeryToken()
 
 <!-- Chat Container -->
 <div class="chat-container">
@@ -274,8 +277,12 @@
 </div>
 
 @section Scripts {
-    <script src="~/lib/signalr/signalr.min.js"></script>
-    <script src="~/js/chat.js"></script>
+    <!-- SignalR CDN - CRITICAL: Load before chat.js (following Collections pattern) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+
+    <!-- Chat functionality -->
+    <script src="~/js/chat.js?v=@DateTime.Now.Ticks"></script>
+
     <script>
         // Initialize page-specific data
         window.chatData = {
@@ -283,5 +290,15 @@
             companyId: '@Model.CompanyId',
             settings: @Html.Raw(Json.Serialize(Model.Settings))
         };
+
+        // Initialize chat after DOM and SignalR are ready (following Collections pattern)
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof signalR !== 'undefined') {
+                console.log('SignalR library loaded successfully');
+                // Chat initialization will happen in chat.js
+            } else {
+                console.error('SignalR library failed to load');
+            }
+        });
     </script>
 }

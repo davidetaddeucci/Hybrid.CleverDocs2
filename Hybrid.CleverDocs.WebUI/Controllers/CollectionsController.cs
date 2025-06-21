@@ -665,7 +665,9 @@ public class CollectionsController : Controller
             Size = doc.Size,
             ContentType = doc.ContentType,
             FileType = GetFileTypeFromContentType(doc.ContentType),
-            Status = MapDocumentStatusForCollectionView(doc.Status)
+            Status = MapDocumentStatusForCollectionView(doc.Status),
+            ProcessingProgress = doc.ProcessingProgress,
+            ProcessingError = doc.ProcessingError
         };
     }
 

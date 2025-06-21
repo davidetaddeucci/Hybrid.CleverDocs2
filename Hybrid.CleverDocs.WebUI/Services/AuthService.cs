@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using System.IdentityModel.Tokens.Jwt;
 using Hybrid.CleverDocs.WebUI.Models;
 
 namespace Hybrid.CleverDocs.WebUI.Services
@@ -51,6 +52,9 @@ namespace Hybrid.CleverDocs.WebUI.Services
                         // Store tokens in secure HttpOnly cookies
                         var userJson = loginResponse.User != null ? JsonSerializer.Serialize(loginResponse.User) : "";
                         SetAuthCookies(loginResponse.AccessToken, loginResponse.RefreshToken, userJson);
+
+                        // Create claims from JWT token and user info
+                        await CreateUserClaimsAndSignInAsync(loginResponse.AccessToken, loginResponse.User);
 
                         // Store in HttpContext.Items for immediate use
                         var context = _httpContextAccessor.HttpContext;
@@ -454,7 +458,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
                 var json = System.Text.Json.JsonSerializer.Serialize(loginRequest);
                 var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-                var response = await httpClient.PostAsync("http://localhost:5252/api/auth/login", content);
+                var response = await httpClient.PostAsync("http://localhost:5253/api/auth/login", content);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -498,7 +502,7 @@ namespace Hybrid.CleverDocs.WebUI.Services
                 var json = System.Text.Json.JsonSerializer.Serialize(refreshRequest);
                 var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-                var response = await httpClient.PostAsync("http://localhost:5252/api/auth/refresh", content);
+                var response = await httpClient.PostAsync("http://localhost:5253/api/auth/refresh", content);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -636,8 +640,97 @@ namespace Hybrid.CleverDocs.WebUI.Services
             return GetStoredRefreshToken();
         }
 
+        /// <summary>
+        /// Create claims from JWT token and sign in the user for ASP.NET Core authentication
+        /// </summary>
+        private async Task CreateUserClaimsAndSignInAsync(string accessToken, UserInfo? userInfo)
+        {
+            try
+            {
+                var context = _httpContextAccessor.HttpContext;
+                if (context == null) return;
 
+                // Parse JWT token to extract claims
+                var handler = new JwtSecurityTokenHandler();
+                var jsonToken = handler.ReadJwtToken(accessToken);
 
+                var claims = new List<Claim>();
+
+                // Add standard claims from JWT
+                foreach (var claim in jsonToken.Claims)
+                {
+                    switch (claim.Type)
+                    {
+                        case "sub":
+                        case "nameid":
+                            claims.Add(new Claim(ClaimTypes.NameIdentifier, claim.Value));
+                            break;
+                        case "email":
+                            claims.Add(new Claim(ClaimTypes.Email, claim.Value));
+                            break;
+                        case "name":
+                            claims.Add(new Claim(ClaimTypes.Name, claim.Value));
+                            break;
+                        case "role":
+                            claims.Add(new Claim(ClaimTypes.Role, claim.Value));
+                            break;
+                        default:
+                            claims.Add(new Claim(claim.Type, claim.Value));
+                            break;
+                    }
+                }
+
+                // Add user info claims if available
+                if (userInfo != null)
+                {
+                    if (userInfo.Id != Guid.Empty)
+                        claims.Add(new Claim(ClaimTypes.NameIdentifier, userInfo.Id.ToString()));
+
+                    if (!string.IsNullOrEmpty(userInfo.Email))
+                        claims.Add(new Claim(ClaimTypes.Email, userInfo.Email));
+
+                    if (!string.IsNullOrEmpty(userInfo.FirstName))
+                        claims.Add(new Claim(ClaimTypes.GivenName, userInfo.FirstName));
+
+                    if (!string.IsNullOrEmpty(userInfo.LastName))
+                        claims.Add(new Claim(ClaimTypes.Surname, userInfo.LastName));
+
+                    if (!string.IsNullOrEmpty(userInfo.Role))
+                        claims.Add(new Claim(ClaimTypes.Role, userInfo.Role));
+
+                    if (userInfo.CompanyId.HasValue)
+                        claims.Add(new Claim("CompanyId", userInfo.CompanyId.Value.ToString()));
+
+                    if (!string.IsNullOrEmpty(userInfo.CompanyName))
+                        claims.Add(new Claim("CompanyName", userInfo.CompanyName));
+                }
+
+                // Ensure we have at least a NameIdentifier claim
+                if (!claims.Any(c => c.Type == ClaimTypes.NameIdentifier))
+                {
+                    var userId = userInfo?.Id.ToString() ?? jsonToken.Claims.FirstOrDefault(c => c.Type == "sub")?.Value ?? "unknown";
+                    claims.Add(new Claim(ClaimTypes.NameIdentifier, userId));
+                }
+
+                // Create identity and principal
+                var identity = new ClaimsIdentity(claims, "Cookies");
+                var principal = new ClaimsPrincipal(identity);
+
+                // Sign in the user
+                await context.SignInAsync("Cookies", principal, new AuthenticationProperties
+                {
+                    IsPersistent = true,
+                    ExpiresUtc = DateTime.UtcNow.AddHours(8)
+                });
+
+                _logger.LogInformation("User claims created and signed in successfully: {UserId}",
+                    claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating user claims and signing in");
+            }
+        }
 
     }
 }
