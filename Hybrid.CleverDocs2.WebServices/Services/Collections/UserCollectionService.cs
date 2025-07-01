@@ -7,6 +7,7 @@ using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Hubs;
 using Hybrid.CleverDocs2.WebServices.Data;
+using Hybrid.CleverDocs2.WebServices.Middleware;
 using System.Text.Json;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Collections;
@@ -25,6 +26,7 @@ public class UserCollectionService : IUserCollectionService
     private readonly ILogger<UserCollectionService> _logger;
     private readonly ICorrelationService _correlationService;
     private readonly UserCollectionOptions _options;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public UserCollectionService(
         ApplicationDbContext dbContext,
@@ -35,7 +37,8 @@ public class UserCollectionService : IUserCollectionService
         IHubContext<CollectionHub> hubContext,
         ILogger<UserCollectionService> logger,
         ICorrelationService correlationService,
-        IOptions<UserCollectionOptions> options)
+        IOptions<UserCollectionOptions> options,
+        IHttpContextAccessor httpContextAccessor)
     {
         _dbContext = dbContext;
         _cacheService = cacheService;
@@ -46,6 +49,7 @@ public class UserCollectionService : IUserCollectionService
         _logger = logger;
         _correlationService = correlationService;
         _options = options.Value;
+        _httpContextAccessor = httpContextAccessor;
 
         // InitializeMockData(); // ❌ REMOVED: No longer using mock data
     }
@@ -749,9 +753,20 @@ public class UserCollectionService : IUserCollectionService
 
     private string GetTenantIdForUser(string userId)
     {
-        // For now, use a default GUID until we implement proper tenant resolution
-        // In production, this should get the actual tenant ID from the user context
-        return "f2e9cab2-c7b4-446b-a9b9-13501b2b5973"; // Default tenant GUID
+        // Get tenant ID from HttpContext using the TenantResolutionMiddleware
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext != null)
+        {
+            var companyId = httpContext.GetCompanyId();
+            if (companyId.HasValue)
+            {
+                return companyId.Value.ToString();
+            }
+        }
+
+        // Fallback: This should not happen in normal operation
+        _logger.LogWarning("Unable to resolve tenant ID for user {UserId}, using fallback", userId);
+        throw new InvalidOperationException($"Unable to resolve tenant ID for user {userId}. Ensure user is properly authenticated.");
     }
 
     /// <summary>

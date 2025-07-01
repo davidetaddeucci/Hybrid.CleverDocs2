@@ -978,6 +978,7 @@ public class DocumentProcessingService : IDocumentProcessingService
                         OriginalFileName = queueItem.FileName,
                         SizeInBytes = queueItem.FileSize,
                         ContentType = queueItem.ContentType,
+                        FileHash = queueItem.Checksum ?? string.Empty, // CRITICAL FIX: Set FileHash from checksum
                         Status = documentStatus,
                         R2RDocumentId = r2rDocumentId,
                         R2RIngestionJobId = queueItem.JobId, // Set JobId for audit trail
@@ -1385,6 +1386,7 @@ public class DocumentProcessingService : IDocumentProcessingService
                             FileName = document.FileName ?? document.Name,
                             FilePath = document.FilePath ?? "",
                             FileSize = document.SizeInBytes,
+                            Checksum = document.FileHash, // CRITICAL FIX: Use existing FileHash for restoration
                             UserId = document.UserId.ToString(),
                             CollectionId = document.CollectionId,
                             CompanyId = document.CompanyId,

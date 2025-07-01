@@ -291,7 +291,7 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
 
                     b.Property<string>("CollectionIds")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("jsonb");
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid");
@@ -325,7 +325,7 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                         .HasColumnType("character varying(255)");
 
                     b.Property<string>("Settings")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("SharedUserIds")
                         .HasColumnType("TEXT");

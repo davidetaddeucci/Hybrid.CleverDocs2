@@ -175,7 +175,7 @@ public class DocumentMetadataDto
     public int? WordCount { get; set; }
     public int? CharacterCount { get; set; }
     public string? Format { get; set; }
-    public string? Version { get; set; }
+    public int Version { get; set; } = 1;
     public Dictionary<string, object> CustomProperties { get; set; } = new();
     public DocumentContentInfoDto ContentInfo { get; set; } = new();
 }

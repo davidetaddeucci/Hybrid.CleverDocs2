@@ -257,12 +257,22 @@ void RegisterR2RClient<TInterface, TImplementation>(IServiceCollection services,
 
         client.Timeout = TimeSpan.FromSeconds(timeout);
 
-        // R2R service is configured for anonymous access - no authentication required
+        // Configure R2R authentication with ApiKey
         client.DefaultRequestHeaders.Clear();
         client.DefaultRequestHeaders.Add("Accept", "application/json");
         client.DefaultRequestHeaders.Add("User-Agent", "Hybrid.CleverDocs2.WebServices/2.0.0");
 
-        Console.WriteLine($"✅ Configured R2R {clientName} client - Timeout: {timeout}s");
+        // Add R2R ApiKey for authentication
+        var apiKey = cfg.GetValue<string>("ApiKey");
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+            Console.WriteLine($"✅ Configured R2R {clientName} client with ApiKey authentication - Timeout: {timeout}s");
+        }
+        else
+        {
+            Console.WriteLine($"⚠️ Configured R2R {clientName} client without ApiKey - Timeout: {timeout}s");
+        }
     })
     .AddPolicyHandler(retryPolicy)
     .AddPolicyHandler(circuitBreakerPolicy);
@@ -499,6 +509,7 @@ builder.Services.AddCors(options =>
 
 // Controllers and OpenAPI
 builder.Services.AddControllers();
+builder.Services.AddHttpContextAccessor(); // Required for tenant resolution in services
 builder.Services.AddOpenApi();
 
 // SignalR for real-time updates

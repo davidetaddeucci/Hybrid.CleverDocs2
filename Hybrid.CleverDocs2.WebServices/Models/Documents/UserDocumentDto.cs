@@ -30,7 +30,7 @@ public class UserDocumentDto
     public bool IsFavorite { get; set; }
     public int ViewCount { get; set; }
     public DateTime? LastViewedAt { get; set; }
-    public string? Version { get; set; }
+    public int Version { get; set; } = 1;
     public bool HasVersions { get; set; }
     public DocumentPermissions Permissions { get; set; } = new();
 

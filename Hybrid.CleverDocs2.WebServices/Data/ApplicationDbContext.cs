@@ -88,18 +88,12 @@ namespace Hybrid.CleverDocs2.WebServices.Data
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                // Configure JSON properties for cross-database compatibility
+                // Configure JSON properties for PostgreSQL jsonb compatibility
                 entity.Property(e => e.Tags)
-                    .HasConversion(
-                        v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
-                        v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<string>())
-                    .HasColumnType("TEXT");
+                    .HasColumnType("jsonb");
 
                 entity.Property(e => e.Metadata)
-                    .HasConversion(
-                        v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
-                        v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new Dictionary<string, object>())
-                    .HasColumnType("TEXT");
+                    .HasColumnType("jsonb");
 
                 entity.HasOne(e => e.Company)
                     .WithMany(e => e.Documents)

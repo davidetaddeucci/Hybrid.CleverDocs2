@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Hybrid.CleverDocs2.WebServices.Models.Documents;
 using Hybrid.CleverDocs2.WebServices.Services.Documents;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;

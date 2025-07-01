@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Hybrid.CleverDocs2.WebServices.Services.Clients;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.WebDev;
-using Hybrid.CleverDocs2.WebServices.Services.DTOs.WebDev;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 

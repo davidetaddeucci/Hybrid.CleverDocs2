@@ -34,8 +34,9 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         [MaxLength(500)]
         public string FilePath { get; set; } = string.Empty;
 
+        [Required]
         [MaxLength(64)]
-        public string? FileHash { get; set; }
+        public string FileHash { get; set; } = string.Empty;
 
         [MaxLength(1000)]
         public string? Description { get; set; }
@@ -68,7 +69,7 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         public bool IsFavorite { get; set; } = false;
         public int ViewCount { get; set; } = 0;
         public DateTime? LastViewedAt { get; set; }
-        public string Version { get; set; } = "1.0";
+        public int Version { get; set; } = 1;
         public bool HasVersions { get; set; } = false;
         public bool HasThumbnail { get; set; } = false;
         public bool IsProcessing { get; set; } = false;

@@ -32,7 +32,7 @@ public class DocumentViewModel
     public bool IsFavorite { get; set; }
     public int ViewCount { get; set; }
     public DateTime? LastViewedAt { get; set; }
-    public string? Version { get; set; }
+    public int Version { get; set; } = 1;
     public bool HasVersions { get; set; }
     public DocumentPermissions Permissions { get; set; } = new();
 
@@ -309,7 +309,7 @@ public class DocumentStatisticsViewModel
 
 public class DocumentVersionViewModel
 {
-    public string Version { get; set; } = string.Empty;
+    public int Version { get; set; } = 1;
     public DateTime CreatedAt { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
     public string? Note { get; set; }

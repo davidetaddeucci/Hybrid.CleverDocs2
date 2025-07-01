@@ -188,7 +188,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
             try
             {
                 var refreshToken = await _context.RefreshTokens
-                    .Where(rt => rt.UserId == userId && rt.IsActive)
+                    .Where(rt => rt.UserId == userId && rt.RevokedAt == null && rt.ExpiresAt > DateTime.UtcNow)
                     .OrderByDescending(rt => rt.CreatedAt)
                     .FirstOrDefaultAsync();
 
@@ -207,7 +207,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
             {
                 // Revoke existing refresh tokens for this user
                 var existingTokens = await _context.RefreshTokens
-                    .Where(rt => rt.UserId == userId && rt.IsActive)
+                    .Where(rt => rt.UserId == userId && rt.RevokedAt == null && rt.ExpiresAt > DateTime.UtcNow)
                     .ToListAsync();
 
                 foreach (var token in existingTokens)
@@ -242,7 +242,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Auth
             try
             {
                 var activeTokens = await _context.RefreshTokens
-                    .Where(rt => rt.UserId == userId && rt.IsActive)
+                    .Where(rt => rt.UserId == userId && rt.RevokedAt == null && rt.ExpiresAt > DateTime.UtcNow)
                     .ToListAsync();
 
                 foreach (var token in activeTokens)

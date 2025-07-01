@@ -802,6 +802,7 @@ public class UserDocumentService : IUserDocumentService
                 FileName = document.FileName,
                 FilePath = document.FilePath,
                 FileSize = document.SizeInBytes,
+                Checksum = document.FileHash, // CRITICAL FIX: Use existing FileHash for retry
                 UserId = userId.ToString(),
                 CollectionId = document.CollectionId,
                 Priority = R2RProcessingPriorityDto.Normal,

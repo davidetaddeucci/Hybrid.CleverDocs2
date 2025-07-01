@@ -808,6 +808,7 @@ public class DocumentUploadService : IDocumentUploadService
             FilePath = fileInfo.TempFilePath!,
             FileSize = fileInfo.TotalSize,
             ContentType = fileInfo.ContentType,
+            Checksum = fileInfo.Checksum, // CRITICAL FIX: Pass file checksum for FileHash
             Priority = R2RProcessingPriorityDto.Normal,
             ProcessingOptions = session.Options,
             JobId = Guid.NewGuid().ToString() // Generate JobId for R2R ingestion tracking
@@ -947,6 +948,7 @@ public class DocumentUploadService : IDocumentUploadService
                 OriginalFileName = queueItem.FileName,
                 SizeInBytes = queueItem.FileSize,
                 ContentType = queueItem.ContentType,
+                FileHash = queueItem.Checksum ?? string.Empty, // CRITICAL FIX: Set FileHash from checksum
                 Status = (int)Data.Entities.DocumentStatus.Processing, // Processing status
                 R2RDocumentId = null, // Will be set when R2R completes
                 R2RIngestionJobId = queueItem.JobId, // Set JobId for audit trail

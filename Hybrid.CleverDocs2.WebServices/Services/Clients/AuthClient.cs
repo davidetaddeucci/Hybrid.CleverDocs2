@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.Auth;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Clients
@@ -10,10 +11,12 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
     public class AuthClient : IAuthClient
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<AuthClient> _logger;
 
-        public AuthClient(HttpClient httpClient)
+        public AuthClient(HttpClient httpClient, ILogger<AuthClient> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         // Authentication operations
@@ -65,11 +68,25 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
             try
             {
                 var response = await _httpClient.PostAsJsonAsync("/v3/users", request);
-                response.EnsureSuccessStatusCode();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("R2R user registration failed with status {StatusCode}: {ErrorContent}",
+                        response.StatusCode, errorContent);
+                    return null;
+                }
+
                 return await response.Content.ReadFromJsonAsync<UserCreateResponse>();
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException ex)
             {
+                _logger.LogError(ex, "HTTP request exception during R2R user registration");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error during R2R user registration");
                 return null;
             }
         }
