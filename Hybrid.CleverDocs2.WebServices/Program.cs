@@ -1,8 +1,10 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using MassTransit;
 using Polly;
@@ -197,18 +199,43 @@ if (enableRabbitMqHealthCheck && rabbitMqEnabled)
     Console.WriteLine("⚠️ RabbitMQ health check temporarily disabled - will be re-enabled after testing basic connectivity");
 }
 
-// Polly Policies
+// Polly Policies - Optimized for AI/RAG Services
+var r2rConfig = builder.Configuration.GetSection("R2R");
+
+// Retry Policy with exponential backoff
 var retryPolicy = HttpPolicyExtensions
     .HandleTransientHttpError()
-    .WaitAndRetryAsync(builder.Configuration.GetSection("R2R").GetValue<int>("MaxRetries"), 
-        retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+    .WaitAndRetryAsync(
+        retryCount: r2rConfig.GetValue<int>("MaxRetries", 3),
+        sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+        onRetry: (outcome, timespan, retryCount, context) =>
+        {
+            Console.WriteLine($"R2R API Retry {retryCount} after {timespan}s delay");
+        });
 
+// Circuit Breaker Policy - Optimized for AI services with variable latency
 var circuitBreakerPolicy = HttpPolicyExtensions
     .HandleTransientHttpError()
-    .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
+    .Or<TimeoutException>()
+    .CircuitBreakerAsync(
+        handledEventsAllowedBeforeBreaking: r2rConfig.GetValue<int>("CircuitBreaker:FailureThreshold", 5),
+        durationOfBreak: TimeSpan.FromSeconds(r2rConfig.GetValue<int>("CircuitBreaker:DurationOfBreakSeconds", 45)),
+        onBreak: (result, duration) =>
+        {
+            var errorMsg = result.Exception?.Message ?? $"HTTP {result.Result?.StatusCode}";
+            Console.WriteLine($"🔴 R2R Circuit Breaker OPENED for {duration}s - {errorMsg}");
+        },
+        onReset: () =>
+        {
+            Console.WriteLine("🟢 R2R Circuit Breaker CLOSED - Service recovered");
+        },
+        onHalfOpen: () =>
+        {
+            Console.WriteLine("🟡 R2R Circuit Breaker HALF-OPEN - Testing service");
+        });
 
 // Register all R2R HTTP Clients with resilience policies
-void RegisterR2RClient<TInterface, TImplementation>(IServiceCollection services)
+void RegisterR2RClient<TInterface, TImplementation>(IServiceCollection services, string clientName = "")
     where TInterface : class
     where TImplementation : class, TInterface
 {
@@ -218,35 +245,57 @@ void RegisterR2RClient<TInterface, TImplementation>(IServiceCollection services)
         var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
 
         client.BaseAddress = new Uri(url);
-        client.Timeout = TimeSpan.FromSeconds(cfg.GetValue<int>("DefaultTimeout"));
+
+        // Differentiated timeouts based on client type
+        var timeout = clientName switch
+        {
+            "Conversation" => cfg.GetValue<int>("Timeouts:ConversationSeconds", 30), // Streaming operations
+            "Document" => cfg.GetValue<int>("Timeouts:DocumentSeconds", 60),        // Document processing
+            "Search" => cfg.GetValue<int>("Timeouts:SearchSeconds", 15),            // Search operations
+            _ => cfg.GetValue<int>("DefaultTimeout", 30)
+        };
+
+        client.Timeout = TimeSpan.FromSeconds(timeout);
 
         // R2R service is configured for anonymous access - no authentication required
-        // Clear any default headers that might interfere
         client.DefaultRequestHeaders.Clear();
         client.DefaultRequestHeaders.Add("Accept", "application/json");
         client.DefaultRequestHeaders.Add("User-Agent", "Hybrid.CleverDocs2.WebServices/2.0.0");
-    });
-    // Temporarily disable Polly policies to test if they're causing issues
-    // .AddPolicyHandler(retryPolicy)
-    // .AddPolicyHandler(circuitBreakerPolicy);
+
+        Console.WriteLine($"✅ Configured R2R {clientName} client - Timeout: {timeout}s");
+    })
+    .AddPolicyHandler(retryPolicy)
+    .AddPolicyHandler(circuitBreakerPolicy);
 }
 
-// Register all R2R clients
-RegisterR2RClient<IAuthClient, AuthClient>(builder.Services);
-RegisterR2RClient<IDocumentClient, DocumentClient>(builder.Services);
-RegisterR2RClient<ICollectionClient, CollectionClient>(builder.Services);
-RegisterR2RClient<IConversationClient, ConversationClient>(builder.Services);
-RegisterR2RClient<IPromptClient, PromptClient>(builder.Services);
-RegisterR2RClient<IIngestionClient, IngestionClient>(builder.Services);
-RegisterR2RClient<IGraphClient, GraphClient>(builder.Services);
-RegisterR2RClient<ISearchClient, SearchClient>(builder.Services);
-RegisterR2RClient<IToolsClient, ToolsClient>(builder.Services);
+// Register all R2R clients with specific configurations
+RegisterR2RClient<IAuthClient, AuthClient>(builder.Services, "Auth");
+RegisterR2RClient<IDocumentClient, DocumentClient>(builder.Services, "Document");
+RegisterR2RClient<ICollectionClient, CollectionClient>(builder.Services, "Collection");
+RegisterR2RClient<IConversationClient, ConversationClient>(builder.Services, "Conversation");
+RegisterR2RClient<IPromptClient, PromptClient>(builder.Services, "Prompt");
+RegisterR2RClient<IIngestionClient, IngestionClient>(builder.Services, "Ingestion");
+RegisterR2RClient<IGraphClient, GraphClient>(builder.Services, "Graph");
+RegisterR2RClient<ISearchClient, SearchClient>(builder.Services, "Search");
+RegisterR2RClient<IToolsClient, ToolsClient>(builder.Services, "Tools");
 RegisterR2RClient<IMaintenanceClient, MaintenanceClient>(builder.Services);
 RegisterR2RClient<IOrchestrationClient, OrchestrationClient>(builder.Services);
 RegisterR2RClient<ILocalLLMClient, LocalLLMClient>(builder.Services);
 RegisterR2RClient<IValidationClient, ValidationClient>(builder.Services);
 RegisterR2RClient<IMcpTuningClient, McpTuningClient>(builder.Services);
 RegisterR2RClient<IWebDevClient, WebDevClient>(builder.Services);
+
+// Register HttpClient for R2R Progress API calls
+builder.Services.AddHttpClient("R2RProgress", client =>
+{
+    var cfg = builder.Configuration.GetSection("R2R");
+    var url = cfg.GetValue<string>("ApiUrl") ?? throw new InvalidOperationException("R2R:ApiUrl not set");
+
+    client.BaseAddress = new Uri(url);
+    client.Timeout = TimeSpan.FromSeconds(30);
+})
+.AddPolicyHandler(retryPolicy)
+.AddPolicyHandler(circuitBreakerPolicy);
 
 // Authentication & Authorization
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -267,6 +316,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = audience,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
+        };
+
+        // Configure JWT for SignalR - extract token from query string
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                // If the request is for SignalR hub and we have a token
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -290,7 +357,8 @@ builder.Services.AddCorrelationServices();
 
 // Rate Limiting Services
 builder.Services.Configure<RateLimitingOptions>(builder.Configuration.GetSection("RateLimiting"));
-builder.Services.AddScoped<IRateLimitingService, RateLimitingService>();
+// CRITICAL FIX: RateLimitingService must be SINGLETON to be consumed by DocumentProcessingService (also SINGLETON)
+builder.Services.AddSingleton<IRateLimitingService, RateLimitingService>();
 
 // RabbitMQ Services - Re-enabled
 builder.Services.Configure<RabbitMQOptions>(builder.Configuration.GetSection("RabbitMQ"));
@@ -313,7 +381,8 @@ builder.Services.AddSingleton<ICacheKeyGenerator, CacheKeyGenerator>();
 builder.Services.AddSingleton<IL1MemoryCache, L1MemoryCache>();
 builder.Services.AddSingleton<IL2RedisCache, L2RedisCache>();
 builder.Services.AddSingleton<IL3PersistentCache, L3PersistentCache>();
-builder.Services.AddScoped<IMultiLevelCacheService, MultiLevelCacheService>();
+// CRITICAL FIX: MultiLevelCacheService must be SINGLETON to be consumed by DocumentProcessingService (also SINGLETON)
+builder.Services.AddSingleton<IMultiLevelCacheService, MultiLevelCacheService>();
 builder.Services.AddScoped<ICacheInvalidationService, CacheInvalidationService>();
 builder.Services.AddScoped<ICacheWarmingService, CacheWarmingService>();
 
@@ -339,10 +408,40 @@ builder.Services.Configure<DocumentProcessingOptions>(builder.Configuration.GetS
 
 builder.Services.AddScoped<IDocumentUploadService, DocumentUploadService>();
 builder.Services.AddScoped<IChunkedUploadService, ChunkedUploadService>();
-builder.Services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
+// CRITICAL FIX: DocumentProcessingService must be SINGLETON to maintain _activeProcessing state
+// across different requests and worker calls
+builder.Services.AddSingleton<IDocumentProcessingService, DocumentProcessingService>(provider =>
+{
+    var rateLimitingService = provider.GetRequiredService<IRateLimitingService>();
+    var cacheService = provider.GetRequiredService<IMultiLevelCacheService>();
+    var logger = provider.GetRequiredService<ILogger<DocumentProcessingService>>();
+    var correlationService = provider.GetRequiredService<ICorrelationService>();
+    var options = provider.GetRequiredService<IOptions<DocumentProcessingOptions>>();
+    var serviceScopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
+    var hubContext = provider.GetRequiredService<IHubContext<DocumentUploadHub>>();
+    var documentClient = provider.GetRequiredService<IDocumentClient>();
+    var complianceService = provider.GetRequiredService<IR2RComplianceService>();
+
+    // Create HttpClient for R2R API calls
+    var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
+    var httpClient = httpClientFactory.CreateClient("R2RProgress");
+
+    return new DocumentProcessingService(
+        rateLimitingService,
+        cacheService,
+        logger,
+        correlationService,
+        options,
+        serviceScopeFactory,
+        hubContext,
+        documentClient,
+        complianceService,
+        httpClient);
+});
 
 // ✅ QUICK WINS - R2R Compliance Service
-builder.Services.AddScoped<IR2RComplianceService, R2RComplianceService>();
+// CRITICAL FIX: R2RComplianceService must be SINGLETON to be consumed by DocumentProcessingService (also SINGLETON)
+builder.Services.AddSingleton<IR2RComplianceService, R2RComplianceService>();
 
 // Upload support services (placeholder implementations)
 builder.Services.AddScoped<IUploadProgressService, UploadProgressService>();
@@ -370,47 +469,30 @@ builder.Services.AddHostedService<MaintenanceWorker>();
 builder.Services.Configure<Hybrid.CleverDocs2.WebServices.Workers.CacheWarmingOptions>(builder.Configuration.GetSection("BackgroundServices:CacheWarming"));
 builder.Services.AddHostedService<CacheWarmingWorker>();
 
-// CORS - Enhanced configuration
-var corsSection = builder.Configuration.GetSection("Cors");
+// CORS - SignalR-compatible configuration
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
+    options.AddPolicy("SignalRCorsPolicy", policy =>
     {
-        var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>() ?? new[] { "*" };
-        var allowedMethods = corsSection.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
-        var allowedHeaders = corsSection.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "*" };
-        var allowCredentials = corsSection.GetValue<bool>("AllowCredentials");
-
-        if (allowedOrigins.Contains("*"))
+        if (builder.Environment.IsDevelopment())
         {
-            policy.AllowAnyOrigin();
+            // Development: Allow specific localhost origins
+            policy.WithOrigins("http://localhost:5170", "http://localhost:5169", "http://localhost:5168", "http://localhost:3000", "http://localhost:5000")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials()
+                  .SetIsOriginAllowedToAllowWildcardSubdomains();
         }
         else
         {
-            policy.WithOrigins(allowedOrigins);
-        }
+            // Production: Use configuration
+            var corsSection = builder.Configuration.GetSection("Cors");
+            var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>() ?? new[] { "https://localhost:7132" };
 
-        if (allowedMethods.Contains("*"))
-        {
-            policy.AllowAnyMethod();
-        }
-        else
-        {
-            policy.WithMethods(allowedMethods);
-        }
-
-        if (allowedHeaders.Contains("*"))
-        {
-            policy.AllowAnyHeader();
-        }
-        else
-        {
-            policy.WithHeaders(allowedHeaders);
-        }
-
-        if (allowCredentials && !allowedOrigins.Contains("*"))
-        {
-            policy.AllowCredentials();
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                  .AllowCredentials();
         }
     });
 });
@@ -436,26 +518,34 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors();
 
 // Add custom middleware (order is important)
 app.UseCorrelation(); // First: Set up correlation context
 app.UseGlobalExceptionHandling(); // Second: Handle exceptions globally
-app.UseMiddleware<JwtMiddleware>(); // Third: JWT authentication
-app.UseMiddleware<TenantResolutionMiddleware>(); // Fourth: Tenant resolution
+
+// CORS must be after UseRouting and before UseAuthentication for SignalR
+app.UseRouting();
+app.UseCors("SignalRCorsPolicy");
+
+app.UseMiddleware<JwtMiddleware>(); // JWT authentication
+app.UseMiddleware<TenantResolutionMiddleware>(); // Tenant resolution
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Health checks endpoint
-app.MapHealthChecks("/health");
+// Configure endpoints
+app.UseEndpoints(endpoints =>
+{
+    // Health checks endpoint
+    endpoints.MapHealthChecks("/health");
 
-// Controllers
-app.MapControllers();
+    // Controllers
+    endpoints.MapControllers();
 
-// SignalR Hubs
-app.MapHub<CollectionHub>("/hubs/collection");
-app.MapHub<DocumentUploadHub>("/hubs/upload");
-app.MapHub<ChatHub>("/hubs/chat");
+    // SignalR Hubs with CORS policy
+    endpoints.MapHub<CollectionHub>("/hubs/collection").RequireCors("SignalRCorsPolicy");
+    endpoints.MapHub<DocumentUploadHub>("/hubs/upload").RequireCors("SignalRCorsPolicy");
+    endpoints.MapHub<ChatHub>("/hubs/chat").RequireCors("SignalRCorsPolicy");
+});
 
 app.Run();

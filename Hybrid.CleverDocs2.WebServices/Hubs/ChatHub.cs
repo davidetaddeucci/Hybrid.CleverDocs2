@@ -5,11 +5,12 @@ using Hybrid.CleverDocs2.WebServices.Services.Clients;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation;
 using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
+using Hybrid.CleverDocs2.WebServices.Services.Queue;
 
 namespace Hybrid.CleverDocs2.WebServices.Hubs
 {
     /// <summary>
-    /// SignalR Hub for real-time chat functionality
+    /// SignalR Hub for real-time chat functionality with rate limiting protection
     /// </summary>
     [Authorize]
     public class ChatHub : Hub
@@ -17,17 +18,20 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
         private readonly IConversationClient _conversationClient;
         private readonly IMultiLevelCacheService _cacheService;
         private readonly ICorrelationService _correlationService;
+        private readonly IRateLimitingService _rateLimitingService;
         private readonly ILogger<ChatHub> _logger;
 
         public ChatHub(
             IConversationClient conversationClient,
             IMultiLevelCacheService cacheService,
             ICorrelationService correlationService,
+            IRateLimitingService rateLimitingService,
             ILogger<ChatHub> logger)
         {
             _conversationClient = conversationClient;
             _cacheService = cacheService;
             _correlationService = correlationService;
+            _rateLimitingService = rateLimitingService;
             _logger = logger;
         }
 
@@ -82,7 +86,7 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
         }
 
         /// <summary>
-        /// Send a message in a conversation with streaming support
+        /// Send a message in a conversation with streaming support and rate limiting protection
         /// </summary>
         public async Task SendMessage(object messageData)
         {
@@ -91,6 +95,17 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
 
             try
             {
+                // Apply rate limiting for conversation operations
+                if (!await _rateLimitingService.CanMakeRequestAsync("r2r_conversation"))
+                {
+                    await Clients.Caller.SendAsync("MessageError", "Rate limit exceeded. Please wait before sending another message.");
+                    _logger.LogWarning("Rate limit exceeded for user {UserId} in SendMessage, CorrelationId: {CorrelationId}", userId, correlationId);
+                    return;
+                }
+
+                // Consume tokens for the operation
+                await _rateLimitingService.ConsumeTokensAsync("r2r_conversation");
+
                 _logger.LogDebug("Sending message for user {UserId}, CorrelationId: {CorrelationId}", userId, correlationId);
 
                 // Parse message data
@@ -120,15 +135,15 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                 if (!string.IsNullOrEmpty(conversationId))
                 {
                     // Send message to existing conversation with streaming
-                    await SendMessageWithStreaming(conversationId, messageRequest, userId.ToString());
+                    await SendMessageWithStreaming(conversationId, messageRequest, userId);
                 }
                 else
                 {
                     // Create new conversation first
-                    var newConversation = await CreateNewConversation(userId.ToString(), collections);
+                    var newConversation = await CreateNewConversation(userId, collections);
                     if (newConversation != null)
                     {
-                        await SendMessageWithStreaming(newConversation.Results.ConversationId, messageRequest, userId.ToString());
+                        await SendMessageWithStreaming(newConversation.Results.ConversationId, messageRequest, userId);
                     }
                     else
                     {
@@ -208,7 +223,7 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
         }
 
         // Private helper methods
-        private async Task SendMessageWithStreaming(string conversationId, MessageRequest messageRequest, string userId)
+        private async Task SendMessageWithStreaming(string conversationId, MessageRequest messageRequest, Guid userId)
         {
             try
             {
@@ -271,10 +286,20 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
             }
         }
 
-        private async Task<ConversationCreateResponse?> CreateNewConversation(string userId, List<string> collections)
+        private async Task<ConversationCreateResponse?> CreateNewConversation(Guid userId, List<string> collections)
         {
             try
             {
+                // Apply rate limiting for conversation creation
+                if (!await _rateLimitingService.CanMakeRequestAsync("r2r_conversation"))
+                {
+                    _logger.LogWarning("Rate limit exceeded for user {UserId} in CreateNewConversation", userId);
+                    return null;
+                }
+
+                // Consume tokens for the operation
+                await _rateLimitingService.ConsumeTokensAsync("r2r_conversation");
+
                 var request = new ConversationRequest
                 {
                     Name = "New Conversation",
@@ -300,7 +325,7 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                     await Clients.Caller.SendAsync("ConversationCreated", new
                     {
                         conversationId = response.Results.ConversationId,
-                        title = request.Name
+                        title = response.Results.Name
                     });
                 }
 
@@ -328,9 +353,14 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
             return Context.User?.FindFirst(ClaimTypes.Name)?.Value ?? "Unknown User";
         }
 
-        private string GetCompanyId()
+        private Guid GetCompanyId()
         {
-            return Context.User?.FindFirst("CompanyId")?.Value ?? "";
+            var companyIdClaim = Context.User?.FindFirst("CompanyId")?.Value;
+            if (string.IsNullOrEmpty(companyIdClaim) || !Guid.TryParse(companyIdClaim, out var companyId))
+            {
+                return Guid.Empty; // Return empty Guid for users without company
+            }
+            return companyId;
         }
     }
 }

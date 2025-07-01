@@ -85,6 +85,7 @@ namespace Hybrid.CleverDocs2.WebServices.Data.Entities
         // R2R Integration
         public string? R2RDocumentId { get; set; }
         public string? R2RIngestionJobId { get; set; }
+        public string? R2RTaskId { get; set; } // R2R API Task ID for progress tracking
         public DateTime? R2RProcessedAt { get; set; }
 
         // Collection Association

@@ -28,6 +28,10 @@ namespace Hybrid.CleverDocs2.WebServices.Data
         public DbSet<UserDashboardWidget> UserDashboardWidgets { get; set; } = null!;
         public DbSet<WidgetTemplate> WidgetTemplates { get; set; } = null!;
 
+        // Chat entities
+        public DbSet<Conversation> Conversations { get; set; } = null!;
+        public DbSet<Message> Messages { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -40,6 +44,8 @@ namespace Hybrid.CleverDocs2.WebServices.Data
             ConfigureDocumentChunk(modelBuilder);
             ConfigureAuditLog(modelBuilder);
             ConfigureAuth(modelBuilder);
+            ConfigureConversation(modelBuilder);
+            ConfigureMessage(modelBuilder);
         }
 
         private static void ConfigureCompany(ModelBuilder modelBuilder)
@@ -204,6 +210,98 @@ namespace Hybrid.CleverDocs2.WebServices.Data
                 entity.HasIndex(e => new { e.UserId, e.ExpiresAt });
 
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            });
+        }
+
+        private static void ConfigureConversation(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Conversation>(entity =>
+            {
+                entity.HasIndex(e => e.R2RConversationId).IsUnique();
+                entity.HasIndex(e => new { e.CompanyId, e.UserId });
+                entity.HasIndex(e => new { e.UserId, e.LastMessageAt });
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.Visibility);
+
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.LastMessageAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                // Configure JSON properties for PostgreSQL jsonb compatibility
+                entity.Property(e => e.CollectionIds)
+                    .HasColumnType("jsonb");
+
+                entity.Property(e => e.Metadata)
+                    .HasColumnType("TEXT");
+
+                entity.Property(e => e.SharedUserIds)
+                    .HasColumnType("TEXT");
+
+                entity.Property(e => e.Tags)
+                    .HasColumnType("TEXT");
+
+                entity.Property(e => e.Settings)
+                    .HasColumnType("jsonb");
+
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+        }
+
+        private static void ConfigureMessage(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Message>(entity =>
+            {
+                entity.HasIndex(e => e.R2RMessageId);
+                entity.HasIndex(e => new { e.ConversationId, e.CreatedAt });
+                entity.HasIndex(e => e.ParentMessageId);
+                entity.HasIndex(e => e.Role);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.IsEdited);
+                entity.HasIndex(e => e.LastEditedAt);
+
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                // Configure JSON properties for cross-database compatibility
+                entity.Property(e => e.Metadata)
+                    .HasColumnType("TEXT");
+
+                entity.Property(e => e.Citations)
+                    .HasColumnType("TEXT");
+
+                entity.Property(e => e.RagContext)
+                    .HasColumnType("TEXT");
+
+                entity.Property(e => e.EditHistory)
+                    .HasColumnType("TEXT");
+
+                entity.HasOne(e => e.Conversation)
+                    .WithMany(e => e.Messages)
+                    .HasForeignKey(e => e.ConversationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.ParentMessage)
+                    .WithMany(e => e.ChildMessages)
+                    .HasForeignKey(e => e.ParentMessageId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.LastEditedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.LastEditedByUserId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
         }
     }

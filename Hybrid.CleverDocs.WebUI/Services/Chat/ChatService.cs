@@ -292,6 +292,92 @@ namespace Hybrid.CleverDocs.WebUI.Services.Chat
             return defaultValue;
         }
 
+        public async Task<MessageViewModel> EditMessageAsync(int messageId, string newContent)
+        {
+            try
+            {
+                await SetAuthorizationHeaderAsync();
+
+                var request = new EditMessageRequest
+                {
+                    NewContent = newContent,
+                    EditReason = "User edit"
+                };
+
+                var json = JsonSerializer.Serialize(request);
+                var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
+
+                // Note: We need the conversation ID for the endpoint, but it's not provided in the interface
+                // This is a limitation that should be addressed in the interface design
+                var response = await _httpClient.PutAsync($"/api/conversations/0/messages/{messageId}", httpContent);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    var messageDto = JsonSerializer.Deserialize<MessageDto>(responseJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (messageDto != null)
+                    {
+                        return new MessageViewModel
+                        {
+                            Id = messageDto.Id.ToString(),
+                            Content = messageDto.Content,
+                            Role = messageDto.Role,
+                            Timestamp = messageDto.UpdatedAt,
+                            IsEdited = messageDto.IsEdited,
+                            LastEditedAt = messageDto.LastEditedAt,
+                            Citations = messageDto.Citations?.Select(c => new CitationViewModel
+                            {
+                                DocumentId = c.GetValueOrDefault("document_id")?.ToString() ?? "",
+                                ChunkId = c.GetValueOrDefault("chunk_id")?.ToString() ?? "",
+                                Score = Convert.ToDouble(c.GetValueOrDefault("score", 0.0)),
+                                Text = c.GetValueOrDefault("text")?.ToString() ?? ""
+                            }).ToList() ?? new List<CitationViewModel>()
+                        };
+                    }
+                }
+
+                return new MessageViewModel();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error editing message {MessageId}", messageId);
+                return new MessageViewModel();
+            }
+        }
+
+        public async Task<List<MessageEditHistoryViewModel>> GetMessageEditHistoryAsync(int messageId)
+        {
+            try
+            {
+                await SetAuthorizationHeaderAsync();
+
+                // Note: Same limitation as above - need conversation ID
+                var response = await _httpClient.GetAsync($"/api/conversations/0/messages/{messageId}/history");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+                    var historyDtos = JsonSerializer.Deserialize<List<MessageEditHistoryDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    return historyDtos?.Select(h => new MessageEditHistoryViewModel
+                    {
+                        PreviousContent = h.PreviousContent,
+                        EditedAt = h.EditedAt,
+                        EditedByUserId = h.EditedByUserId.ToString(),
+                        EditReason = h.EditReason
+                    }).ToList() ?? new List<MessageEditHistoryViewModel>();
+                }
+
+                return new List<MessageEditHistoryViewModel>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting edit history for message {MessageId}", messageId);
+                return new List<MessageEditHistoryViewModel>();
+            }
+        }
+
         // Placeholder implementations for remaining interface methods
         public Task<bool> UpdateConversationSettingsAsync(int conversationId, ChatSettingsViewModel settings) => Task.FromResult(false);
         public Task<bool> TogglePinConversationAsync(int conversationId) => Task.FromResult(false);
@@ -304,8 +390,7 @@ namespace Hybrid.CleverDocs.WebUI.Services.Chat
         public Task<List<ConversationBranchViewModel>> GetConversationBranchesAsync(int conversationId) => Task.FromResult(new List<ConversationBranchViewModel>());
         public Task<ConversationViewModel> CreateConversationBranchAsync(int conversationId, int fromMessageId, string title) => Task.FromResult(new ConversationViewModel());
         public Task<List<MessageViewModel>> GetMessageThreadAsync(int messageId) => Task.FromResult(new List<MessageViewModel>());
-        public Task<MessageViewModel> EditMessageAsync(int messageId, string newContent) => Task.FromResult(new MessageViewModel());
-        public Task<List<MessageEditHistoryViewModel>> GetMessageEditHistoryAsync(int messageId) => Task.FromResult(new List<MessageEditHistoryViewModel>());
+
         public Task<bool> RateMessageAsync(int messageId, int rating, string? feedback = null) => Task.FromResult(false);
         public Task<ConversationAnalyticsViewModel> GetConversationAnalyticsAsync(int conversationId) => Task.FromResult(new ConversationAnalyticsViewModel());
         public Task<R2RStatusViewModel> GetR2RStatusAsync() => Task.FromResult(new R2RStatusViewModel());
@@ -375,6 +460,8 @@ namespace Hybrid.CleverDocs.WebUI.Services.Chat
         public string Status { get; set; } = string.Empty;
         public bool IsEdited { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+        public DateTime? LastEditedAt { get; set; }
     }
 
     public class CreateConversationRequest
@@ -390,5 +477,19 @@ namespace Hybrid.CleverDocs.WebUI.Services.Chat
         public string Content { get; set; } = string.Empty;
         public int? ParentMessageId { get; set; }
         public Dictionary<string, object>? RagConfig { get; set; }
+    }
+
+    public class EditMessageRequest
+    {
+        public string NewContent { get; set; } = string.Empty;
+        public string? EditReason { get; set; }
+    }
+
+    public class MessageEditHistoryDto
+    {
+        public string PreviousContent { get; set; } = string.Empty;
+        public DateTime EditedAt { get; set; }
+        public Guid EditedByUserId { get; set; }
+        public string? EditReason { get; set; }
     }
 }

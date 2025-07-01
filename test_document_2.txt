@@ -1,0 +1,57 @@
+Test Document 2 - Plain Text Format
+
+This is a plain text document for testing the Hybrid.CleverDocs2 system.
+
+TESTING OBJECTIVES:
+==================
+
+1. Document Upload Testing
+   - Verify file type validation (.txt files)
+   - Test upload progress tracking
+   - Confirm R2R ingestion process
+   - Validate database record creation
+
+2. Document Operations Testing
+   - Test VIEW functionality
+   - Test DOWNLOAD functionality  
+   - Test DELETE functionality
+   - Verify proper error handling
+
+3. Integration Testing
+   - WebUI to WebServices communication
+   - WebServices to R2R API integration
+   - R2R to Database synchronization
+   - SignalR real-time updates
+
+4. Data Flow Verification
+   - Document metadata storage
+   - R2R document ID assignment
+   - Processing status tracking
+   - Cache invalidation
+
+EXPECTED BEHAVIOR:
+=================
+
+Upload Phase:
+- File should be accepted (supported .txt format)
+- Progress tracking should show real-time updates
+- R2R ingestion should process the document
+- Database should store document metadata
+- SignalR should notify of status changes
+
+Management Phase:
+- VIEW should display document details
+- DOWNLOAD should serve the original file
+- DELETE should remove from both DB and R2R
+- All operations should update UI in real-time
+
+ERROR SCENARIOS:
+===============
+
+- Network failures during upload
+- R2R service unavailability
+- Database connection issues
+- Invalid file formats
+- File size limit exceeded
+
+This document serves as test data for comprehensive end-to-end testing of the document management system.

@@ -45,7 +45,7 @@ public class DocumentResponse
     public DateTime UpdatedAt { get; set; }
 
     [JsonPropertyName("ingestion_attempt_number")]
-    public int IngestionAttemptNumber { get; set; }
+    public int? IngestionAttemptNumber { get; set; }
 
     [JsonPropertyName("summary")]
     public string? Summary { get; set; }

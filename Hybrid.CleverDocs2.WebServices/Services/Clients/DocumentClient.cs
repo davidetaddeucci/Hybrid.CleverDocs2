@@ -6,16 +6,19 @@ using System.Threading.Tasks;
 using System.Text;
 using System.Web;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.Document;
+using Hybrid.CleverDocs2.WebServices.Services.Queue;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Clients
 {
     public class DocumentClient : IDocumentClient
     {
         private readonly HttpClient _httpClient;
+        private readonly IRateLimitingService _rateLimitingService;
 
-        public DocumentClient(HttpClient httpClient)
+        public DocumentClient(HttpClient httpClient, IRateLimitingService rateLimitingService)
         {
             _httpClient = httpClient;
+            _rateLimitingService = rateLimitingService;
         }
 
         // Core CRUD operations
@@ -23,6 +26,9 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
         {
             try
             {
+                // Apply rate limiting for document ingestion (10 req/s limit)
+                await _rateLimitingService.WaitForAvailabilityAsync("r2r_document_ingestion");
+
                 HttpResponseMessage response;
 
                 if (request.File != null)

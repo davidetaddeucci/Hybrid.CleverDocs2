@@ -69,11 +69,12 @@ namespace Hybrid.CleverDocs2.WebServices.Workers
                             .Take(_options.MaxConcurrentProcessing)
                             .ToList();
 
-                        // Check for documents in Processing state that might be completed by R2R
+                        // CRITICAL FIX: Check for documents in Processing state that might be completed by R2R
+                        // This includes both legacy documents with "pending_" IDs and new documents with empty R2RDocumentId
                         var processingItems = queueItems
                             .Where(item => item.Status == R2RProcessingStatusDto.Processing &&
-                                          item.R2RDocumentId != null &&
-                                          item.R2RDocumentId.StartsWith("pending_"))
+                                          (string.IsNullOrEmpty(item.R2RDocumentId) ||
+                                           (item.R2RDocumentId != null && item.R2RDocumentId.StartsWith("pending_"))))
                             .ToList();
 
                         if (readyItems.Any())
@@ -81,14 +82,12 @@ namespace Hybrid.CleverDocs2.WebServices.Workers
                             _logger.LogInformation("Processing {Count} ready R2R documents", readyItems.Count);
 
                             // Process items in parallel with concurrency limit
+                            // CRITICAL FIX: Reuse the same processingService instance to avoid creating new scopes
                             var tasks = readyItems.Select(async item =>
                             {
                                 try
                                 {
-                                    using var itemScope = _serviceScopeFactory.CreateScope();
-                                    var itemProcessingService = itemScope.ServiceProvider.GetRequiredService<IDocumentProcessingService>();
-
-                                    await itemProcessingService.ProcessDocumentAsync(item);
+                                    await processingService.ProcessDocumentAsync(item);
                                 }
                                 catch (Exception ex)
                                 {
@@ -108,14 +107,12 @@ namespace Hybrid.CleverDocs2.WebServices.Workers
                         {
                             _logger.LogDebug("Checking R2R status for {Count} processing documents", processingItems.Count);
 
+                            // CRITICAL FIX: Reuse the same processingService instance to avoid creating new scopes
                             var statusCheckTasks = processingItems.Select(async item =>
                             {
                                 try
                                 {
-                                    using var itemScope = _serviceScopeFactory.CreateScope();
-                                    var itemProcessingService = itemScope.ServiceProvider.GetRequiredService<IDocumentProcessingService>();
-
-                                    await itemProcessingService.CheckR2RStatusAndUpdateAsync(item);
+                                    await processingService.CheckR2RStatusAndUpdateAsync(item);
                                 }
                                 catch (Exception ex)
                                 {

@@ -809,7 +809,8 @@ public class DocumentUploadService : IDocumentUploadService
             FileSize = fileInfo.TotalSize,
             ContentType = fileInfo.ContentType,
             Priority = R2RProcessingPriorityDto.Normal,
-            ProcessingOptions = session.Options
+            ProcessingOptions = session.Options,
+            JobId = Guid.NewGuid().ToString() // Generate JobId for R2R ingestion tracking
         };
 
         fileInfo.DocumentId = queueItem.DocumentId;
@@ -948,6 +949,7 @@ public class DocumentUploadService : IDocumentUploadService
                 ContentType = queueItem.ContentType,
                 Status = (int)Data.Entities.DocumentStatus.Processing, // Processing status
                 R2RDocumentId = null, // Will be set when R2R completes
+                R2RIngestionJobId = queueItem.JobId, // Set JobId for audit trail
                 R2RProcessedAt = null, // Will be set when R2R completes
                 UserId = userGuid,
                 CompanyId = user.CompanyId,

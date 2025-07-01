@@ -589,6 +589,16 @@ public static class DocumentUploadHubExtensions
     }
 
     /// <summary>
+    /// Broadcasts R2R progress update for real-time progress tracking
+    /// </summary>
+    public static async Task BroadcastR2RProgressUpdate(this IHubContext<DocumentUploadHub> hubContext,
+        string userId, object progressData)
+    {
+        await hubContext.Clients.Group($"user_{userId}")
+            .SendAsync("R2RProgressUpdate", progressData);
+    }
+
+    /// <summary>
     /// Broadcasts system-wide R2R status update
     /// </summary>
     public static async Task BroadcastR2RStatusUpdate(this IHubContext<DocumentUploadHub> hubContext,

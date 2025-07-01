@@ -8,14 +8,16 @@ Hybrid.CleverDocs2.WebServices è il backend del sistema, sviluppato in .NET 9.0
 
 ## Caratteristiche Principali
 
+- **📁 Document Management API**: Complete CRUD operations with authenticated downloads ✅
 - **API RESTful**: Endpoint completi per tutte le funzionalità del sistema
-- **Autenticazione Ibrida**: Cookie Authentication + JWT in HttpOnly cookies per massima sicurezza
+- **Autenticazione Sicura**: JWT authentication con typed HttpClients per operazioni sicure
 - **Multi-tenancy**: Architettura PostgreSQL shared database/schema con isolamento dati
 - **Integrazione R2R**: Rate limiting, queue management, bidirectional sync con SciPhi AI R2R API
 - **SignalR Real-time**: Hub per upload documenti e aggiornamenti collezioni con event persistence intelligente
 - **Caching Strategico**: Redis utilizzato solo per operazioni intensive (chat), rimosso da CRUD per performance
 - **Elaborazione Asincrona**: RabbitMQ per gestione code documenti con rate limiting R2R
 - **Monitoring e Health Checks**: Sistema completo di monitoraggio e diagnostica
+- **🔒 Secure Downloads**: Authenticated file downloads with proper streaming and MIME types
 
 ## Architettura
 

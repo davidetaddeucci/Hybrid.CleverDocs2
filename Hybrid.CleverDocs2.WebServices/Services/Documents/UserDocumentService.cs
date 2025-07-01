@@ -729,9 +729,9 @@ public class UserDocumentService : IUserDocumentService
                 return null;
             }
 
-            // For now, we'll return a direct download URL through our API
+            // Return full WebServices URL for download
             // In a production environment, you might want to generate signed URLs or use a CDN
-            var downloadUrl = $"/api/UserDocuments/{documentId}/download-direct";
+            var downloadUrl = $"http://localhost:5253/api/UserDocuments/{documentId}/download-direct";
 
             _logger.LogInformation("Generated download URL for document {DocumentId}: {DownloadUrl}", documentId, downloadUrl);
             return downloadUrl;

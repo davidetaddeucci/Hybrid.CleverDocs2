@@ -64,6 +64,7 @@ namespace Hybrid.CleverDocs.WebUI.Models
         public string Status { get; set; } = "sent"; // "sent", "processing", "completed", "failed"
         public bool IsEdited { get; set; }
         public bool IsTyping { get; set; }
+        public DateTime? LastEditedAt { get; set; }
 
         // Helper properties for UI
         public bool HasCitations => Citations?.Any() == true;
@@ -83,6 +84,7 @@ namespace Hybrid.CleverDocs.WebUI.Models
         public int PageNumber { get; set; }
         public string CollectionId { get; set; } = string.Empty;
         public string CollectionName { get; set; } = string.Empty;
+        public string ChunkId { get; set; } = string.Empty;
         public Dictionary<string, object> Metadata { get; set; } = new();
     }
 
@@ -277,9 +279,12 @@ namespace Hybrid.CleverDocs.WebUI.Models
         public string Id { get; set; } = string.Empty;
         public string MessageId { get; set; } = string.Empty;
         public string OriginalContent { get; set; } = string.Empty;
+        public string PreviousContent { get; set; } = string.Empty;
         public string EditedContent { get; set; } = string.Empty;
         public DateTime EditedAt { get; set; }
         public string EditReason { get; set; } = string.Empty;
+        public string EditedByUserId { get; set; } = string.Empty;
+        public string EditedByUserName { get; set; } = string.Empty;
     }
 
     public class ConversationAnalyticsViewModel

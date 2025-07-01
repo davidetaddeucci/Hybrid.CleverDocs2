@@ -5,6 +5,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2025-06-22 - CONVERSATION CREATION BUG FIX
+
+### 🚀 Added
+- **Chat/Conversation System**: Fully operational conversation creation and management
+- **Entity Framework Configuration**: Proper PostgreSQL jsonb column type support
+- **Database Schema Alignment**: Conversations table properly configured for production use
+
+### 🔧 Fixed
+- **CRITICAL**: Entity Framework ApplicationDbContext.cs configuration bug resolved
+  - **CollectionIds Column**: Changed from HasColumnType("TEXT") to HasColumnType("jsonb")
+  - **Settings Column**: Changed from HasColumnType("TEXT") to HasColumnType("jsonb")
+- **PostgreSQL Type Conversion Errors**: Eliminated 42804 errors preventing conversation creation
+- **Conversation Creation**: Now working successfully with HTTP 201 responses and proper database storage
+- **WebUI→WebServices→Database Workflow**: Complete conversation creation pipeline operational
+
+### 🎨 Enhanced
+- **Chat Interface**: Conversation pages now load correctly with proper navigation
+- **Database Integration**: Conversations properly stored in PostgreSQL cleverdocs database
+- **Real-time Updates**: SignalR integration working for conversation status updates
+- **Error Handling**: Robust error handling for conversation operations
+
+### 📊 Technical Improvements
+- **Database Schema**: Proper jsonb column types for PostgreSQL compatibility
+- **API Integration**: Seamless WebUI to WebServices conversation creation flow
+- **Authentication**: Secure conversation creation with proper user context
+- **Performance**: Optimized conversation operations with proper database indexing
+
+### ✅ Production Ready Features
+- **Conversation CRUD**: Create, read, update, delete operations working perfectly
+- **Chat System**: Full chat/conversation functionality operational
+- **Database Storage**: Proper conversation persistence in PostgreSQL
+- **User Experience**: Smooth conversation creation and navigation
+
+## [2.5.0] - 2025-06-21 - DOCUMENT CRUD OPERATIONS COMPLETE
+
+### 🚀 Added
+- **Document Details View** with comprehensive metadata display and R2R integration status
+- **Authenticated Download System** with proper JWT authentication and file streaming
+- **Delete Confirmation Dialogs** with user-friendly confirmation and cascade delete
+- **Progress Tracking Fix** showing accurate completion percentages instead of 0%
+- **HttpClient Architecture** using typed clients (IDocumentApiClient) for secure API calls
+
+### 🔧 Fixed
+- **VIEW Functionality**: Created missing Documents/Details.cshtml view with full metadata
+- **DOWNLOAD Functionality**: Implemented DownloadDocumentAsync with authenticated requests
+- **DELETE Functionality**: Confirmed working with proper confirmation and redirect
+- **Progress Display**: Fixed bug showing 0% for completed documents, now shows 100%
+- **Authentication Issues**: Resolved HttpClient authentication using typed clients
+
+### 🎨 Enhanced
+- **Document Management**: Complete CRUD operations (CREATE, READ, UPDATE, DELETE)
+- **Real-time Updates**: SignalR integration for live status updates
+- **Error Handling**: Comprehensive error handling with user-friendly messages
+- **Security**: All operations use proper JWT authentication via HTTP-only cookies
+- **Performance**: Optimized document operations with async patterns and caching
+
+### 📊 Technical Improvements
+- **API Architecture**: Consistent use of typed HttpClients across all document operations
+- **Authentication Flow**: Secure JWT token handling for all API communications
+- **File Handling**: Proper file streaming for downloads with correct MIME types
+- **Database Integration**: Efficient document queries with proper indexing
+- **SignalR Integration**: Real-time progress updates and status notifications
+
+### ✅ Production Ready Features
+- **Document CRUD**: All operations (VIEW, DELETE, DOWNLOAD) working perfectly
+- **Authentication**: Secure JWT-based authentication across all operations
+- **Real-time Updates**: Live progress tracking and status updates
+- **Error Recovery**: Robust error handling with graceful fallbacks
+- **UI/UX**: Intuitive document management with responsive design
+
 ## [2.0.0] - 2025-01-15 - ADVANCED DASHBOARD SYSTEM
 
 ### 🚀 Added

@@ -281,6 +281,97 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                     b.ToTable("Companies");
                 });
 
+            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.Conversation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CollectionIds")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastMessageAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("MessageCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("R2RConversationId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Settings")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SharedUserIds")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Tags")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("R2RConversationId")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Visibility");
+
+                    b.HasIndex("CompanyId", "UserId");
+
+                    b.HasIndex("UserId", "LastMessageAt");
+
+                    b.ToTable("Conversations");
+                });
+
             modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.Document", b =>
                 {
                     b.Property<Guid>("Id")
@@ -381,6 +472,9 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
 
                     b.Property<DateTime?>("R2RProcessedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("R2RTaskId")
+                        .HasColumnType("text");
 
                     b.Property<long>("SizeInBytes")
                         .HasColumnType("bigint");
@@ -510,6 +604,111 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("IngestionJobs");
+                });
+
+            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.Message", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Citations")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("ConfidenceScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ConversationId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("EditHistory")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("IsEdited")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastEditedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("LastEditedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OriginalContent")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ParentMessageId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ProcessingTimeMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("R2RMessageId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("RagContext")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("TokenCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsEdited");
+
+                    b.HasIndex("LastEditedAt");
+
+                    b.HasIndex("LastEditedByUserId");
+
+                    b.HasIndex("ParentMessageId");
+
+                    b.HasIndex("R2RMessageId");
+
+                    b.HasIndex("Role");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ConversationId", "CreatedAt");
+
+                    b.ToTable("Messages");
                 });
 
             modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.User", b =>
@@ -916,6 +1115,25 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                     b.Navigation("Document");
                 });
 
+            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.Conversation", b =>
+                {
+                    b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.Document", b =>
                 {
                     b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.Collection", "Collection")
@@ -956,6 +1174,39 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                     b.Navigation("Document");
 
                     b.Navigation("IngestionJob");
+                });
+
+            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.Message", b =>
+                {
+                    b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.Conversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.User", "LastEditedByUser")
+                        .WithMany()
+                        .HasForeignKey("LastEditedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.Message", "ParentMessage")
+                        .WithMany("ChildMessages")
+                        .HasForeignKey("ParentMessageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("LastEditedByUser");
+
+                    b.Navigation("ParentMessage");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.User", b =>
@@ -1004,6 +1255,11 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                     b.Navigation("Users");
                 });
 
+            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.Conversation", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
             modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.Document", b =>
                 {
                     b.Navigation("Chunks");
@@ -1014,6 +1270,11 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
             modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.IngestionJob", b =>
                 {
                     b.Navigation("Chunks");
+                });
+
+            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.Message", b =>
+                {
+                    b.Navigation("ChildMessages");
                 });
 
             modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.User", b =>

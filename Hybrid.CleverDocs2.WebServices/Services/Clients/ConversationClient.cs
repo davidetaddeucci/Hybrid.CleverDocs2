@@ -7,16 +7,19 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation;
+using Hybrid.CleverDocs2.WebServices.Services.Queue;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Clients
 {
     public class ConversationClient : IConversationClient
     {
         private readonly HttpClient _httpClient;
+        private readonly IRateLimitingService _rateLimitingService;
 
-        public ConversationClient(HttpClient httpClient)
+        public ConversationClient(HttpClient httpClient, IRateLimitingService rateLimitingService)
         {
             _httpClient = httpClient;
+            _rateLimitingService = rateLimitingService;
         }
 
         // Conversation CRUD operations
@@ -24,6 +27,9 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
         {
             try
             {
+                // Apply rate limiting for conversation operations
+                await _rateLimitingService.WaitForAvailabilityAsync("r2r_conversation");
+
                 var response = await _httpClient.PostAsJsonAsync("/v3/conversations", request);
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<ConversationCreateResponse>();
@@ -38,6 +44,9 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
         {
             try
             {
+                // Apply rate limiting for conversation operations
+                await _rateLimitingService.WaitForAvailabilityAsync("r2r_conversation");
+
                 var response = await _httpClient.GetAsync($"/v3/conversations/{conversationId}");
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<ConversationResponse>();
@@ -99,6 +108,9 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
         {
             try
             {
+                // Apply rate limiting for message operations (higher rate for real-time chat)
+                await _rateLimitingService.WaitForAvailabilityAsync("r2r_conversation");
+
                 var response = await _httpClient.PostAsJsonAsync($"/v3/conversations/{conversationId}/messages", request);
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<MessageCreateResponse>();

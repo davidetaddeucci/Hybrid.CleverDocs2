@@ -6,16 +6,19 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using System.Runtime.CompilerServices;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.Search;
+using Hybrid.CleverDocs2.WebServices.Services.Queue;
 
 namespace Hybrid.CleverDocs2.WebServices.Services.Clients
 {
     public class SearchClient : ISearchClient
     {
         private readonly HttpClient _httpClient;
+        private readonly IRateLimitingService _rateLimitingService;
 
-        public SearchClient(HttpClient httpClient)
+        public SearchClient(HttpClient httpClient, IRateLimitingService rateLimitingService)
         {
             _httpClient = httpClient;
+            _rateLimitingService = rateLimitingService;
         }
 
         // Search operations
@@ -23,6 +26,9 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
         {
             try
             {
+                // Apply rate limiting for search operations (20 req/s limit)
+                await _rateLimitingService.WaitForAvailabilityAsync("r2r_search");
+
                 var response = await _httpClient.PostAsJsonAsync("/v3/retrieval/search", request);
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<SearchResponse>();

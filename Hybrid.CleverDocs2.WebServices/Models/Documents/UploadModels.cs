@@ -162,6 +162,11 @@ public class R2RProcessingQueueItemDto
     public R2RProcessingPriorityDto Priority { get; set; } = R2RProcessingPriorityDto.Normal;
     public R2RProcessingStatusDto Status { get; set; } = R2RProcessingStatusDto.Queued;
 
+    /// <summary>
+    /// R2R Ingestion Job ID for audit trail and debugging
+    /// </summary>
+    public string? JobId { get; set; }
+
     // ✅ QUICK WIN 1 - R2R Task ID tracking corretto
     public string? TaskId { get; set; }           // R2R task ID per async tracking
     public string? R2RDocumentId { get; set; }    // Popolato quando task completa

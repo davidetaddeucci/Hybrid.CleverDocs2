@@ -227,7 +227,9 @@ public static class CorrelationMiddlewareExtensions
     /// </summary>
     public static IServiceCollection AddCorrelationServices(this IServiceCollection services)
     {
-        services.AddScoped<ICorrelationService, CorrelationService>();
+        // CRITICAL FIX: CorrelationService must be SINGLETON to be consumed by other SINGLETON services
+        // It uses AsyncLocal for thread-safe context, so it's safe to be singleton
+        services.AddSingleton<ICorrelationService, CorrelationService>();
         return services;
     }
 }
