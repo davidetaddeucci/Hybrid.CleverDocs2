@@ -4,7 +4,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation
 {
     public class ConversationResponse
     {
-        [JsonPropertyName("conversation_id")]
+        [JsonPropertyName("id")]
         public string ConversationId { get; set; } = string.Empty;
 
         [JsonPropertyName("name")]
