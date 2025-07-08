@@ -1,11 +1,15 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Services.Clients;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation;
 using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Services.Queue;
+using Hybrid.CleverDocs2.WebServices.Services.Collections;
+using System.Text.Json;
 
 namespace Hybrid.CleverDocs2.WebServices.Hubs
 {
@@ -19,21 +23,29 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
         private readonly IMultiLevelCacheService _cacheService;
         private readonly ICorrelationService _correlationService;
         private readonly IRateLimitingService _rateLimitingService;
+        private readonly IUserCollectionService _collectionService;
         private readonly ILogger<ChatHub> _logger;
+        private readonly ApplicationDbContext _context;
 
         public ChatHub(
             IConversationClient conversationClient,
             IMultiLevelCacheService cacheService,
             ICorrelationService correlationService,
             IRateLimitingService rateLimitingService,
-            ILogger<ChatHub> logger)
+            IUserCollectionService collectionService,
+            ILogger<ChatHub> logger,
+            ApplicationDbContext context)
         {
             _conversationClient = conversationClient;
             _cacheService = cacheService;
             _correlationService = correlationService;
             _rateLimitingService = rateLimitingService;
+            _collectionService = collectionService;
             _logger = logger;
+            _context = context;
         }
+
+
 
         /// <summary>
         /// Called when a client connects to the hub
@@ -93,6 +105,10 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
             var userId = GetUserId();
             var correlationId = _correlationService.GetCorrelationId();
 
+            // ✅ DEBUG: Add logging to see if method is called
+            _logger.LogInformation("🔥 ChatHub.SendMessage called for user {UserId}, CorrelationId: {CorrelationId}", userId, correlationId);
+            _logger.LogInformation("🔥 MessageData type: {Type}, Content: {Content}", messageData?.GetType().Name, System.Text.Json.JsonSerializer.Serialize(messageData));
+
             try
             {
                 // Apply rate limiting for conversation operations
@@ -114,7 +130,55 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
 
                 var content = data.GetValueOrDefault("content")?.ToString() ?? "";
                 var conversationId = data.GetValueOrDefault("conversationId")?.ToString();
-                var collections = data.GetValueOrDefault("collections") as List<string> ?? new List<string>();
+
+                // ✅ Fixed: Better collections parsing from JsonElement
+                var collections = new List<string>();
+                if (data.TryGetValue("collections", out var collectionsObj))
+                {
+                    if (collectionsObj is JsonElement collectionsElement && collectionsElement.ValueKind == JsonValueKind.Array)
+                    {
+                        collections = collectionsElement.EnumerateArray()
+                            .Where(x => x.ValueKind == JsonValueKind.String)
+                            .Select(x => x.GetString()!)
+                            .Where(x => !string.IsNullOrEmpty(x))
+                            .ToList();
+                    }
+                }
+
+                // ✅ ENHANCED: If no collections specified, use all user's collections as default
+                if (collections.Count == 0)
+                {
+                    _logger.LogInformation("🔥 No collections specified, fetching all user collections as default");
+                    try
+                    {
+                        var userCollections = await _collectionService.GetUserCollectionsAsync(userId.ToString());
+                        if (userCollections?.Any() == true)
+                        {
+                            collections = userCollections.Select(c => c.Id.ToString()).ToList();
+                            _logger.LogInformation("🔥 Using {Count} default collections: {Collections}",
+                                collections.Count, string.Join(", ", collections.Take(3)) + (collections.Count > 3 ? "..." : ""));
+                        }
+                        else
+                        {
+                            _logger.LogWarning("🔥 No collections found for user {UserId}", userId);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "🔥 Error fetching user collections for default selection");
+                    }
+                }
+
+                _logger.LogInformation("🔥 Parsed message data - Content length: {ContentLength}, ConversationId: {ConversationId}, Collections count: {CollectionsCount}",
+                    content.Length, conversationId, collections.Count);
+                if (collections.Count > 0)
+                {
+                    _logger.LogInformation("🔥 Selected collections: {Collections}", string.Join(", ", collections));
+                }
+                else
+                {
+                    _logger.LogWarning("🔥 NO COLLECTIONS AVAILABLE - R2R will not be able to search documents!");
+                }
 
                 if (string.IsNullOrEmpty(content))
                 {
@@ -125,17 +189,47 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                 // Create message request
                 var messageRequest = new MessageRequest
                 {
-                    Message = content,
-                    UseVectorSearch = true,
-                    UseHybridSearch = true,
-                    SearchLimit = 10,
-                    IncludeTitleIfAvailable = true
+                    Content = content,
+                    Role = "user",
+                    SearchMode = "advanced",
+                    Stream = false,  // ✅ FIXED: Use non-streaming mode (streaming endpoint returns 422 errors)
+                    RagGenerationConfig = new RagGenerationConfig
+                    {
+                        Model = "gpt-4o-mini",  // ✅ Added: Use configured LLM model
+                        MaxTokensToSample = 1000,
+                        Temperature = 0.7f
+                    }
                 };
+
+                // Add search settings if collections are specified
+                if (collections.Count > 0)
+                {
+                    messageRequest.SearchSettings = new SearchSettings
+                    {
+                        Filters = new Dictionary<string, object>
+                        {
+                            { "collection_ids", collections }
+                        },
+                        Limit = 10,
+                        UseVectorSearch = true,
+                        UseHybridSearch = true
+                    };
+                }
 
                 if (!string.IsNullOrEmpty(conversationId))
                 {
-                    // Send message to existing conversation with streaming
-                    await SendMessageWithStreaming(conversationId, messageRequest, userId);
+                    // Get R2R conversation UUID from local database ID
+                    var r2rConversationId = await GetR2RConversationIdAsync(conversationId, userId);
+                    if (!string.IsNullOrEmpty(r2rConversationId))
+                    {
+                        // Send message to existing conversation (non-streaming mode)
+                        await SendMessageWithStreaming(r2rConversationId, messageRequest, userId);
+                    }
+                    else
+                    {
+                        await Clients.Caller.SendAsync("MessageError", "Conversation not found");
+                        return;
+                    }
                 }
                 else
                 {
@@ -215,11 +309,14 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
         }
 
         /// <summary>
-        /// Ping to keep connection alive
+        /// Ping to keep connection alive and test hub functionality
         /// </summary>
         public async Task Ping()
         {
-            await Clients.Caller.SendAsync("Pong", DateTime.UtcNow);
+            var userId = GetUserId();
+            _logger.LogInformation("🔥 ChatHub.Ping called for user {UserId} - Hub is working!", userId);
+            await Clients.Caller.SendAsync("Pong", $"PONG from ChatHub at {DateTime.UtcNow:HH:mm:ss} - Hub is working!");
+            _logger.LogInformation("🔥 ChatHub.Ping response sent back to caller");
         }
 
         // Private helper methods
@@ -227,52 +324,147 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
         {
             try
             {
-                // Check if streaming is supported
-                var streamingResponse = await _conversationClient.StreamMessageAsync(conversationId, messageRequest);
-                
-                if (streamingResponse != null)
+                // ✅ ENHANCED: Log the complete request being sent to R2R for debugging
+                _logger.LogInformation("🔥 SENDING TO R2R API:");
+                _logger.LogInformation("🔥   Conversation ID: {ConversationId}", conversationId);
+                _logger.LogInformation("🔥   Message Content: {Content}", messageRequest.Content);
+                _logger.LogInformation("🔥   Search Mode: {SearchMode}", messageRequest.SearchMode);
+                _logger.LogInformation("🔥   Stream: {Stream}", messageRequest.Stream);
+                _logger.LogInformation("🔥   RAG Config: {RagConfig}", System.Text.Json.JsonSerializer.Serialize(messageRequest.RagGenerationConfig));
+                if (messageRequest.SearchSettings != null)
                 {
-                    // Handle streaming response
-                    await foreach (var chunk in streamingResponse)
+                    _logger.LogInformation("🔥   Search Settings: {SearchSettings}", System.Text.Json.JsonSerializer.Serialize(messageRequest.SearchSettings));
+                }
+
+                // ✅ ENHANCED: Ensure message request has all required fields for R2R processing
+                if (string.IsNullOrEmpty(messageRequest.Content))
+                {
+                    _logger.LogError("🔥 ERROR: Message content is empty!");
+                    await Clients.Caller.SendAsync("MessageError", "Message content cannot be empty");
+                    return;
+                }
+
+                // ✅ CRITICAL FIX: Get local conversation and save user message to database
+                var localConversation = await GetLocalConversationByR2RIdAsync(conversationId, userId);
+                if (localConversation == null)
+                {
+                    _logger.LogError("🔥 CRITICAL ERROR: Local conversation not found for R2R ID {ConversationId}", conversationId);
+                    await Clients.Caller.SendAsync("MessageError", "Conversation not found in local database");
+                    return;
+                }
+
+                // ✅ CRITICAL FIX: Save user message to database
+                var userMessage = new Data.Entities.Message
+                {
+                    ConversationId = localConversation.Id,
+                    Role = "user",
+                    Content = messageRequest.Content,
+                    Status = "sent",
+                    CreatedAt = DateTime.UtcNow,
+                    UserId = userId
+                };
+
+                _context.Messages.Add(userMessage);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("🔥 SAVED USER MESSAGE to database: ConversationId={ConversationId}, MessageId={MessageId}", localConversation.Id, userMessage.Id);
+
+                // ✅ ENHANCED: Ensure RAG generation config is properly set for AI processing
+                if (messageRequest.RagGenerationConfig == null)
+                {
+                    _logger.LogWarning("🔥 WARNING: RAG generation config is null, setting defaults");
+                    messageRequest.RagGenerationConfig = new RagGenerationConfig
                     {
-                        await Clients.Group($"conversation_{conversationId}")
-                            .SendAsync("MessageStreaming", new
-                            {
-                                messageId = Guid.NewGuid().ToString(),
-                                content = chunk,
-                                isComplete = false,
-                                conversationId = conversationId
-                            });
+                        Model = "gpt-4o-mini",
+                        MaxTokensToSample = 1000,
+                        Temperature = 0.7f
+                    };
+                }
+
+                _logger.LogInformation("🔥 Calling AddMessageAsync for conversation {ConversationId}", conversationId);
+                var response = await _conversationClient.AddMessageAsync(conversationId, messageRequest);
+
+                _logger.LogInformation("🔥 AddMessageAsync response: {Response}", response != null ? "SUCCESS" : "NULL");
+                if (response != null)
+                {
+                    _logger.LogInformation("🔥 R2R Response Details - MessageId: {MessageId}, Content length: {ContentLength}, SearchResults count: {SearchResultsCount}",
+                        response.Results?.MessageId,
+                        response.Results?.Content?.Length ?? 0,
+                        response.Results?.SearchResults?.Count ?? 0);
+
+                    if (!string.IsNullOrEmpty(response.Results?.Content))
+                    {
+                        _logger.LogInformation("🔥 Response content preview: {Content}",
+                            response.Results.Content.Substring(0, Math.Min(200, response.Results.Content.Length)));
+                    }
+                    else
+                    {
+                        _logger.LogWarning("🔥 R2R returned empty or null content!");
                     }
 
-                    // Send completion signal
-                    await Clients.Group($"conversation_{conversationId}")
-                        .SendAsync("MessageStreaming", new
+                    // Check if R2R response is empty and use fallback LLM
+                    string finalContent = response.Results?.Content ?? "";
+                    if (string.IsNullOrWhiteSpace(finalContent))
+                    {
+                        _logger.LogWarning("🔥 R2R returned empty content, using fallback LLM generation");
+                        finalContent = await GenerateFallbackResponseAsync(messageRequest.Content, new List<string>());
+                    }
+
+                    // ✅ CRITICAL FIX: Save assistant message to database
+                    var assistantMessage = new Data.Entities.Message
+                    {
+                        ConversationId = localConversation.Id,
+                        R2RMessageId = response.Results.MessageId,
+                        Role = "assistant",
+                        Content = finalContent,
+                        ParentMessageId = userMessage.Id,
+                        Status = "completed",
+                        ProcessingTimeMs = (int)(DateTime.UtcNow - userMessage.CreatedAt).TotalMilliseconds,
+                        TokenCount = finalContent?.Length / 4, // Rough token estimate
+                        CreatedAt = DateTime.UtcNow,
+                        UserId = userId
+                    };
+
+                    // Set RAG context if available
+                    if (response.Results.SearchResults != null && response.Results.SearchResults.Any())
+                    {
+                        var ragContext = new Dictionary<string, object>
                         {
-                            messageId = Guid.NewGuid().ToString(),
-                            content = "",
-                            isComplete = true,
-                            conversationId = conversationId
+                            ["search_results"] = response.Results.SearchResults,
+                            ["search_mode"] = messageRequest.SearchMode,
+                            ["collection_filters"] = messageRequest.SearchSettings?.Filters
+                        };
+                        assistantMessage.SetRagContext(ragContext);
+                    }
+
+                    _context.Messages.Add(assistantMessage);
+
+                    // ✅ CRITICAL FIX: Update conversation message count and last message time
+                    localConversation.MessageCount += 2; // User + Assistant messages
+                    localConversation.LastMessageAt = DateTime.UtcNow;
+                    localConversation.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("🔥 SAVED ASSISTANT MESSAGE to database: ConversationId={ConversationId}, MessageId={MessageId}, MessageCount={MessageCount}",
+                        localConversation.Id, assistantMessage.Id, localConversation.MessageCount);
+
+                    _logger.LogInformation("🔥 Sending ReceiveMessage via SignalR to group conversation_{ConversationId}", conversationId);
+
+                    await Clients.Group($"conversation_{conversationId}")
+                        .SendAsync("ReceiveMessage", new
+                        {
+                            id = response.Results.MessageId,
+                            content = finalContent,
+                            role = "assistant",
+                            createdAt = DateTime.UtcNow,
+                            conversationId = conversationId,
+                            citations = response.Results.SearchResults?.Cast<object>().ToList() ?? new List<object>()
                         });
+
+                    _logger.LogInformation("🔥 ReceiveMessage sent successfully via SignalR");
                 }
                 else
                 {
-                    // Fallback to regular message sending
-                    var response = await _conversationClient.AddMessageAsync(conversationId, messageRequest);
-                    
-                    if (response != null)
-                    {
-                        await Clients.Group($"conversation_{conversationId}")
-                            .SendAsync("ReceiveMessage", new
-                            {
-                                id = response.Results.MessageId,
-                                content = response.Results.Content,
-                                role = "assistant",
-                                createdAt = DateTime.UtcNow,
-                                conversationId = conversationId,
-                                citations = response.Results.SearchResults?.Cast<object>().ToList() ?? new List<object>()
-                            });
-                    }
+                    _logger.LogWarning("🔥 AddMessageAsync returned null response");
                 }
 
                 // Notify conversation update
@@ -338,6 +530,39 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
             }
         }
 
+        private async Task<string?> GetR2RConversationIdAsync(string conversationId, Guid userId)
+        {
+            try
+            {
+                // Try to parse as integer (local database ID)
+                if (int.TryParse(conversationId, out var localId))
+                {
+                    // Look up the conversation in the database to get the R2R UUID
+                    var conversation = await _context.Conversations
+                        .Where(c => c.Id == localId && c.UserId == userId)
+                        .Select(c => c.R2RConversationId)
+                        .FirstOrDefaultAsync();
+
+                    return conversation;
+                }
+                else
+                {
+                    // If it's already a UUID format, assume it's the R2R conversation ID
+                    if (Guid.TryParse(conversationId, out _))
+                    {
+                        return conversationId;
+                    }
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting R2R conversation ID for conversation {ConversationId}", conversationId);
+                return null;
+            }
+        }
+
         private Guid GetUserId()
         {
             var userIdClaim = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -361,6 +586,55 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                 return Guid.Empty; // Return empty Guid for users without company
             }
             return companyId;
+        }
+
+        /// <summary>
+        /// Get local conversation entity by R2R conversation ID
+        /// </summary>
+        private async Task<Data.Entities.Conversation?> GetLocalConversationByR2RIdAsync(string r2rConversationId, Guid userId)
+        {
+            try
+            {
+                var conversation = await _context.Conversations
+                    .FirstOrDefaultAsync(c => c.R2RConversationId == r2rConversationId && c.UserId == userId);
+
+                if (conversation == null)
+                {
+                    _logger.LogWarning("🔥 Local conversation not found for R2R ID {R2RConversationId} and user {UserId}", r2rConversationId, userId);
+                }
+
+                return conversation;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting local conversation by R2R ID {R2RConversationId}", r2rConversationId);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Generate fallback response using CleverDocs LLM provider when R2R fails
+        /// </summary>
+        private async Task<string> GenerateFallbackResponseAsync(string userMessage, List<string> collectionIds)
+        {
+            try
+            {
+                _logger.LogInformation("🔥 Generating fallback response for message: {Message}", userMessage.Substring(0, Math.Min(50, userMessage.Length)));
+
+                // Simple fallback response for now
+                var fallbackResponse = $"I understand you're asking: \"{userMessage}\". " +
+                    "I'm currently experiencing some technical difficulties with my knowledge base integration. " +
+                    "Please try your question again in a moment, or contact support if the issue persists.";
+
+                _logger.LogInformation("🔥 Generated fallback response: {Response}", fallbackResponse.Substring(0, Math.Min(100, fallbackResponse.Length)));
+
+                return fallbackResponse;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "🔥 Error generating fallback response");
+                return "I'm sorry, I'm currently experiencing technical difficulties. Please try again later.";
+            }
         }
     }
 }

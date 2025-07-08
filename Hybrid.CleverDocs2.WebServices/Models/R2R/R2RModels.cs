@@ -40,6 +40,7 @@ namespace Hybrid.CleverDocs2.WebServices.Models.R2R
         public Dictionary<string, object>? RagGenerationConfig { get; set; }
         public Dictionary<string, object>? SearchFilters { get; set; }
         public List<string>? CollectionIds { get; set; }
+        public bool Stream { get; set; } = false;
     }
 
     /// <summary>

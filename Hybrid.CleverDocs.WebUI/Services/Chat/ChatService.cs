@@ -196,6 +196,19 @@ namespace Hybrid.CleverDocs.WebUI.Services.Chat
                     RagConfig = ragConfig
                 };
 
+                // Extract collections and settings from ragConfig if provided
+                if (ragConfig != null)
+                {
+                    if (ragConfig.TryGetValue("collections", out var collectionsObj) && collectionsObj is List<string> collections)
+                    {
+                        request.Collections = collections;
+                    }
+                    if (ragConfig.TryGetValue("settings", out var settingsObj) && settingsObj is Dictionary<string, object> settings)
+                    {
+                        request.Settings = settings;
+                    }
+                }
+
                 var json = JsonSerializer.Serialize(request);
                 var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -477,6 +490,8 @@ namespace Hybrid.CleverDocs.WebUI.Services.Chat
         public string Content { get; set; } = string.Empty;
         public int? ParentMessageId { get; set; }
         public Dictionary<string, object>? RagConfig { get; set; }
+        public List<string>? Collections { get; set; }
+        public Dictionary<string, object>? Settings { get; set; }
     }
 
     public class EditMessageRequest

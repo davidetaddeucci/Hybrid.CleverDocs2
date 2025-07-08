@@ -70,6 +70,8 @@ namespace Hybrid.CleverDocs2.WebServices.Models.Conversations
         public string Content { get; set; } = string.Empty;
         public int? ParentMessageId { get; set; }
         public Dictionary<string, object>? RagConfig { get; set; }
+        public List<string>? Collections { get; set; }
+        public Dictionary<string, object>? Settings { get; set; }
     }
 
     /// <summary>

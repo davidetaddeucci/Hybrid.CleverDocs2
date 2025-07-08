@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Hybrid.CleverDocs2.WebServices.Data.Entities;
 using Hybrid.CleverDocs2.WebServices.Services.Clients;
@@ -8,6 +9,7 @@ using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Models.Conversations;
 using Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation;
 using Hybrid.CleverDocs2.WebServices.Middleware;
+using Hybrid.CleverDocs2.WebServices.Hubs;
 using System.Security.Claims;
 
 namespace Hybrid.CleverDocs2.WebServices.Controllers
@@ -25,17 +27,20 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
         private readonly IConversationClient _conversationClient;
         private readonly IMultiLevelCacheService _cacheService;
         private readonly ILogger<ConversationsController> _logger;
+        private readonly IHubContext<ChatHub> _hubContext;
 
         public ConversationsController(
             ApplicationDbContext context,
             IConversationClient conversationClient,
             IMultiLevelCacheService cacheService,
-            ILogger<ConversationsController> logger)
+            ILogger<ConversationsController> logger,
+            IHubContext<ChatHub> hubContext)
         {
             _context = context;
             _conversationClient = conversationClient;
             _cacheService = cacheService;
             _logger = logger;
+            _hubContext = hubContext;
         }
 
         /// <summary>
@@ -183,7 +188,10 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                     UserId = userId,
                     CompanyId = companyId,
                     Status = "active",
-                    LastMessageAt = DateTime.UtcNow
+                    LastMessageAt = DateTime.UtcNow,
+                    Metadata = null,
+                    SharedUserIds = null,
+                    Tags = null
                 };
 
                 if (request.CollectionIds?.Any() == true)
@@ -225,6 +233,21 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                     L3TTL = TimeSpan.FromHours(1),
                     TenantId = companyId.ToString()
                 });
+
+                // ✅ CRITICAL FIX: Send ConversationCreated SignalR event to the user
+                try
+                {
+                    await _hubContext.Clients.User(userId.ToString()).SendAsync("ConversationCreated", new
+                    {
+                        conversationId = conversation.R2RConversationId,  // Send R2R UUID for SignalR group membership
+                        title = conversation.Title
+                    });
+                    _logger.LogInformation("🔥 ConversationCreated event sent to user {UserId} for conversation {ConversationId}", userId, conversation.R2RConversationId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "❌ Failed to send ConversationCreated event to user {UserId}", userId);
+                }
 
                 return CreatedAtAction(nameof(GetConversation), new { id = conversation.Id }, conversationDto);
             }
@@ -271,31 +294,96 @@ namespace Hybrid.CleverDocs2.WebServices.Controllers
                 var conversationSettings = conversation.GetSettings();
                 var messageRequest = new Services.DTOs.Conversation.MessageRequest
                 {
-                    Message = request.Content,
-                    UseVectorSearch = (bool)(conversationSettings.GetValueOrDefault("useVectorSearch", true)),
-                    UseHybridSearch = (bool)(conversationSettings.GetValueOrDefault("useHybridSearch", true)),
-                    SearchLimit = (int)(conversationSettings.GetValueOrDefault("maxResults", 10)),
-                    IncludeTitleIfAvailable = (bool)(conversationSettings.GetValueOrDefault("includeTitleIfAvailable", true)),
+                    Content = request.Content,
+                    Role = "user",
+                    SearchMode = "advanced",
                     Stream = (bool)(conversationSettings.GetValueOrDefault("streamingEnabled", true)),
-                    RagGenerationConfig = new Dictionary<string, object>
+                    RagGenerationConfig = new Services.DTOs.Conversation.RagGenerationConfig
                     {
-                        ["model"] = "gpt-4o-mini",
-                        ["temperature"] = 0.1,
-                        ["max_tokens"] = 1024
+                        Model = "gpt-4o-mini",
+                        MaxTokensToSample = 1024,
+                        Temperature = 0.1f
                     }
                 };
 
-                // Add advanced R2R features based on conversation settings
-                if ((bool)(conversationSettings.GetValueOrDefault("agenticMode", false)))
+                // Add search settings with collection filtering
+                messageRequest.SearchSettings = new Services.DTOs.Conversation.SearchSettings
                 {
-                    messageRequest.RagGenerationConfig["extended_thinking"] = true;
-                    messageRequest.RagGenerationConfig["thinking_budget"] = conversationSettings.GetValueOrDefault("thinkingBudget", 4096);
+                    UseVectorSearch = (bool)(conversationSettings.GetValueOrDefault("useVectorSearch", true)),
+                    UseHybridSearch = (bool)(conversationSettings.GetValueOrDefault("useHybridSearch", true)),
+                    Limit = (int)(conversationSettings.GetValueOrDefault("maxResults", 10)),
+                    Filters = new Dictionary<string, object>()
+                };
+
+                // Add collection filtering if collections are specified in the request
+                if (request.Collections != null && request.Collections.Count > 0)
+                {
+                    // Convert WebUI collection IDs to R2R collection IDs
+                    var r2rCollectionIds = new List<string>();
+                    foreach (var collectionIdStr in request.Collections)
+                    {
+                        if (Guid.TryParse(collectionIdStr, out var collectionId))
+                        {
+                            var collection = await _context.Collections
+                                .FirstOrDefaultAsync(c => c.Id == collectionId);
+
+                            if (collection != null && !string.IsNullOrEmpty(collection.R2RCollectionId))
+                            {
+                                r2rCollectionIds.Add(collection.R2RCollectionId);
+                                _logger.LogInformation("✅ Mapped WebUI collection {WebUIId} -> R2R collection {R2RId}",
+                                    collectionId, collection.R2RCollectionId);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("⚠️ Collection {CollectionId} not found or missing R2R ID", collectionId);
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("⚠️ Invalid collection ID format: {CollectionId}", collectionIdStr);
+                        }
+                    }
+
+                    if (r2rCollectionIds.Count > 0)
+                    {
+                        messageRequest.SearchSettings.Filters["collection_ids"] = r2rCollectionIds;
+                        _logger.LogInformation("🎯 COLLECTION FILTERING APPLIED: {CollectionCount} R2R collections: {Collections}",
+                            r2rCollectionIds.Count, string.Join(", ", r2rCollectionIds));
+                    }
+                    else
+                    {
+                        _logger.LogWarning("⚠️ NO VALID R2R COLLECTION IDs found for provided collections");
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("⚠️ NO COLLECTIONS PROVIDED in request - search will not be filtered");
                 }
 
-                if ((bool)(conversationSettings.GetValueOrDefault("useKnowledgeGraph", false)))
+                // Apply additional settings from the request
+                if (request.Settings != null)
                 {
-                    messageRequest.RagGenerationConfig["use_knowledge_graph"] = true;
+                    foreach (var setting in request.Settings)
+                    {
+                        if (setting.Key == "relevanceThreshold" && setting.Value is double threshold)
+                        {
+                            messageRequest.SearchSettings.Filters["score_threshold"] = threshold;
+                        }
+                        else if (setting.Key == "maxResults" && setting.Value is int maxResults)
+                        {
+                            messageRequest.SearchSettings.Limit = maxResults;
+                        }
+                        else if (setting.Key == "searchMode" && setting.Value is string searchMode)
+                        {
+                            messageRequest.SearchMode = searchMode.ToLowerInvariant();
+                        }
+                    }
                 }
+
+                // Log the complete request being sent to R2R
+                _logger.LogInformation("🚀 SENDING TO R2R: ConversationId={ConversationId}, Content={Content}, SearchMode={SearchMode}, Filters={Filters}",
+                    conversation.R2RConversationId, messageRequest.Content, messageRequest.SearchMode,
+                    messageRequest.SearchSettings?.Filters != null ? System.Text.Json.JsonSerializer.Serialize(messageRequest.SearchSettings.Filters) : "null");
 
                 // Send message to R2R
                 var r2rResponse = await _conversationClient.AddMessageAsync(conversation.R2RConversationId, messageRequest);

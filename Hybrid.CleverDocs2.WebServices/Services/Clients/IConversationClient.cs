@@ -26,8 +26,7 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
         // Conversation analytics
         Task<ConversationStatsResponse?> GetConversationStatsAsync(string conversationId);
 
-        // Streaming support
-        Task<IAsyncEnumerable<string>?> StreamMessageAsync(string conversationId, MessageRequest request);
+        // Streaming support - DISABLED: R2R streaming endpoint returns 422 errors
 
         // Bulk operations
         Task<MessageResponse2?> DeleteMultipleMessagesAsync(string conversationId, List<string> messageIds);

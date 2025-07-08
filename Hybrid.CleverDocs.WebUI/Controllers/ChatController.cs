@@ -176,6 +176,21 @@ namespace Hybrid.CleverDocs.WebUI.Controllers
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetToken()
+        {
+            try
+            {
+                var token = await _authService.GetTokenAsync();
+                return Json(new { token = token });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting JWT token for SignalR");
+                return Json(new { token = "" });
+            }
+        }
+
         // Private helper methods - Now using ChatService
         private async Task LoadConversationsAsync(ChatIndexViewModel model)
         {

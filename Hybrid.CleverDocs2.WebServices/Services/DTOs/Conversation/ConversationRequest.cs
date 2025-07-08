@@ -40,29 +40,50 @@ namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation
 
     public class MessageRequest
     {
-        [JsonPropertyName("message")]
-        public string Message { get; set; } = string.Empty;
+        [JsonPropertyName("content")]
+        public string Content { get; set; } = string.Empty;
+
+        [JsonPropertyName("role")]
+        public string Role { get; set; } = "user";
+
+        [JsonPropertyName("search_mode")]
+        public string SearchMode { get; set; } = "advanced";
+
+        [JsonPropertyName("rag_generation_config")]
+        public RagGenerationConfig RagGenerationConfig { get; set; } = new();
+
+        [JsonPropertyName("search_settings")]
+        public SearchSettings? SearchSettings { get; set; }
+
+        [JsonPropertyName("stream")]
+        public bool Stream { get; set; } = false;
+    }
+
+    public class RagGenerationConfig
+    {
+        [JsonPropertyName("model")]
+        public string Model { get; set; } = "anthropic/claude-3-haiku-20240307";
+
+        [JsonPropertyName("max_tokens_to_sample")]
+        public int MaxTokensToSample { get; set; } = 2048;
+
+        [JsonPropertyName("temperature")]
+        public float? Temperature { get; set; }
+    }
+
+    public class SearchSettings
+    {
+        [JsonPropertyName("filters")]
+        public Dictionary<string, object> Filters { get; set; } = new();
+
+        [JsonPropertyName("limit")]
+        public int Limit { get; set; } = 10;
 
         [JsonPropertyName("use_vector_search")]
         public bool UseVectorSearch { get; set; } = true;
 
-        [JsonPropertyName("search_filters")]
-        public Dictionary<string, object> SearchFilters { get; set; } = new();
-
-        [JsonPropertyName("search_limit")]
-        public int SearchLimit { get; set; } = 10;
-
         [JsonPropertyName("use_hybrid_search")]
         public bool UseHybridSearch { get; set; } = true;
-
-        [JsonPropertyName("rag_generation_config")]
-        public Dictionary<string, object> RagGenerationConfig { get; set; } = new();
-
-        [JsonPropertyName("include_title_if_available")]
-        public bool IncludeTitleIfAvailable { get; set; } = true;
-
-        [JsonPropertyName("stream")]
-        public bool Stream { get; set; } = false;
     }
 
     public class ConversationBranchRequest
