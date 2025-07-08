@@ -40,6 +40,31 @@ Hybrid.CleverDocs2 is an enterprise-grade multi-tenant WebUI for managing docume
 - **Real-time Updates**: Test SignalR message broadcasting for live chat updates
 - **Collection Context**: Ensure conversations properly utilize selected collections for context
 
+### 🔧 **LLM CONFIGURATION SOLUTION (January 8, 2025)**
+
+**ISSUE IDENTIFIED**: Chat system returns fallback responses instead of AI-generated responses.
+
+**ROOT CAUSE**: R2R API service lacks OpenAI API key configuration as environment variable.
+
+**INVESTIGATION FINDINGS**:
+- ✅ R2R collection contains 71 successfully indexed documents
+- ✅ Collection mapping between WebUI and R2R is correct (`aa160d16-1b73-40f0-aac2-a89998134d29` → `122fdf6a-e116-546b-a8f6-e4cb2e2c0a09`)
+- ✅ R2R API accepts message requests successfully
+- ✅ Chat infrastructure (SignalR, WebServices) is fully operational
+- ❌ **Missing `OPENAI_API_KEY` environment variable** in R2R service
+
+**SOLUTION**: Configure OpenAI API key as environment variable for R2R service:
+```bash
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+**IMPLEMENTATION**:
+- **Docker**: Add `-e OPENAI_API_KEY=...` to container startup
+- **Docker Compose**: Add to environment section
+- **System Service**: Add to environment file and restart service
+
+**VERIFICATION**: After configuration, test with chat interface - AI responses should appear instead of fallback messages.
+
 ---
 
 ## 🚀 Previous Updates (July 1, 2025)
