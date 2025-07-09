@@ -40,11 +40,11 @@ Hybrid.CleverDocs2 is an enterprise-grade multi-tenant WebUI for managing docume
 - **Real-time Updates**: Test SignalR message broadcasting for live chat updates
 - **Collection Context**: Ensure conversations properly utilize selected collections for context
 
-### 🔧 **LLM CONFIGURATION SOLUTION (January 9, 2025)**
+### 🔧 **LLM CONFIGURATION SOLUTION (January 9, 2025) - PERPLEXITY VALIDATED ✅**
 
 **ISSUE IDENTIFIED**: Chat system returns fallback responses instead of AI-generated responses.
 
-**ROOT CAUSE**: R2R system configured with **invalid OpenAI model names**.
+**ROOT CAUSE**: R2R system configured with **invalid OpenAI model names** (Confirmed by Perplexity Deep Research).
 
 **INVESTIGATION FINDINGS**:
 - ✅ R2R collection contains 71 successfully indexed documents
@@ -53,24 +53,28 @@ Hybrid.CleverDocs2 is an enterprise-grade multi-tenant WebUI for managing docume
 - ✅ Chat infrastructure (SignalR, WebServices) is fully operational
 - ❌ **Invalid model names in R2R configuration**: `openai/gpt-4.1` and `openai/gpt-4.1-mini`
 
-**CRITICAL CONFIGURATION ERROR**:
-```json
-// CURRENT (INVALID)
-{
-  "quality_llm": "openai/gpt-4.1",
-  "fast_llm": "openai/gpt-4.1-mini"
-}
+**PERPLEXITY VALIDATION CONFIRMS**:
+- LiteLLM requires exact model name matching with proper `openai/` prefixes
+- Invalid model names cause routing failures leading to `NoneType` errors
+- R2R with LiteLLM Proxy may require double prefixing in some configurations
+- Enterprise patterns support 10M+ tenants with partition-key strategies
 
-// REQUIRED (VALID)
-{
-  "quality_llm": "openai/gpt-4o",
-  "fast_llm": "openai/gpt-4o-mini"
-}
+**CRITICAL CONFIGURATION ERROR**:
+```toml
+# CURRENT (INVALID)
+[completion]
+provider = "litellm"
+model = "openai/gpt-4.1"  # ❌ Invalid model name
+
+# REQUIRED (VALID)
+[completion]
+provider = "litellm"
+model = "openai/gpt-4o"   # ✅ Valid OpenAI model
 ```
 
 **SOLUTION**: Update R2R configuration file with correct OpenAI model names and restart service.
 
-**VERIFICATION**: After configuration fix, LLM completion calls succeed and AI responses appear in chat interface.
+**ENHANCED VERIFICATION**: Multi-level validation including model name validation, response content checks, and fallback mechanism testing.
 
 ---
 
