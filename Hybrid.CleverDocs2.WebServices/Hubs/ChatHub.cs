@@ -9,6 +9,7 @@ using Hybrid.CleverDocs2.WebServices.Services.Cache;
 using Hybrid.CleverDocs2.WebServices.Services.Logging;
 using Hybrid.CleverDocs2.WebServices.Services.Queue;
 using Hybrid.CleverDocs2.WebServices.Services.Collections;
+using Hybrid.CleverDocs2.WebServices.Services.LLM;
 using System.Text.Json;
 
 namespace Hybrid.CleverDocs2.WebServices.Hubs
@@ -24,6 +25,7 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
         private readonly ICorrelationService _correlationService;
         private readonly IRateLimitingService _rateLimitingService;
         private readonly IUserCollectionService _collectionService;
+        private readonly ILLMProviderService _llmProviderService;
         private readonly ILogger<ChatHub> _logger;
         private readonly ApplicationDbContext _context;
 
@@ -33,6 +35,7 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
             ICorrelationService correlationService,
             IRateLimitingService rateLimitingService,
             IUserCollectionService collectionService,
+            ILLMProviderService llmProviderService,
             ILogger<ChatHub> logger,
             ApplicationDbContext context)
         {
@@ -41,6 +44,7 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
             _correlationService = correlationService;
             _rateLimitingService = rateLimitingService;
             _collectionService = collectionService;
+            _llmProviderService = llmProviderService;
             _logger = logger;
             _context = context;
         }
@@ -186,19 +190,55 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                     return;
                 }
 
-                // Create message request
+                // ✅ GAME CHANGER: Get user's LLM configuration for per-user provider selection
+                var userLLMConfig = await _llmProviderService.GetUserLLMConfigurationAsync(userId);
+                RagGenerationConfig ragConfig;
+
+                if (userLLMConfig != null)
+                {
+                    // Use user's custom LLM configuration
+                    _logger.LogInformation("🚀 Using user's custom LLM configuration: {Provider}/{Model}",
+                        userLLMConfig.Provider, userLLMConfig.Model);
+
+                    ragConfig = new RagGenerationConfig
+                    {
+                        Model = $"{userLLMConfig.Provider}/{userLLMConfig.Model}",
+                        MaxTokens = userLLMConfig.MaxTokens,
+                        Temperature = (float)userLLMConfig.Temperature,
+                        TopP = userLLMConfig.TopP.HasValue ? (float)userLLMConfig.TopP.Value : null,
+                        Stream = userLLMConfig.EnableStreaming,
+                        ApiBase = userLLMConfig.ApiEndpoint,
+                        AdditionalParameters = userLLMConfig.AdditionalParameters
+                    };
+
+                    // Update usage statistics
+                    await _llmProviderService.UpdateUsageStatisticsAsync(userId);
+                }
+                else
+                {
+                    // Use system default configuration
+                    var systemDefault = await _llmProviderService.GetSystemDefaultConfigurationAsync();
+                    _logger.LogInformation("🔧 Using system default LLM configuration: {Provider}/{Model}",
+                        systemDefault.Provider, systemDefault.Model);
+
+                    ragConfig = new RagGenerationConfig
+                    {
+                        Model = $"{systemDefault.Provider}/{systemDefault.Model}",
+                        MaxTokens = systemDefault.MaxTokens,
+                        Temperature = (float)systemDefault.Temperature,
+                        TopP = systemDefault.TopP.HasValue ? (float)systemDefault.TopP.Value : null,
+                        Stream = systemDefault.EnableStreaming
+                    };
+                }
+
+                // Create message request with user-specific or system default LLM configuration
                 var messageRequest = new MessageRequest
                 {
                     Content = content,
                     Role = "user",
                     SearchMode = "advanced",
-                    Stream = false,  // ✅ FIXED: Use non-streaming mode (streaming endpoint returns 422 errors)
-                    RagGenerationConfig = new RagGenerationConfig
-                    {
-                        Model = "gpt-4o-mini",  // ✅ Added: Use configured LLM model
-                        MaxTokensToSample = 1000,
-                        Temperature = 0.7f
-                    }
+                    Stream = ragConfig.Stream,
+                    RagGenerationConfig = ragConfig
                 };
 
                 // Add search settings if collections are specified

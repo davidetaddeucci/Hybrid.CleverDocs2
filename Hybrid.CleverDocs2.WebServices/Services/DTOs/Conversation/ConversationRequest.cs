@@ -62,13 +62,33 @@ namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation
     public class RagGenerationConfig
     {
         [JsonPropertyName("model")]
-        public string Model { get; set; } = "anthropic/claude-3-haiku-20240307";
+        public string Model { get; set; } = "openai/gpt-4o-mini";
 
-        [JsonPropertyName("max_tokens_to_sample")]
-        public int MaxTokensToSample { get; set; } = 2048;
+        [JsonPropertyName("max_tokens")]
+        public int MaxTokens { get; set; } = 1000;
 
         [JsonPropertyName("temperature")]
-        public float? Temperature { get; set; }
+        public float? Temperature { get; set; } = 0.7f;
+
+        [JsonPropertyName("top_p")]
+        public float? TopP { get; set; }
+
+        [JsonPropertyName("stream")]
+        public bool Stream { get; set; } = false;
+
+        [JsonPropertyName("api_base")]
+        public string? ApiBase { get; set; }
+
+        [JsonPropertyName("add_generation_kwargs")]
+        public Dictionary<string, object>? AdditionalParameters { get; set; }
+
+        // Legacy support for max_tokens_to_sample
+        [JsonPropertyName("max_tokens_to_sample")]
+        public int MaxTokensToSample
+        {
+            get => MaxTokens;
+            set => MaxTokens = value;
+        }
     }
 
     public class SearchSettings

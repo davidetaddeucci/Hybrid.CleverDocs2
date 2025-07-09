@@ -131,6 +131,17 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
                 _logger.LogInformation("🚀 R2R API CALL: POST /v3/conversations/{ConversationId}/messages", conversationId);
                 _logger.LogInformation("🚀 Request payload: {Payload}", System.Text.Json.JsonSerializer.Serialize(request));
 
+                // ✅ GAME CHANGER: Log LLM configuration details for per-user tracking
+                if (request.RagGenerationConfig != null)
+                {
+                    _logger.LogInformation("🚀 LLM Configuration: Model={Model}, Temperature={Temperature}, MaxTokens={MaxTokens}, Stream={Stream}, ApiBase={ApiBase}",
+                        request.RagGenerationConfig.Model,
+                        request.RagGenerationConfig.Temperature,
+                        request.RagGenerationConfig.MaxTokens,
+                        request.RagGenerationConfig.Stream,
+                        request.RagGenerationConfig.ApiBase ?? "default");
+                }
+
                 var response = await _httpClient.PostAsJsonAsync($"/v3/conversations/{conversationId}/messages", request);
 
                 // ✅ ENHANCED: Log response details for debugging

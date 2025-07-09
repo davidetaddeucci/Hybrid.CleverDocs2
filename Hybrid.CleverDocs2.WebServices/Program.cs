@@ -22,6 +22,7 @@ using Hybrid.CleverDocs2.WebServices.Services.Collections;
 using Hybrid.CleverDocs2.WebServices.Services.Documents;
 using Hybrid.CleverDocs2.WebServices.Services.Users;
 using Hybrid.CleverDocs2.WebServices.Services.Companies;
+using Hybrid.CleverDocs2.WebServices.Services.LLM;
 using Hybrid.CleverDocs2.WebServices.Hubs;
 using Hybrid.CleverDocs2.WebServices.Middleware;
 
@@ -361,6 +362,10 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 // User and Company Sync Services
 builder.Services.AddScoped<IUserSyncService, UserSyncService>();
 builder.Services.AddScoped<ICompanySyncService, CompanySyncService>();
+
+// LLM Provider Services for per-user configuration
+builder.Services.AddScoped<ILLMProviderService, LLMProviderService>();
+builder.Services.AddScoped<ILLMAuditService, LLMAuditService>();
 
 // Correlation and Logging Services
 builder.Services.AddCorrelationServices();

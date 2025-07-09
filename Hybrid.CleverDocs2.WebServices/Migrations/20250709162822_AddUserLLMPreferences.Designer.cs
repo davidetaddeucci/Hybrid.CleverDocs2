@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Hybrid.CleverDocs2.WebServices.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Hybrid.CleverDocs2.WebServices.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250709162822_AddUserLLMPreferences")]
+    partial class AddUserLLMPreferences
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1149,99 +1152,6 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                     b.ToTable("TokenBlacklists");
                 });
 
-            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Services.LLM.LLMAuditLogEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ChangedBy")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("IpAddress")
-                        .HasColumnType("text");
-
-                    b.Property<string>("NewConfiguration")
-                        .HasColumnType("text");
-
-                    b.Property<string>("OldConfiguration")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("Timestamp")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("UserAgent")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Action");
-
-                    b.HasIndex("Timestamp");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("UserId", "Timestamp");
-
-                    b.ToTable("LLMAuditLogs");
-                });
-
-            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Services.LLM.LLMUsageLogEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Model")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int?>("ResponseTimeMs")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("Success")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("Timestamp")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Provider");
-
-                    b.HasIndex("Success");
-
-                    b.HasIndex("Timestamp");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("UserId", "Provider", "Timestamp");
-
-                    b.ToTable("LLMUsageLogs");
-                });
-
             modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Data.Entities.AuditLog", b =>
                 {
                     b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.Company", "Company")
@@ -1427,28 +1337,6 @@ namespace Hybrid.CleverDocs2.WebServices.Migrations
                     b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.User", "User")
                         .WithOne()
                         .HasForeignKey("Hybrid.CleverDocs2.WebServices.Data.Entities.UserLLMPreferences", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Services.LLM.LLMAuditLogEntry", b =>
-                {
-                    b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Hybrid.CleverDocs2.WebServices.Services.LLM.LLMUsageLogEntry", b =>
-                {
-                    b.HasOne("Hybrid.CleverDocs2.WebServices.Data.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

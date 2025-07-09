@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Hybrid.CleverDocs2.WebServices.Data.Entities;
 using Hybrid.CleverDocs2.WebServices.Models.Auth;
+using Hybrid.CleverDocs2.WebServices.Services.LLM;
 
 namespace Hybrid.CleverDocs2.WebServices.Data
 {
@@ -32,6 +33,11 @@ namespace Hybrid.CleverDocs2.WebServices.Data
         public DbSet<Conversation> Conversations { get; set; } = null!;
         public DbSet<Message> Messages { get; set; } = null!;
 
+        // LLM Configuration entities
+        public DbSet<UserLLMPreferences> UserLLMPreferences { get; set; } = null!;
+        public DbSet<LLMAuditLogEntry> LLMAuditLogs { get; set; } = null!;
+        public DbSet<LLMUsageLogEntry> LLMUsageLogs { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -46,6 +52,8 @@ namespace Hybrid.CleverDocs2.WebServices.Data
             ConfigureAuth(modelBuilder);
             ConfigureConversation(modelBuilder);
             ConfigureMessage(modelBuilder);
+            ConfigureUserLLMPreferences(modelBuilder);
+            ConfigureLLMAuditLogs(modelBuilder);
         }
 
         private static void ConfigureCompany(ModelBuilder modelBuilder)
@@ -296,6 +304,94 @@ namespace Hybrid.CleverDocs2.WebServices.Data
                     .WithMany()
                     .HasForeignKey(e => e.LastEditedByUserId)
                     .OnDelete(DeleteBehavior.SetNull);
+            });
+        }
+
+        private static void ConfigureUserLLMPreferences(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<UserLLMPreferences>(entity =>
+            {
+                // Primary key is UserId (one preference per user)
+                entity.HasKey(e => e.UserId);
+
+                // Indexes for performance
+                entity.HasIndex(e => e.Provider);
+                entity.HasIndex(e => e.IsActive);
+                entity.HasIndex(e => new { e.Provider, e.IsActive });
+                entity.HasIndex(e => e.LastUsedAt);
+
+                // Default values
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                // JSON column for additional parameters
+                entity.Property(e => e.AdditionalParameters)
+                    .HasColumnType("jsonb");
+
+                // Precision for decimal fields
+                entity.Property(e => e.Temperature)
+                    .HasPrecision(3, 2);
+
+                entity.Property(e => e.TopP)
+                    .HasPrecision(3, 2);
+
+                // Foreign key relationship
+                entity.HasOne(e => e.User)
+                    .WithOne()
+                    .HasForeignKey<UserLLMPreferences>(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // Check constraints for validation
+                entity.HasCheckConstraint("CK_UserLLMPreferences_Temperature", "\"Temperature\" >= 0.0 AND \"Temperature\" <= 2.0");
+                entity.HasCheckConstraint("CK_UserLLMPreferences_MaxTokens", "\"MaxTokens\" >= 1 AND \"MaxTokens\" <= 32000");
+                entity.HasCheckConstraint("CK_UserLLMPreferences_TopP", "\"TopP\" IS NULL OR (\"TopP\" >= 0.0 AND \"TopP\" <= 1.0)");
+                entity.HasCheckConstraint("CK_UserLLMPreferences_Provider", "\"Provider\" IN ('openai', 'anthropic', 'azure', 'custom')");
+            });
+        }
+
+        private static void ConfigureLLMAuditLogs(ModelBuilder modelBuilder)
+        {
+            // Configure LLMAuditLogEntry
+            modelBuilder.Entity<LLMAuditLogEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                // Indexes for performance
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.Action);
+                entity.HasIndex(e => e.Timestamp);
+                entity.HasIndex(e => new { e.UserId, e.Timestamp });
+
+                // Default values
+                entity.Property(e => e.Timestamp).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                // Foreign key relationship
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Configure LLMUsageLogEntry
+            modelBuilder.Entity<LLMUsageLogEntry>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                // Indexes for performance
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.Provider);
+                entity.HasIndex(e => e.Success);
+                entity.HasIndex(e => e.Timestamp);
+                entity.HasIndex(e => new { e.UserId, e.Provider, e.Timestamp });
+
+                // Default values
+                entity.Property(e => e.Timestamp).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                // Foreign key relationship
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

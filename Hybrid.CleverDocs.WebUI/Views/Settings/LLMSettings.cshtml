@@ -1,0 +1,274 @@
+@model LLMSettingsViewModel
+@{
+    ViewData["Title"] = "LLM Provider Settings";
+    ViewData["PageTitle"] = "LLM Provider Configuration";
+    ViewData["PageDescription"] = "Configure your personal LLM provider and API settings for AI-powered conversations";
+}
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">🤖 LLM Provider Settings</h1>
+                    <p class="text-muted mb-0">Configure your personal AI model preferences and API keys</p>
+                </div>
+                <div>
+                    @if (Model.Configuration.IsSystemDefault)
+                    {
+                        <span class="badge bg-info">Using System Default</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-success">Custom Configuration</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    <div id="alertContainer"></div>
+
+    <div class="row">
+        <!-- Configuration Form -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-cog me-2"></i>LLM Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="llmConfigForm">
+                        <!-- Provider Selection -->
+                        <div class="mb-3">
+                            <label for="provider" class="form-label">LLM Provider</label>
+                            <select class="form-select" id="provider" name="provider" required>
+                                @foreach (var provider in Model.AvailableProviders)
+                                {
+                                    <option value="@provider.Id" 
+                                            @(provider.Id == Model.Configuration.Provider ? "selected" : "")
+                                            data-description="@provider.Description">
+                                        @provider.Name
+                                    </option>
+                                }
+                            </select>
+                            <div class="form-text" id="providerDescription">
+                                @Model.AvailableProviders.FirstOrDefault(p => p.Id == Model.Configuration.Provider)?.Description
+                            </div>
+                        </div>
+
+                        <!-- Model Selection -->
+                        <div class="mb-3">
+                            <label for="model" class="form-label">Model</label>
+                            <select class="form-select" id="model" name="model" required>
+                                <option value="@Model.Configuration.Model" selected>@Model.Configuration.Model</option>
+                            </select>
+                            <div class="form-text">Select the specific AI model to use for conversations</div>
+                        </div>
+
+                        <!-- API Key -->
+                        <div class="mb-3">
+                            <label for="apiKey" class="form-label">
+                                API Key
+                                <span class="text-muted">(Optional - leave empty to use system default)</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="apiKey" name="apiKey" 
+                                       placeholder="Enter your personal API key">
+                                <button class="btn btn-outline-secondary" type="button" id="toggleApiKey">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            @if (Model.Configuration.HasApiKey)
+                            {
+                                <div class="form-text text-success">
+                                    <i class="fas fa-check-circle"></i> Personal API key is configured
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="form-text">Using system default API key</div>
+                            }
+                        </div>
+
+                        <!-- Custom API Endpoint -->
+                        <div class="mb-3">
+                            <label for="apiEndpoint" class="form-label">
+                                Custom API Endpoint
+                                <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="url" class="form-control" id="apiEndpoint" name="apiEndpoint" 
+                                   value="@Model.Configuration.ApiEndpoint"
+                                   placeholder="https://api.custom-provider.com/v1">
+                            <div class="form-text">Use a custom API endpoint for your LLM provider</div>
+                        </div>
+
+                        <!-- Advanced Settings -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <button class="btn btn-link p-0 text-decoration-none" type="button" 
+                                            data-bs-toggle="collapse" data-bs-target="#advancedSettings">
+                                        <i class="fas fa-chevron-down me-2"></i>Advanced Settings
+                                    </button>
+                                </h6>
+                            </div>
+                            <div class="collapse" id="advancedSettings">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="temperature" class="form-label">
+                                                    Temperature
+                                                    <span class="badge bg-secondary" id="temperatureValue">@Model.Configuration.Temperature</span>
+                                                </label>
+                                                <input type="range" class="form-range" id="temperature" name="temperature" 
+                                                       min="0" max="2" step="0.1" value="@Model.Configuration.Temperature">
+                                                <div class="form-text">Controls randomness (0 = deterministic, 2 = very creative)</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="maxTokens" class="form-label">Max Tokens</label>
+                                                <input type="number" class="form-control" id="maxTokens" name="maxTokens" 
+                                                       value="@Model.Configuration.MaxTokens" min="1" max="32000">
+                                                <div class="form-text">Maximum tokens in the response</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="topP" class="form-label">
+                                                    Top P
+                                                    <span class="badge bg-secondary" id="topPValue">@(Model.Configuration.TopP ?? 1.0m)</span>
+                                                </label>
+                                                <input type="range" class="form-range" id="topP" name="topP" 
+                                                       min="0" max="1" step="0.05" value="@(Model.Configuration.TopP ?? 1.0m)">
+                                                <div class="form-text">Nucleus sampling parameter</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="enableStreaming" 
+                                                           name="enableStreaming" @(Model.Configuration.EnableStreaming ? "checked" : "")>
+                                                    <label class="form-check-label" for="enableStreaming">
+                                                        Enable Streaming
+                                                    </label>
+                                                </div>
+                                                <div class="form-text">Stream responses in real-time</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Configuration
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="testConfigBtn">
+                                <i class="fas fa-vial me-2"></i>Test Configuration
+                            </button>
+                            @if (!Model.Configuration.IsSystemDefault)
+                            {
+                                <button type="button" class="btn btn-outline-danger" id="deleteConfigBtn">
+                                    <i class="fas fa-trash me-2"></i>Reset to Default
+                                </button>
+                            }
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage Statistics -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Usage Statistics
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.UsageStatistics.TotalCalls > 0)
+                    {
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Total API Calls:</span>
+                                <strong>@Model.UsageStatistics.TotalCalls.ToString("N0")</strong>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Current Provider:</span>
+                                <strong>@Model.UsageStatistics.Provider</strong>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Current Model:</span>
+                                <strong>@Model.UsageStatistics.Model</strong>
+                            </div>
+                        </div>
+                        @if (Model.UsageStatistics.LastUsed.HasValue)
+                        {
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <span>Last Used:</span>
+                                    <strong>@Model.UsageStatistics.LastUsed.Value.ToString("MMM dd, yyyy")</strong>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted">
+                            <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                            <p>No usage data available yet.<br>Start a conversation to see statistics!</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Help Card -->
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Need Help?
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <i class="fas fa-key text-primary me-2"></i>
+                            <strong>API Keys:</strong> Get your keys from provider websites
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-thermometer-half text-success me-2"></i>
+                            <strong>Temperature:</strong> Lower = more focused, Higher = more creative
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-coins text-warning me-2"></i>
+                            <strong>Tokens:</strong> Higher = longer responses, but more expensive
+                        </li>
+                        <li>
+                            <i class="fas fa-shield-alt text-danger me-2"></i>
+                            <strong>Security:</strong> API keys are encrypted and stored securely
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/llm-settings.js"></script>
+}
