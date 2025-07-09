@@ -69,12 +69,33 @@ model = "openai/gpt-4.1"  # ❌ Invalid model name
 # REQUIRED (VALID)
 [completion]
 provider = "litellm"
-model = "openai/gpt-4o"   # ✅ Valid OpenAI model
+model = "openai/o4-mini"   # ✅ Valid OpenAI model
 ```
 
 **SOLUTION**: Update R2R configuration file with correct OpenAI model names and restart service.
 
 **ENHANCED VERIFICATION**: Multi-level validation including model name validation, response content checks, and fallback mechanism testing.
+
+### 🚨 **CRITICAL DISCOVERY: R2R Per-User LLM Configuration (MANUS AI Research)**
+
+**BREAKTHROUGH FINDING**: R2R **DOES SUPPORT** per-user LLM configuration via `rag_generation_config` parameter!
+
+**NEW CAPABILITIES IDENTIFIED**:
+- ✅ **Runtime model selection**: Each API call can specify different LLM provider
+- ✅ **Custom endpoints**: Support for `api_base` parameter for user-specific routing
+- ✅ **Parameter customization**: Temperature, max_tokens, streaming per user
+- ✅ **Multi-provider support**: OpenAI, Anthropic, Azure per user preference
+
+**IMPLEMENTATION EXAMPLE**:
+```python
+rag_generation_config = {
+    "model": "anthropic/claude-3-opus",
+    "temperature": 0.7,
+    "api_base": "http://user-specific-endpoint.com"
+}
+```
+
+**ENTERPRISE OPPORTUNITY**: Implement user preference system for LLM provider selection.
 
 ---
 
