@@ -233,6 +233,11 @@ app.MapControllerRoute(
 
 // Chat routes
 app.MapControllerRoute(
+    name: "chat-token",
+    pattern: "chat/token",
+    defaults: new { controller = "Chat", action = "GetToken" });
+
+app.MapControllerRoute(
     name: "chat-index",
     pattern: "chat",
     defaults: new { controller = "Chat", action = "Index" });

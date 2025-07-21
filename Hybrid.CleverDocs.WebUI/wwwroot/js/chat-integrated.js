@@ -38,10 +38,11 @@ class ChatManager {
             // Get JWT token from server
             const token = await this.getJwtTokenFromCookie();
 
-            // Build SignalR URL with token as query parameter
+            // Build SignalR URL with token as query parameter (configurable)
+            const baseUrl = window.appConfig?.apiBaseUrl || 'http://localhost:5253';
             const signalRUrl = token
-                ? `http://localhost:5253/hubs/chat?access_token=${encodeURIComponent(token)}`
-                : "http://localhost:5253/hubs/chat";
+                ? `${baseUrl}/hubs/chat?access_token=${encodeURIComponent(token)}`
+                : `${baseUrl}/hubs/chat`;
 
             this.chatConnection = new signalR.HubConnectionBuilder()
                 .withUrl(signalRUrl, {
@@ -74,8 +75,9 @@ class ChatManager {
 
     async getJwtTokenFromCookie() {
         try {
-            // Get JWT token from the server endpoint
-            const response = await fetch('/chat/token', {
+            // Get JWT token from the server endpoint (configurable)
+            const tokenEndpoint = window.appConfig?.endpoints?.chatToken || '/chat/token';
+            const response = await fetch(tokenEndpoint, {
                 method: 'GET',
                 credentials: 'include', // Include cookies for authentication
                 headers: {
@@ -88,7 +90,11 @@ class ChatManager {
                 return data.token;
             }
         } catch (error) {
-            console.error('Error fetching JWT token:', error);
+            console.error('❌ Error fetching JWT token:', error);
+            if (window.appConfig?.debug) {
+                console.error('Token fetch failed - endpoint:', tokenEndpoint);
+                console.error('Error details:', error);
+            }
         }
 
         return null;

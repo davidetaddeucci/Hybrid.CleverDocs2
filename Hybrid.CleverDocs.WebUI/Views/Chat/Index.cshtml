@@ -322,6 +322,8 @@
 </div>
 
 @section Scripts {
+    <!-- App Configuration - CRITICAL: Load first -->
+    <script src="~/js/app-config.js?v=@DateTime.Now.Ticks"></script>
     <!-- SignalR CDN - CRITICAL: Load before chat.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
 

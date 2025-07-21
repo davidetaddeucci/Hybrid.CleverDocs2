@@ -218,8 +218,8 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                 {
                     // Use system default configuration
                     var systemDefault = await _llmProviderService.GetSystemDefaultConfigurationAsync();
-                    _logger.LogInformation("🔧 Using system default LLM configuration: {Provider}/{Model}",
-                        systemDefault.Provider, systemDefault.Model);
+                    _logger.LogInformation("🔧 Using system default LLM configuration: {Provider}/{Model}, Temperature: {Temperature}",
+                        systemDefault.Provider, systemDefault.Model, systemDefault.Temperature);
 
                     ragConfig = new RagGenerationConfig
                     {
@@ -420,32 +420,51 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                     };
                 }
 
-                _logger.LogInformation("🔥 Calling AddMessageAsync for conversation {ConversationId}", conversationId);
-                var response = await _conversationClient.AddMessageAsync(conversationId, messageRequest);
+                // ✅ CORRECT: Use the Agent endpoint that generates AI responses
+                _logger.LogInformation("🔥 Calling SendToAgentAsync for conversation {ConversationId}", conversationId);
 
-                _logger.LogInformation("🔥 AddMessageAsync response: {Response}", response != null ? "SUCCESS" : "NULL");
+                // Create agent request with proper structure
+                var agentRequest = new AgentRequest
+                {
+                    Message = new AgentMessage
+                    {
+                        Role = "user",
+                        Content = messageRequest.Content
+                    },
+                    SearchMode = messageRequest.SearchMode,
+                    SearchSettings = messageRequest.SearchSettings,
+                    RagGenerationConfig = messageRequest.RagGenerationConfig,
+                    ConversationId = conversationId,
+                    Mode = "rag",
+                    IncludeTitleIfAvailable = true
+                };
+
+                var response = await _conversationClient.SendToAgentAsync(agentRequest);
+
+                _logger.LogInformation("🔥 SendToAgentAsync response: {Response}", response != null ? "SUCCESS" : "NULL");
                 if (response != null)
                 {
-                    _logger.LogInformation("🔥 R2R Response Details - MessageId: {MessageId}, Content length: {ContentLength}, SearchResults count: {SearchResultsCount}",
-                        response.Results?.MessageId,
-                        response.Results?.Content?.Length ?? 0,
-                        response.Results?.SearchResults?.Count ?? 0);
+                    var agentResponse = response.Results?.AssistantMessage;
+                    _logger.LogInformation("🔥 R2R Agent Response Details - ConversationId: {ConversationId}, Messages count: {MessagesCount}, Assistant message found: {HasAssistant}",
+                        response.Results?.ConversationId,
+                        response.Results?.Messages?.Count ?? 0,
+                        agentResponse != null);
 
-                    if (!string.IsNullOrEmpty(response.Results?.Content))
+                    if (!string.IsNullOrEmpty(agentResponse?.Content))
                     {
-                        _logger.LogInformation("🔥 Response content preview: {Content}",
-                            response.Results.Content.Substring(0, Math.Min(200, response.Results.Content.Length)));
+                        _logger.LogInformation("🔥 Agent response content preview: {Content}",
+                            agentResponse.Content.Substring(0, Math.Min(200, agentResponse.Content.Length)));
                     }
                     else
                     {
-                        _logger.LogWarning("🔥 R2R returned empty or null content!");
+                        _logger.LogWarning("🔥 R2R Agent returned empty or null content!");
                     }
 
-                    // Check if R2R response is empty and use fallback LLM
-                    string finalContent = response.Results?.Content ?? "";
+                    // Check if R2R agent response is empty and use fallback LLM
+                    string finalContent = agentResponse?.Content ?? "";
                     if (string.IsNullOrWhiteSpace(finalContent))
                     {
-                        _logger.LogWarning("🔥 R2R returned empty content, using fallback LLM generation");
+                        _logger.LogWarning("🔥 R2R Agent returned empty content, using fallback LLM generation");
                         finalContent = await GenerateFallbackResponseAsync(messageRequest.Content, new List<string>());
                     }
 
@@ -453,7 +472,7 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                     var assistantMessage = new Data.Entities.Message
                     {
                         ConversationId = localConversation.Id,
-                        R2RMessageId = response.Results.MessageId,
+                        R2RMessageId = Guid.NewGuid().ToString(), // Generate ID since Agent doesn't return MessageId
                         Role = "assistant",
                         Content = finalContent,
                         ParentMessageId = userMessage.Id,
@@ -464,17 +483,14 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                         UserId = userId
                     };
 
-                    // Set RAG context if available
-                    if (response.Results.SearchResults != null && response.Results.SearchResults.Any())
+                    // Set RAG context - Agent endpoint doesn't return SearchResults, but we can set basic context
+                    var ragContext = new Dictionary<string, object>
                     {
-                        var ragContext = new Dictionary<string, object>
-                        {
-                            ["search_results"] = response.Results.SearchResults,
-                            ["search_mode"] = messageRequest.SearchMode,
-                            ["collection_filters"] = messageRequest.SearchSettings?.Filters
-                        };
-                        assistantMessage.SetRagContext(ragContext);
-                    }
+                        ["search_mode"] = messageRequest.SearchMode,
+                        ["collection_filters"] = messageRequest.SearchSettings?.Filters,
+                        ["conversation_id"] = response.Results.ConversationId
+                    };
+                    assistantMessage.SetRagContext(ragContext);
 
                     _context.Messages.Add(assistantMessage);
 
@@ -492,12 +508,12 @@ namespace Hybrid.CleverDocs2.WebServices.Hubs
                     await Clients.Group($"conversation_{conversationId}")
                         .SendAsync("ReceiveMessage", new
                         {
-                            id = response.Results.MessageId,
+                            id = assistantMessage.R2RMessageId,
                             content = finalContent,
                             role = "assistant",
                             createdAt = DateTime.UtcNow,
                             conversationId = conversationId,
-                            citations = response.Results.SearchResults?.Cast<object>().ToList() ?? new List<object>()
+                            citations = new List<object>() // Agent endpoint doesn't return SearchResults
                         });
 
                     _logger.LogInformation("🔥 ReceiveMessage sent successfully via SignalR");

@@ -119,7 +119,65 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
             response.EnsureSuccessStatusCode();
         }
 
-        // Message operations
+        // RAG Agent operations - CORRECT ENDPOINT FOR AI RESPONSES
+        public async Task<AgentResponse?> SendToAgentAsync(AgentRequest request)
+        {
+            try
+            {
+                // Apply rate limiting for agent operations
+                await _rateLimitingService.WaitForAvailabilityAsync("r2r_conversation");
+
+                // ✅ CORRECT: Use the agent endpoint that generates AI responses
+                _logger.LogInformation("🚀 R2R AGENT API CALL: POST /v3/retrieval/agent");
+                _logger.LogInformation("🚀 Agent request payload: {Payload}", System.Text.Json.JsonSerializer.Serialize(request));
+
+                var response = await _httpClient.PostAsJsonAsync("/v3/retrieval/agent", request);
+
+                // ✅ Log response details for debugging
+                _logger.LogInformation("🚀 R2R AGENT Response: Status={StatusCode}", response.StatusCode);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("🚀 R2R AGENT ERROR: Status={StatusCode}, Body={ErrorBody}", response.StatusCode, errorBody);
+                    await HandleR2RErrorAsync(response, "SendToAgent");
+                    return null;
+                }
+
+                var responseBody = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("🚀 R2R AGENT SUCCESS: Response body length={Length}, Preview={Preview}",
+                    responseBody.Length, responseBody.Substring(0, Math.Min(500, responseBody.Length)));
+
+                // Parse the agent response
+                var result = System.Text.Json.JsonSerializer.Deserialize<AgentResponse>(responseBody);
+
+                // ✅ Validate that the agent generated content
+                var assistantMessage = result?.Results?.AssistantMessage;
+                if (assistantMessage?.Content == null || string.IsNullOrWhiteSpace(assistantMessage.Content))
+                {
+                    _logger.LogWarning("🚀 R2R AGENT WARNING: Response received but content is empty or null!");
+                }
+
+                return result;
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "🚀 HTTP request exception in SendToAgentAsync");
+                return null;
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogError(ex, "🚀 Request timeout in SendToAgentAsync");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "🚀 Unexpected error in SendToAgentAsync");
+                return null;
+            }
+        }
+
+        // Message operations - LEGACY: Only adds messages, doesn't generate AI responses
         public async Task<MessageCreateResponse?> AddMessageAsync(string conversationId, MessageRequest request)
         {
             try

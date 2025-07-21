@@ -13,7 +13,10 @@ namespace Hybrid.CleverDocs2.WebServices.Services.Clients
         Task<ConversationResponse?> UpdateConversationAsync(string conversationId, ConversationUpdateRequest request);
         Task DeleteConversationAsync(string conversationId);
 
-        // Message operations
+        // RAG Agent operations - CORRECT ENDPOINT FOR AI RESPONSES
+        Task<AgentResponse?> SendToAgentAsync(AgentRequest request);
+
+        // Message operations - LEGACY: Only adds messages, doesn't generate AI responses
         Task<MessageCreateResponse?> AddMessageAsync(string conversationId, MessageRequest request);
         Task<MessageResponse?> GetMessageAsync(string conversationId, string messageId);
         Task<MessageListResponse?> ListMessagesAsync(string conversationId, int offset = 0, int limit = 100);

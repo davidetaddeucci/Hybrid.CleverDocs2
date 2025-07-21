@@ -310,8 +310,12 @@ namespace Hybrid.CleverDocs2.WebServices.Services.LLM
             // Get system default from configuration
             var defaultProvider = _configuration["R2R:DefaultProvider"] ?? "openai";
             var defaultModel = _configuration["R2R:DefaultModel"] ?? "gpt-4o-mini";
-            var defaultTemperature = decimal.Parse(_configuration["R2R:DefaultTemperature"] ?? "0.7");
+            var temperatureString = _configuration["R2R:DefaultTemperature"] ?? "0.7";
+            var defaultTemperature = decimal.Parse(temperatureString, System.Globalization.CultureInfo.InvariantCulture);
             var defaultMaxTokens = int.Parse(_configuration["R2R:DefaultMaxTokens"] ?? "1000");
+
+            _logger.LogInformation("🔧 Reading system default config: Provider={Provider}, Model={Model}, TemperatureString='{TemperatureString}', ParsedTemperature={ParsedTemperature}",
+                defaultProvider, defaultModel, temperatureString, defaultTemperature);
 
             return await Task.FromResult(new UserLLMConfiguration
             {

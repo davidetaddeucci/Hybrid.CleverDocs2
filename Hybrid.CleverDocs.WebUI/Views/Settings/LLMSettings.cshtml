@@ -48,8 +48,8 @@
                             <select class="form-select" id="provider" name="provider" required>
                                 @foreach (var provider in Model.AvailableProviders)
                                 {
-                                    <option value="@provider.Id" 
-                                            @(provider.Id == Model.Configuration.Provider ? "selected" : "")
+                                    <option value="@provider.Id"
+                                            selected="@(provider.Id == Model.Configuration.Provider)"
                                             data-description="@provider.Description">
                                         @provider.Name
                                     </option>

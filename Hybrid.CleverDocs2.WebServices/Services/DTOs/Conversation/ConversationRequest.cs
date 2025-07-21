@@ -114,4 +114,65 @@ namespace Hybrid.CleverDocs2.WebServices.Services.DTOs.Conversation
         [JsonPropertyName("new_message")]
         public string NewMessage { get; set; } = string.Empty;
     }
+
+    // ✅ CORRECT R2R Agent API Models - Based on official R2R documentation
+    public class AgentRequest
+    {
+        [JsonPropertyName("message")]
+        public AgentMessage Message { get; set; } = new();
+
+        [JsonPropertyName("search_mode")]
+        public string SearchMode { get; set; } = "advanced";
+
+        [JsonPropertyName("search_settings")]
+        public SearchSettings? SearchSettings { get; set; }
+
+        [JsonPropertyName("rag_generation_config")]
+        public RagGenerationConfig? RagGenerationConfig { get; set; }
+
+        [JsonPropertyName("conversation_id")]
+        public string? ConversationId { get; set; }
+
+        [JsonPropertyName("mode")]
+        public string Mode { get; set; } = "rag";
+
+        [JsonPropertyName("include_title_if_available")]
+        public bool IncludeTitleIfAvailable { get; set; } = true;
+    }
+
+    public class AgentMessage
+    {
+        [JsonPropertyName("role")]
+        public string Role { get; set; } = "user";
+
+        [JsonPropertyName("content")]
+        public string Content { get; set; } = string.Empty;
+    }
+
+    public class AgentResponse
+    {
+        [JsonPropertyName("results")]
+        public AgentResults Results { get; set; } = new();
+    }
+
+    public class AgentResults
+    {
+        [JsonPropertyName("messages")]
+        public List<AgentResponseMessage> Messages { get; set; } = new();
+
+        [JsonPropertyName("conversation_id")]
+        public string? ConversationId { get; set; }
+
+        // Helper property to get the assistant message
+        public AgentResponseMessage? AssistantMessage => Messages?.FirstOrDefault(m => m.Role == "assistant");
+    }
+
+    public class AgentResponseMessage
+    {
+        [JsonPropertyName("role")]
+        public string Role { get; set; } = string.Empty;
+
+        [JsonPropertyName("content")]
+        public string Content { get; set; } = string.Empty;
+    }
 }
